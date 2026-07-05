@@ -14,6 +14,205 @@ A GTK4 Markdown editor for GNOME — clean, fast, and compatible with Fedora, Ub
 - Preferences stored in `~/.config/Calamus/Calamus.conf`
 - Dark/light/system theme support via Libadwaita
 
+## Markdown Support
+
+Calamus renders Markdown using [mistune 3](https://github.com/lepture/mistune)
+(a CommonMark-based parser).  The table below shows which extensions from
+popular Markdown flavours are supported and which gracefully fail over.
+
+**Key:**
+- ✅ **Supported** — renders as the spec intends
+- ⚠️ **Graceful fail-over** — no crash; text content visible; surrounding
+  document renders correctly (GLFM/GFM/ExtraMark-specific markup may appear
+  as plain text)
+- 🔧 **Available** — the underlying mistune 3 plugin exists; enable by adding
+  the plugin name to `MistuneRenderer.__init__()` in `calamus/renderer.py`
+
+---
+
+### CommonMark (baseline)
+
+All [CommonMark 0.31](https://spec.commonmark.org/0.31.2/) block and inline
+constructs are supported: headings (ATX and setext), paragraphs, bold, italic,
+strikethrough, inline code, fenced and indented code blocks, blockquotes,
+ordered and unordered lists, thematic breaks, links, reference links, images,
+and raw inline HTML.
+
+---
+
+### GitHub Flavored Markdown (GFM)
+
+GFM defines exactly five extensions over CommonMark
+([spec §4.10, §5.3, §6.5, §6.9, §6.11](https://github.github.com/gfm/)):
+
+| Extension | Status | Notes |
+|---|---|---|
+| **Tables** (pipe syntax) | ✅ Supported | Via mistune `table` plugin |
+| **Strikethrough** (`~~text~~`) | ✅ Supported | Via mistune `strikethrough` plugin |
+| **Extended autolinks** (bare `https://`, `http://`) | ✅ Supported | Via mistune `url` plugin |
+| **Extended autolinks** (`www.` URLs, bare emails) | ⚠️ Graceful fail-over | Text visible; no broken HTML |
+| **Task list items** (`- [x]`, `- [ ]`) | 🔧 Available | Add `"task_lists"` plugin |
+| **Disallowed raw HTML** (`<script>`, `<iframe>`, …) | ⚠️ Known divergence | Calamus renders local author content; HTML passes through unfiltered (no sanitisation needed for a desktop editor) |
+
+---
+
+### GitLab Flavored Markdown (GLFM)
+
+GLFM extends CommonMark with GitLab-specific features
+([docs](https://docs.gitlab.com/user/markdown/#differences-with-standard-markdown)).
+Calamus is designed for editing GitLab repository files; the table below
+documents every GLFM-only feature:
+
+| Feature | Status | Notes |
+|---|---|---|
+| **Pipe tables** | ✅ Supported | Same as GFM |
+| **Strikethrough** | ✅ Supported | Same as GFM |
+| **URL autolinks** | ✅ Supported | Same as GFM |
+| **GitLab references** (`#123`, `@user`, `!123`, `~label`, `%milestone`) | ⚠️ Graceful fail-over | Rendered as plain text; no GitLab context in editor |
+| **Inline diff** (`{+ addition +}`, `{- deletion -}`) | ⚠️ Graceful fail-over | Text visible |
+| **Description lists** | 🔧 Available | Add `"def_list"` plugin |
+| **Task list inapplicable** (`- [~]`) | ⚠️ Graceful fail-over | `[~]` text visible (standard `[x]`/`[ ]` also 🔧 Available) |
+| **Multiline blockquote** (`>>>`) | ⚠️ Graceful fail-over | Content visible as plain text |
+| **JSON tables** (`` ```json:table ``` ``) | ⚠️ Graceful fail-over | Rendered as plain code block |
+| **Math** (`$...$`, `$$...$$`, `` ```math `` ) | 🔧 Available | Add `"math"` plugin if available; currently graceful fail-over (LaTeX source visible) |
+| **Table of contents** (`[[_TOC_]]`) | ⚠️ Graceful fail-over | No TOC generated; text passes through |
+| **Alerts** (`> [!note]`, `> [!warning]`, …) | ⚠️ Graceful fail-over | Renders as standard `<blockquote>` |
+| **Color chips** (`` `#FF0000` ``) | ⚠️ Graceful fail-over | Renders as `<code>` without color swatch |
+| **Emoji shortcodes** (`:smile:`) | ⚠️ Graceful fail-over | Rendered as plain text |
+| **YAML / TOML / JSON front matter** | ⚠️ Graceful fail-over | Document body renders correctly |
+| **Include directives** (`::include{file=…}`) | ⚠️ Graceful fail-over | No file embedding (intentional) |
+| **Placeholders** (`%{project_name}`, …) | ⚠️ Graceful fail-over | Not resolved (no GitLab context) |
+| **Mermaid diagrams** (`` ```mermaid `` ) | ✅ Supported | See [Mermaid Support](#mermaid-diagram-support) below |
+
+---
+
+### ExtraMark
+
+ExtraMark branches directly from CommonMark (not GFM) to provide a unified,
+portable extension standard
+([repo](https://github.com/vimtaai/extramark)):
+
+| Extension | Status | Notes |
+|---|---|---|
+| **Tables** | ✅ Supported | Same GFM pipe-table syntax |
+| **Typographic replacements** (`---`, `...`, `(c)`, `(tm)`) | ⚠️ Graceful fail-over | ASCII forms preserved; no typographer pass |
+| **Heading anchors** (id= + self-link for h1–h3) | ⚠️ Graceful fail-over | Headings render without `id=` attribute |
+| **Definition lists** | 🔧 Available | Add `"def_list"` plugin |
+| **Superscript** (`x^2^`) | 🔧 Available | Add `"superscript"` plugin |
+| **Subscript** (`H~2~O`) | 🔧 Available | Add `"subscript"` plugin; single `~` does NOT trigger `~~` strikethrough |
+| **Abbreviations** (`*[HTML]: expansion`) | 🔧 Available | Add `"abbr"` plugin |
+| **Footnotes** (`[^1]`) | 🔧 Available | Add `"footnotes"` plugin |
+| **Critic Markup** (`{++ ++}`, `{-- --}`, `{~~ ~> ~~}`, `{== ==}`, `{>> <<}`) | ⚠️ Graceful fail-over | No mistune plugin; text content visible |
+
+> **Enabling 🔧 Available plugins:** All six plugins (`task_lists`, `def_list`,
+> `footnotes`, `abbr`, `superscript`, `subscript`) ship with mistune 3 and
+> require no extra dependencies.  Add the plugin name string to the `plugins`
+> list in `MistuneRenderer.__init__()` in `calamus/renderer.py`.  The
+> corresponding compatibility tests in `tests/test_gfm_compat.py` and
+> `tests/test_extramark_compat.py` will automatically flip from Case 1
+> (graceful fail-over) to Case 2 (supported) once enabled.
+
+---
+
+## Mermaid Diagram Support
+
+Calamus supports [Mermaid](https://mermaid.js.org/) diagrams in fenced
+`` ```mermaid `` code blocks via two rendering paths:
+
+### Path 1 — Browser-side (mermaid.js, always available)
+
+`mermaid.min.js` is bundled locally (fetched at build time by
+`scripts/fetch-mermaid.sh`) and inlined into the WebKit preview.  No network
+access is required at runtime.
+
+```markdown
+```mermaid
+graph LR
+    A --> B --> C
+```
+```
+
+### Path 2 — Server-side pre-rendering (mmdc CLI, optional)
+
+When the `mmdc` CLI is installed (part of `@mermaid-js/mermaid-cli`), Calamus
+pre-renders all Mermaid diagrams to inline SVG **before** passing HTML to
+WebKit.  This path is required for configuration features that are only applied
+by the Node.js Mermaid engine (notably `labelRotation` in `xychart-beta`).
+
+```bash
+npm install -g @mermaid-js/mermaid-cli   # installs mmdc
+```
+
+### Configuration syntaxes
+
+Both paths support two diagram configuration syntaxes:
+
+#### YAML frontmatter (`---config:---`)
+
+Placed between `---` delimiters at the top of the fenced block:
+
+````markdown
+```mermaid
+---
+config:
+  xyChart:
+    xAxis:
+      labelRotation: 20
+---
+xychart-beta
+    title "My Chart"
+    x-axis ["A", "B", "C"]
+    y-axis "val" 0 --> 10
+    bar [1, 2, 3]
+```
+````
+
+#### Inline directive (`%%{init: ...}%%`)
+
+Placed as the first line of the fenced block
+([GLFM directive syntax](https://stackoverflow.com/a/66751560)):
+
+````markdown
+```mermaid
+%%{init: {'theme': 'forest'}}%%
+graph TD
+    A[Christmas] -->|Get money| B(Go shopping)
+    B --> C{Let me think}
+```
+````
+
+### Math in Mermaid (KaTeX — Mermaid v10.9.0+)
+
+Mathematical expressions using [KaTeX](https://katex.org/) are supported
+inside Mermaid node labels, edge labels, and sequence participants via the
+`$$...$$` delimiter.  Supported diagram types: flowcharts and sequence diagrams.
+
+````markdown
+```mermaid
+graph LR
+    A["$$x^2$$"] -->|"$$\sqrt{x+3}$$"| B("$$\frac{1}{2}$$")
+    A --> C("$$\pi r^2$$")
+```
+````
+
+````markdown
+```mermaid
+sequenceDiagram
+    participant 1 as $$\alpha$$
+    participant 2 as $$\beta$$
+    1->>2: Solve: $$\sqrt{2+2}$$
+    2-->>1: Answer: $$2$$
+```
+````
+
+The Python rendering pipeline passes `$$...$$` and all LaTeX commands
+(`\sqrt`, `\frac`, `\alpha`, etc.) through `html.escape()` without
+modification — `$` and `\` are not HTML-special characters.  The underlying
+Mermaid engine (browser-side `mermaid.js` or `mmdc` CLI) renders the math via
+KaTeX.
+
+---
+
 ## Platform Compatibility
 
 | Distribution | Minimum Version | GTK4 Version |
