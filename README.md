@@ -131,11 +131,19 @@ docker compose build
 **Run the application** (requires a running X11 or Wayland display):
 
 ```bash
-# Allow Docker to connect to your display first (X11)
+# Grant local Docker containers access to your X server
 xhost +local:docker
 
 docker compose up app
 ```
+
+> **Fedora / SELinux note:** The `docker-compose.yml` passes
+> `--security-opt label=type:container_runtime_t` so the container can reach
+> the X11 socket without needing `--privileged`. The three pieces that work
+> together are:
+> - `xhost +local:docker` — lets local Docker containers connect to your X server
+> - `DISPLAY=$DISPLAY` — tells GTK which display to use
+> - `/tmp/.X11-unix` mount — exposes the Unix socket the app communicates over
 
 **Run the full test suite:**
 
