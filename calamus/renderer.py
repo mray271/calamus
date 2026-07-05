@@ -30,7 +30,8 @@ class MistuneRenderer(AbstractMarkdownRenderer):
 
     def __init__(self) -> None:
         self._renderer = mistune.create_markdown(
-            plugins=["strikethrough", "table", "url"]
+            renderer=mistune.HTMLRenderer(escape=False),
+            plugins=["strikethrough", "table", "url"],
         )
 
     def render(self, text: str) -> str:
