@@ -457,3 +457,316 @@ def test_directive_mmdc_path_svg_contains_graph_content():
     assert any(label in svg for label in node_labels), (
         f"No graph node labels found in SVG. Present: {svg[:300]!r}"
     )
+
+
+# ── 8. Mermaid math syntax ($$...$$, KaTeX — Mermaid v10.9.0+) ───────────────
+# Mermaid supports KaTeX mathematical expressions inside node labels, edge
+# labels, and sequence participants using the $$...$$ delimiter (double dollar).
+#
+# Reference: https://mermaid.js.org/config/math.html
+# Fixture:   tests/fixtures/mermaid_math.md (exact examples from official docs)
+#
+# The Python rendering pipeline must pass the math syntax through intact.
+# Key html.escape() effects on math content (verified in tests below):
+#   - "$$x^2$$"   in a quoted node label → &quot;$$x^2$$&quot;  ($$ intact)
+#   - -->|"..."|  edge labels            → --&gt;|&quot;...&quot;|  ($$ intact)
+#   - $$\alpha$$  unquoted participant   → $$\alpha$$  (no escaping, all intact)
+#   - a &\text{}  LaTeX alignment &      → a &amp;\text{}  (& is HTML-special)
+#
+# Supported diagram types: flowcharts and sequence diagrams (v10.9.0+).
+
+MATH_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "mermaid_math.md"
+MATH_FIXTURE_MD = MATH_FIXTURE_PATH.read_text(encoding="utf-8")
+
+# Inline Markdown strings for focused single-diagram tests.
+_MATH_FLOWCHART_MD = r"""```mermaid
+graph LR
+    A["$$x^2$$"] -->|"$$\sqrt{x+3}$$"| B("$$\frac{1}{2}$$")
+    A -->|"$$\overbrace{a+b+c}^{\text{note}}$$"| C("$$\pi r^2$$")
+    B --> D("$$x = \begin{cases} a &\text{if } b \\ c &\text{if } d \end{cases}$$")
+    C --> E("$$x(t)=c_1\begin{bmatrix}-\cos{t}+\sin{t}\\ 2\cos{t} \end{bmatrix}e^{2t}$$")
+```
+"""
+
+_MATH_SEQUENCE_MD = r"""```mermaid
+sequenceDiagram
+    autonumber
+    participant 1 as $$\alpha$$
+    participant 2 as $$\beta$$
+    1->>2: Solve: $$\sqrt{2+2}$$
+    2-->>1: Answer: $$2$$
+    Note right of 2: $$\sqrt{2+2}=\sqrt{4}=2$$
+```
+"""
+
+_MATH_SIMPLE_MD = r"""```mermaid
+graph LR
+    A["$$E=mc^2$$"] --> B["$$F=ma$$"]
+    B --> C["$$\frac{d}{dt}p = F$$"]
+```
+"""
+
+
+# ── 8a. Fixture integrity ─────────────────────────────────────────────────────
+
+
+def test_math_fixture_file_exists():
+    """The mermaid_math.md fixture must be loadable and contain math syntax."""
+    assert MATH_FIXTURE_PATH.exists(), "mermaid_math.md fixture missing"
+    assert "$$" in MATH_FIXTURE_MD, "double-dollar math delimiter not in fixture"
+    assert r"\sqrt" in MATH_FIXTURE_MD, r"\sqrt LaTeX command not in fixture"
+    assert r"\alpha" in MATH_FIXTURE_MD, r"\alpha not in fixture"
+    assert "graph LR" in MATH_FIXTURE_MD, "flowchart keyword missing from fixture"
+    assert "sequenceDiagram" in MATH_FIXTURE_MD, "sequence keyword missing from fixture"
+
+
+# ── 8b. No-crash checks (both rendering paths) ───────────────────────────────
+
+
+def test_math_flowchart_renders_without_crash():
+    """A math-containing flowchart must not raise."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    assert isinstance(html, str) and html.strip()
+
+
+def test_math_sequence_renders_without_crash():
+    """A math-containing sequence diagram must not raise."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SEQUENCE_MD)
+    assert isinstance(html, str) and html.strip()
+
+
+def test_math_fixture_renders_without_crash():
+    """The full math fixture (both diagrams) must not raise."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(MATH_FIXTURE_MD)
+    assert isinstance(html, str) and html.strip()
+
+
+def test_math_simple_flowchart_renders_without_crash():
+    """A simple math flowchart (E=mc^2) must not raise."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SIMPLE_MD)
+    assert isinstance(html, str) and html.strip()
+
+
+def test_math_no_raw_fence_in_output():
+    """The ```mermaid fence must not appear literally in output."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    assert "```mermaid" not in html, "raw mermaid fence leaked into output"
+
+
+# ── 8c. Browser-side path: $$ delimiter and LaTeX content in <pre> ───────────
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_double_dollar_preserved_in_pre_flowchart():
+    """$$ delimiters in a flowchart node label must survive html.escape() intact."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    # Node A["$$x^2$$"] → pre contains: A[&quot;$$x^2$$&quot;]
+    assert "$$x^2$$" in pre, (
+        f"$$x^2$$ dollar delimiters lost or escaped; pre: {pre[:200]!r}"
+    )
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_double_dollar_preserved_in_pre_sequence():
+    """$$ delimiters in an unquoted sequence participant must be fully intact."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SEQUENCE_MD)
+    pre = _extract_mermaid_pre(html)
+    # participant 1 as $$\alpha$$ — no " quoting, so no &quot; escaping either
+    assert "$$" in pre, f"$$ delimiters missing from sequence pre block; pre: {pre[:200]!r}"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_latex_sqrt_command_preserved():
+    r"""The \sqrt LaTeX command must survive html.escape() (backslash not special)."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    assert r"\sqrt" in pre, r"\sqrt command was dropped or mangled"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_latex_frac_command_preserved():
+    r"""The \frac command must survive html.escape()."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    assert r"\frac" in pre, r"\frac command lost"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_latex_pi_command_preserved():
+    r"""The \pi command must survive html.escape()."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    assert r"\pi" in pre, r"\pi command lost"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_latex_alpha_preserved_in_sequence():
+    r"""The \alpha participant name must be intact (no HTML special chars in \alpha)."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SEQUENCE_MD)
+    pre = _extract_mermaid_pre(html)
+    assert r"\alpha" in pre, r"\alpha was dropped from sequence participant"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_latex_beta_preserved_in_sequence():
+    r"""The \beta participant name must be intact."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SEQUENCE_MD)
+    pre = _extract_mermaid_pre(html)
+    assert r"\beta" in pre, r"\beta was dropped from sequence participant"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_sequence_solve_message_preserved():
+    """The Solve message with $$ math must be intact in the sequence <pre>."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SEQUENCE_MD)
+    pre = _extract_mermaid_pre(html)
+    assert "Solve" in pre, "Solve message label lost"
+    assert "$$" in pre, "$$ delimiter lost in sequence message"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_dollar_signs_not_html_escaped():
+    """$ is not an HTML-special character; html.escape() must leave it alone."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SIMPLE_MD)
+    pre = _extract_mermaid_pre(html)
+    # If $ were escaped, we'd see &#36; or &dollar; — must NOT appear
+    assert "&#36;" not in pre, "$ was unexpectedly HTML-escaped to &#36;"
+    assert "&dollar;" not in pre, "$ was unexpectedly HTML-escaped to &dollar;"
+    assert "$$E=mc^2$$" in pre, "simple E=mc^2 expression lost"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_quoted_node_label_quotes_become_entities():
+    """Quoted node labels like A[\"$$...$$\"] have \" escaped to &quot; but $$ intact."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    # The " around $$x^2$$ is escaped; the $$ is not
+    assert "&quot;" in pre, 'double-quote in node label should become &quot;'
+    assert "$$x^2$$" in pre, "math content inside quoted label was lost"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_latex_alignment_ampersand_becomes_entity():
+    r"""LaTeX alignment & in \begin{cases} a &\text{if} b is HTML-escaped to &amp;.
+
+    This is expected html.escape() behaviour: & is HTML-special.  The browser's
+    mermaid.js reads the <pre> as innerHTML / textContent, which decodes &amp;
+    back to & before KaTeX processes it.
+    """
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    # The cases expression has "a &\text{if }" — & becomes &amp;
+    assert "&amp;" in pre, (
+        "LaTeX alignment & was not HTML-escaped to &amp; — "
+        "may cause HTML parser to misread the pre block content"
+    )
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_latex_curly_braces_not_escaped():
+    r"""Curly braces {} in LaTeX (\frac{1}{2}) must NOT be HTML-escaped."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    # html.escape() does not touch { or }
+    assert "{" in pre, "{ curly brace was unexpectedly escaped"
+    assert "}" in pre, "} curly brace was unexpectedly escaped"
+
+
+@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
+def test_math_complex_expression_not_truncated():
+    """The long matrix expression must not be silently truncated."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    # The bmatrix expression from node E
+    assert r"\bmatrix" in pre or "bmatrix" in pre, (
+        "\\bmatrix expression was truncated or dropped"
+    )
+
+
+# ── 8d. mmdc pre-render path: math-containing diagrams ───────────────────────
+
+
+@pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not installed")
+def test_math_flowchart_mmdc_produces_svg():
+    """mmdc must accept math in flowchart node labels and produce an SVG."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    assert "data:image/svg+xml;base64," in html, (
+        "mmdc did not produce SVG for math-containing flowchart"
+    )
+    assert '<pre class="mermaid">' not in html
+
+
+@pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not installed")
+def test_math_sequence_mmdc_produces_svg():
+    """mmdc must accept math in sequence participants/messages and produce SVG."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SEQUENCE_MD)
+    assert "data:image/svg+xml;base64," in html, (
+        "mmdc did not produce SVG for math-containing sequence diagram"
+    )
+
+
+@pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not installed")
+def test_math_mmdc_svg_is_non_trivial():
+    """The SVG produced for a math flowchart must be non-trivial."""
+    import base64
+    import re
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
+    match = re.search(r"data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)", html)
+    assert match, "no SVG data URI found"
+    svg = base64.b64decode(match.group(1)).decode("utf-8", errors="replace")
+    assert len(svg) > 2000, f"SVG only {len(svg)} bytes — likely a placeholder"
+    assert "<svg" in svg
+
+
+@pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not installed")
+def test_math_simple_mmdc_produces_svg():
+    """E=mc^2 and F=ma flowchart must render to SVG with mmdc."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_MATH_SIMPLE_MD)
+    assert "data:image/svg+xml;base64," in html, (
+        "mmdc failed to render simple math flowchart"
+    )
