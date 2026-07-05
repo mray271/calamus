@@ -18,7 +18,7 @@ RUN dnf update -y && dnf install -y \
     libadwaita \
     gobject-introspection \
     glib2-devel \
-    webkit2gtk4.1-devel \
+    webkit2gtk4.1 \
     gtksourceview5 \
     xorg-x11-server-Xvfb \
     dbus-daemon \

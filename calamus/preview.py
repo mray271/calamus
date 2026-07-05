@@ -15,12 +15,18 @@ from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
 
 try:
     gi.require_version("WebKit", "6.0")
-    from gi.repository import WebKit
+    from gi.repository import WebKit as _WebKitModule
 
     _WEBKIT_AVAILABLE = True
 except (ImportError, ValueError):
-    WebKit = None
-    _WEBKIT_AVAILABLE = False
+    try:
+        gi.require_version("WebKit2", "4.1")
+        from gi.repository import WebKit2 as _WebKitModule
+
+        _WEBKIT_AVAILABLE = True
+    except (ImportError, ValueError):
+        _WebKitModule = None
+        _WEBKIT_AVAILABLE = False
 
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
@@ -63,11 +69,11 @@ class AbstractPreview(ABC):
 
 
 class WebKitPreview(AbstractPreview):
-    """Preview implementation backed by WebKit."""
+    """Preview implementation backed by WebKit (6.0) or WebKit2 (4.1)."""
 
     def __init__(self, renderer: AbstractMarkdownRenderer | None = None) -> None:
         self._renderer = renderer or MistuneRenderer()
-        self._view = WebKit.WebView()
+        self._view = _WebKitModule.WebView()
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
 
