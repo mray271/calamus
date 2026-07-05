@@ -42,6 +42,12 @@ RUN uv sync --no-install-project || true
 # Copy source
 COPY . .
 
+# Download Mermaid.js once at build time so the image works fully offline.
+# Also store a copy outside /app so the dev volume mount (.:/app) can't shadow it.
+RUN bash scripts/fetch-mermaid.sh && \
+    mkdir -p /usr/local/share/calamus/js && \
+    cp calamus/resources/js/mermaid.min.js /usr/local/share/calamus/js/mermaid.min.js
+
 # Entrypoint: overlays /sys/block with a bind-mountable directory so
 # WebKit's bwrap sandbox can access it (requires CAP_SYS_ADMIN at runtime).
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

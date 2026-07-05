@@ -15,13 +15,20 @@ MERMAID_CDN_URL = (
     f"https://cdn.jsdelivr.net/npm/mermaid@{MERMAID_VERSION}/dist/mermaid.min.js"
 )
 MERMAID_LOCAL_PATH = "calamus/resources/js/mermaid.min.js"
+# System-wide copy baked into the Docker image (outside the volume-mounted /app).
+# Used as a fallback when the volume mount shadows the source-tree copy.
+MERMAID_SYSTEM_PATH = "/usr/local/share/calamus/js/mermaid.min.js"
 
 
 def get_mermaid_script_tag(local_first: bool = True) -> str:
     """Return a <script> tag that loads Mermaid.js."""
-    local_path = Path(MERMAID_LOCAL_PATH).resolve()
-    if local_first and local_path.exists():
-        return f'<script src="file://{local_path}"></script>'
+    if local_first:
+        local_path = Path(MERMAID_LOCAL_PATH).resolve()
+        if local_path.exists():
+            return f'<script src="file://{local_path}"></script>'
+        system_path = Path(MERMAID_SYSTEM_PATH)
+        if system_path.exists():
+            return f'<script src="file://{system_path}"></script>'
     return f'<script src="{MERMAID_CDN_URL}"></script>'
 
 
