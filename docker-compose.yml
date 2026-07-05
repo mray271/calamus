@@ -4,6 +4,8 @@ services:
     container_name: calamus-app
     environment:
       - DISPLAY=${DISPLAY:-:0}
+      - WEBKIT_DISABLE_SANDBOX=1
+      - WEBKIT_FORCE_SANDBOX=0
       # Uncomment if you get "Invalid MIT-MAGIC-COOKIE-1 key" errors:
       # - XAUTHORITY=${XAUTHORITY:-$HOME/.Xauthority}
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}
@@ -18,8 +20,12 @@ services:
       - ~/.config/Calamus:/root/.config/Calamus
     security_opt:
       - label=type:container_runtime_t
+      - seccomp=unconfined
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
     network_mode: host
-    command: uv run calamus
+    command: ["dbus-run-session", "uv", "run", "calamus"]
 
   test:
     build: .

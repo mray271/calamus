@@ -19,6 +19,7 @@ RUN dnf update -y && dnf install -y \
     gobject-introspection \
     glib2-devel \
     webkit2gtk4.1 \
+    webkitgtk6.0 \
     gtksourceview5 \
     xorg-x11-server-Xvfb \
     dbus-daemon \
@@ -41,8 +42,14 @@ RUN uv sync --no-install-project || true
 # Copy source
 COPY . .
 
+# Entrypoint: overlays /sys/block with a bind-mountable directory so
+# WebKit's bwrap sandbox can access it (requires CAP_SYS_ADMIN at runtime).
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Set display for GUI
 ENV DISPLAY=:0
 ENV DBUS_SESSION_BUS_ADDRESS=autolaunch:
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uv", "run", "calamus"]

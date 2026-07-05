@@ -19,14 +19,10 @@ try:
 
     _WEBKIT_AVAILABLE = True
 except (ImportError, ValueError):
-    try:
-        gi.require_version("WebKit2", "4.1")
-        from gi.repository import WebKit2 as _WebKitModule
-
-        _WEBKIT_AVAILABLE = True
-    except (ImportError, ValueError):
-        _WebKitModule = None
-        _WEBKIT_AVAILABLE = False
+    # WebKit2 4.1 uses GTK3 internally and cannot be loaded alongside GTK4.
+    # Install webkitgtk6.0 for the live preview to work.
+    _WebKitModule = None
+    _WEBKIT_AVAILABLE = False
 
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
@@ -73,6 +69,11 @@ class WebKitPreview(AbstractPreview):
 
     def __init__(self, renderer: AbstractMarkdownRenderer | None = None) -> None:
         self._renderer = renderer or MistuneRenderer()
+        # Disable the bwrap/dbus-proxy sandbox — required when running inside
+        # Docker where bubblewrap cannot create user namespaces.
+        context = _WebKitModule.WebContext.get_default()
+        if hasattr(context, "set_sandbox_enabled"):
+            context.set_sandbox_enabled(False)
         self._view = _WebKitModule.WebView()
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
