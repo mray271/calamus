@@ -145,6 +145,10 @@ class AbstractTabManager(ABC):
     """Defines tab-management behavior."""
 
     @abstractmethod
+    def get_widget(self) -> Gtk.Widget:
+        """Return the widget backing the tab manager."""
+
+    @abstractmethod
     def new_tab(self, file_path: str | None = None) -> AbstractTab:
         """Create a new tab."""
 
@@ -185,37 +189,39 @@ class AbstractTabManager(ABC):
         """Select the previous tab."""
 
 
-@AbstractTabManager.register
-class AdwTabManager(Adw.TabView):
-    """Adwaita TabView-based tab manager."""
+class AdwTabManager(AbstractTabManager):
+    """Adwaita TabView-backed tab manager (composition — AdwTabView is final)."""
 
     def __init__(self, window: Gtk.Window) -> None:
-        super().__init__()
         self._window = window
-        self.set_vexpand(True)
+        self._tab_view = Adw.TabView()
+        self._tab_view.set_vexpand(True)
         self.new_tab()
+
+    def get_widget(self) -> Gtk.Widget:
+        return self._tab_view
 
     def new_tab(self, file_path: str | None = None) -> AbstractTab:
         tab = EditorTab(file_path)
-        page = self.append(tab)
+        page = self._tab_view.append(tab)
         page.set_title(tab.title)
         tab.editor.get_buffer().connect(
             "changed", lambda *_args: page.set_title(tab.title)
         )
-        self.set_selected_page(page)
+        self._tab_view.set_selected_page(page)
         return tab
 
     def open_file(self, path: str) -> None:
-        for index in range(self.get_n_pages()):
-            page = self.get_nth_page(index)
+        for index in range(self._tab_view.get_n_pages()):
+            page = self._tab_view.get_nth_page(index)
             child = page.get_child()
             if isinstance(child, EditorTab) and child.file_path == path:
-                self.set_selected_page(page)
+                self._tab_view.set_selected_page(page)
                 return
         self.new_tab(path)
 
     def get_current_tab(self) -> AbstractTab | None:
-        page = self.get_selected_page()
+        page = self._tab_view.get_selected_page()
         if page is None:
             return None
         child = page.get_child()
@@ -244,17 +250,17 @@ class AdwTabManager(Adw.TabView):
             tab.reload()
 
     def close_current_tab(self) -> None:
-        page = self.get_selected_page()
-        if page is not None and self.get_n_pages() > 1:
-            self.close_page(page)
+        page = self._tab_view.get_selected_page()
+        if page is not None and self._tab_view.get_n_pages() > 1:
+            self._tab_view.close_page(page)
 
     def next_tab(self) -> None:
-        if self.get_selected_page() is not None:
-            self.select_next_page()
+        if self._tab_view.get_selected_page() is not None:
+            self._tab_view.select_next_page()
 
     def prev_tab(self) -> None:
-        if self.get_selected_page() is not None:
-            self.select_previous_page()
+        if self._tab_view.get_selected_page() is not None:
+            self._tab_view.select_previous_page()
 
     def _on_save_as_response(self, dialog: Gtk.FileDialog, result: object) -> None:
         try:
@@ -268,6 +274,6 @@ class AdwTabManager(Adw.TabView):
             return
         tab.file_path = gfile.get_path()
         tab.save()
-        page = self.get_selected_page()
+        page = self._tab_view.get_selected_page()
         if page is not None:
             page.set_title(tab.title)

@@ -60,7 +60,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         self.paned.set_position(220)
 
         self.tab_manager = AdwTabManager(self)
-        self.paned.set_end_child(self.tab_manager)
+        self.paned.set_end_child(self.tab_manager.get_widget())
 
     def _build_menu(self) -> Gio.MenuModel:
         builder = Gtk.Builder.new_from_string(MENU_XML, -1)
