@@ -414,3 +414,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## License
 
 GNU Lesser General Public License v2.1 or later. See [LICENSE](LICENSE).
+
+---
+
+Copyright 2026 Daniel P. Dougherty and the Calamus contributors.
