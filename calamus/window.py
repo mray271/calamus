@@ -136,6 +136,11 @@ class CalamusWindow(Adw.ApplicationWindow):
         filters = Gio.ListStore.new(Gtk.FileFilter)
         filters.append(file_filter)
         dialog.set_filters(filters)
+        config = self._config_provider.load()
+        initial_dir = (
+            config.get("Files", "default_open_dir", fallback="") or os.getcwd()
+        )
+        dialog.set_initial_folder(Gio.File.new_for_path(initial_dir))
         dialog.open(self, None, self._on_open_response)
 
     def _on_open_response(self, dialog: Gtk.FileDialog, result: object) -> None:

@@ -67,7 +67,7 @@ class GtkDirectoryPane(Gtk.Box):
         self._tree.connect("row-activated", self._on_row_activated)
         scroll.set_child(self._tree)
 
-        self.load_directory(os.path.expanduser("~"))
+        self.load_directory(os.getcwd())
 
     def _populate(self, parent_iter: object, path: str) -> None:
         try:
