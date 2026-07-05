@@ -127,7 +127,7 @@ class EditorTab(Gtk.Box):
         self.append(paned)
 
         scroll_editor = Gtk.ScrolledWindow()
-        scroll_editor.set_child(self.editor)
+        scroll_editor.set_child(self.editor.get_widget())
         paned.set_start_child(scroll_editor)
 
         scroll_preview = Gtk.ScrolledWindow()

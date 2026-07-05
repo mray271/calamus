@@ -193,17 +193,17 @@ class CalamusWindow(Adw.ApplicationWindow):
     def _on_cut(self, _action: Gio.SimpleAction, _param: object) -> None:
         editor = self.tab_manager.get_current_editor()
         if editor is not None:
-            editor.emit("cut-clipboard")
+            editor.get_widget().emit("cut-clipboard")
 
     def _on_copy(self, _action: Gio.SimpleAction, _param: object) -> None:
         editor = self.tab_manager.get_current_editor()
         if editor is not None:
-            editor.emit("copy-clipboard")
+            editor.get_widget().emit("copy-clipboard")
 
     def _on_paste(self, _action: Gio.SimpleAction, _param: object) -> None:
         editor = self.tab_manager.get_current_editor()
         if editor is not None:
-            editor.emit("paste-clipboard")
+            editor.get_widget().emit("paste-clipboard")
 
     def _on_goto_line(self, _action: Gio.SimpleAction, _param: object) -> None:
         editor = self.tab_manager.get_current_editor()

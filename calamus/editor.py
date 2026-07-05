@@ -58,6 +58,10 @@ class AbstractEditor(ABC):
     def configure_from_prefs(self, config: configparser.ConfigParser) -> None:
         """Apply preferences to the editor widget."""
 
+    @abstractmethod
+    def get_widget(self) -> Gtk.Widget:
+        """Return the underlying GTK widget."""
+
 
 class MarkdownEditor(AbstractEditor):
     """Concrete GtkSource-based Markdown editor."""
@@ -97,6 +101,9 @@ class MarkdownEditor(AbstractEditor):
         self._view.get_style_context().add_provider(
             provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
+
+    def get_widget(self) -> GtkSource.View:
+        return self._view
 
     def get_buffer(self) -> GtkSource.Buffer:
         return self._view.get_buffer()
@@ -160,7 +167,7 @@ class MarkdownEditor(AbstractEditor):
             buffer = self.get_buffer()
             iterator = buffer.get_iter_at_line(max(0, line))
             buffer.place_cursor(iterator)
-            self.scroll_to_iter(iterator, 0.1, True, 0.0, 0.5)
+            self._view.scroll_to_iter(iterator, 0.1, True, 0.0, 0.5)
 
         dialog.connect("response", on_response)
         dialog.present()
