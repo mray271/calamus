@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    container_name: calamus-app
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp}
+      - DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XDG_RUNTIME_DIR:-/tmp}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/${WAYLAND_DISPLAY:-wayland-0}:rw
+      - ~/.config/Calamus:/root/.config/Calamus
+    network_mode: host
+    command: uv run calamus
+
+  test:
+    build: .
+    container_name: calamus-test
+    environment:
+      - DISPLAY=:99
+    volumes:
+      - .:/app
+    command: >
+      sh -c "Xvfb :99 -screen 0 1024x768x24 &
+             sleep 1 &&
+             uv run pytest"
+
+  format-check:
+    build: .
+    container_name: calamus-format
+    volumes:
+      - .:/app
+    command: uv run black --check .

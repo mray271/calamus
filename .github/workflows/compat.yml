@@ -1,0 +1,199 @@
+name: Compatibility Matrix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Strategy:
+#
+# Two complementary matrices cover cross-platform compatibility:
+#
+# 1. python-matrix — pure Python tests (no GTK) across Python 3.11, 3.12, 3.13
+#    on a single Ubuntu 25.04 runner. Catches Python version regressions fast
+#    and cheaply. Covers: formatting, mermaid_support, renderer, preferences,
+#    recentfiles, exporter logic, selinux_compat static audit.
+#
+# 2. distro-matrix — GTK integration tests inside per-distro containers
+#    (Fedora 44, Ubuntu 25.04, Debian 13, openSUSE Tumbleweed) using a fixed
+#    Python version. Catches distro-specific package name differences, GTK
+#    version differences, and typelib availability.
+#    Windows and macOS are intentionally excluded — Calamus is a Linux/GNOME
+#    application and GTK4 is not a supported runtime on those platforms.
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Python version matrix — pure Python tests, no GTK required.
+  #    Fast, cheap: runs on GitHub-hosted Ubuntu runner.
+  # ---------------------------------------------------------------------------
+  python-matrix:
+    name: Pure Python tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-25.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dev dependencies
+        run: uv sync --extra dev
+
+      - name: Run pure Python tests (no GTK)
+        # Explicitly select test modules that do not require a display or GTK.
+        # These cover all non-GUI logic and are safe to run on any Python version.
+        run: |
+          uv run pytest \
+            tests/test_formatting.py \
+            tests/test_mermaid_support.py \
+            tests/test_renderer.py \
+            tests/test_preferences.py \
+            tests/test_recentfiles.py \
+            tests/test_exporter.py \
+            tests/test_init.py \
+            tests/test_selinux_compat.py \
+            --cov=calamus \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --junitxml=junit-python-${{ matrix.python-version }}.xml \
+            -v
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-python-${{ matrix.python-version }}
+          path: junit-python-${{ matrix.python-version }}.xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-python-${{ matrix.python-version }}
+          path: coverage.xml
+
+  # ---------------------------------------------------------------------------
+  # 2. Distro compatibility matrix — GTK integration tests in containers.
+  #    One Python version (3.11), one container per supported distro.
+  #    Verifies that system GTK packages install correctly and GTK tests pass.
+  #
+  #    Supported distros (per README.md):
+  #      - Fedora 44        (primary target)
+  #      - Ubuntu 25.04     (GitHub-hosted runner, no container needed)
+  #      - Debian 13        (Trixie)
+  #      - openSUSE         (Tumbleweed, rolling release)
+  #
+  #    Linux Mint 22.x is based on Ubuntu 25.04 and covered by the Ubuntu job.
+  # ---------------------------------------------------------------------------
+  distro-matrix:
+    name: GTK tests (${{ matrix.distro }})
+    runs-on: ubuntu-25.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: fedora-44
+            container: fedora:44
+            install_cmd: >
+              dnf install -y
+              python3 python3-gobject python3-cairo
+              gtk4 libadwaita gtksourceview5
+              typelib-GLib-2_0 typelib-Gtk-4_0 typelib-Adw-1 typelib-GtkSource-5
+              xorg-x11-server-Xvfb dbus dbus-tools curl git
+              && dnf clean all
+
+          - distro: ubuntu-25.04
+            container: ubuntu:25.04
+            install_cmd: >
+              apt-get update && apt-get install -y
+              python3 python3-gi python3-gi-cairo python3-pip
+              gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5
+              libgtk-4-1 libadwaita-1-0
+              xvfb dbus curl git
+
+          - distro: debian-13
+            container: debian:trixie
+            install_cmd: >
+              apt-get update && apt-get install -y
+              python3 python3-gi python3-gi-cairo python3-pip
+              gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5
+              libgtk-4-1 libadwaita-1-0
+              xvfb dbus curl git
+
+          - distro: opensuse-tumbleweed
+            container: opensuse/tumbleweed
+            install_cmd: >
+              zypper --non-interactive install
+              python3 python3-gobject python3-cairo
+              typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1 typelib-1_0-GtkSource-5
+              libgtk-4-1 libadwaita-1-0
+              xvfb-run dbus-1 curl git
+
+    container:
+      image: ${{ matrix.container }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system GTK dependencies
+        run: ${{ matrix.install_cmd }}
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Add uv to PATH
+        run: echo "/root/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Python dev dependencies
+        run: uv python install 3.11 && uv sync --extra dev
+
+      - name: Run GTK integration tests
+        run: |
+          xvfb-run -a uv run pytest \
+            tests/test_editor.py \
+            tests/test_exporter.py \
+            --cov=calamus \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --junitxml=junit-distro-${{ matrix.distro }}.xml \
+            -v
+
+      - name: Run full test suite
+        run: |
+          xvfb-run -a uv run pytest \
+            --ignore=tests/test_editor.py \
+            --cov=calamus \
+            --cov-append \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -v
+        continue-on-error: false
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-distro-${{ matrix.distro }}
+          path: junit-distro-${{ matrix.distro }}.xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-distro-${{ matrix.distro }}
+          path: coverage.xml
+
+      - name: Publish test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: junit-distro-${{ matrix.distro }}.xml
+          check_name: GTK Tests (${{ matrix.distro }})

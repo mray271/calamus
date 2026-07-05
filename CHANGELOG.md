@@ -1,0 +1,30 @@
+# Changelog
+
+All notable changes to Calamus will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- Mermaid.js 11.5.0 diagram support in Preview, HTML/PDF/ODT Export, and Print
+- Mermaid version displayed in Help menu and About dialog
+- Initial project scaffold
+- GTK4 application window with File, Edit, Formatting, and Help menus
+- Tabbed Markdown editor using GtkSourceView
+- Live Markdown preview pane
+- Directory tree sidebar (toggleable)
+- Markdown formatting menu (headings H1–H6, bold, italic, bold+italic, strikethrough, inline code, code block, blockquote, ordered list, unordered list, horizontal rule, link, image)
+- Export to HTML, PDF, and ODT
+- Print and Print Preview
+- Find bar (Ctrl+F) and Go to Line dialog (Ctrl+G)
+- Recent files tracking (10 most recent Markdown files)
+- Preferences dialog with settings saved to `~/.config/Calamus/Calamus.conf`
+- About dialog displaying current version
+- Docker + docker-compose setup for developers (base image: fedora:44)
+- GitHub Actions CI pipeline: format check (black + isort), test suite with 80% coverage gate, build validation, automated release, SELinux compatibility audit, and cross-platform compatibility matrix
+- Compatibility matrix (`compat.yml`): pure Python tests across Python 3.11/3.12/3.13; GTK integration tests on Fedora 44, Ubuntu 25.04, Debian 13, and openSUSE Tumbleweed
+- Three-tier SELinux compatibility enforcement: static subprocess allowlist audit, behavioral graceful-failure regression tests, and self-hosted Fedora enforcing runner support
+- `docs/selinux.md` SELinux compatibility guide for developers and contributors
+- GitHub Actions workflows for formatting, testing, building, and releasing

@@ -1,0 +1,90 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: pytest (${{ matrix.python-version }})
+    # ubuntu-25.04 ships GTK 4.22.x (GTK >= 4.22.4 required)
+    runs-on: ubuntu-25.04
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system GTK dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi python3-gi-cairo \
+            gir1.2-gtk-4.0 gir1.2-adw-1 \
+            gir1.2-gtksource-5 \
+            libgtk-4-1 libadwaita-1-0 \
+            xvfb dbus
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: |
+          xvfb-run -a uv run pytest \
+            --cov=calamus \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --cov-fail-under=80 \
+            --junitxml=junit.xml \
+            -v
+
+      - name: Upload coverage XML (Cobertura)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml-${{ matrix.python-version }}
+          path: coverage.xml
+
+      - name: Upload coverage HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-${{ matrix.python-version }}
+          path: htmlcov/
+
+      - name: Upload test results (JUnit XML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.python-version }}
+          path: junit.xml
+
+      - name: Publish test results to GitHub
+        if: always() && matrix.python-version == '3.11'
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: junit.xml
+
+      - name: Post coverage comment on PR
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.11'
+        uses: MishaKav/pytest-coverage-comment@main
+        with:
+          pytest-xml-coverage-path: coverage.xml
+          junitxml-path: junit.xml
+          title: Test Coverage Report
+          badge-title: Coverage
+          hide-badge: false
+          hide-report: false
+          create-new-comment: false
+          hide-comment: false
+          report-only-changed-files: false
+          unique-id-for-comment: calamus-coverage

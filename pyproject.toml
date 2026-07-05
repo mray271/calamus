@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "calamus"
+version = "0.1.0"
+description = "A GTK4 Markdown editor for GNOME"
+readme = "README.md"
+license = { text = "LGPL-2.1-or-later" }
+requires-python = ">=3.11"
+keywords = ["markdown", "editor", "gtk4", "gnome"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications :: GTK",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Editors",
+    # GTK 4.22.4+ required (Fedora 44+, Ubuntu 25.04+, Debian 13+, openSUSE Tumbleweed)
+]
+dependencies = [
+    "mistune>=3.0",
+    "weasyprint>=61.0",
+    "odfpy>=1.4",
+    "pygobject>=3.56.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0",
+    "isort>=5.13",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[project.scripts]
+calamus = "calamus.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/OWNER/calamus"
+Issues = "https://github.com/OWNER/calamus/issues"
+Changelog = "https://github.com/OWNER/calamus/blob/main/CHANGELOG.md"
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=calamus --cov-report=term-missing"
+
+[tool.hatch.build.targets.wheel]
+packages = ["calamus"]
+
+[dependency-groups]
+dev = [
+    "black>=24.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+]

@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# uv
+uv.lock.bak
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# GTK / GLib
+*.gresource
+*.gresource.xml.bak
+calamus/resources/js/mermaid.min.js
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Distribution
+MANIFEST
+
+# Logs
+*.log
+
+# Temp
+*.tmp
+*.bak
