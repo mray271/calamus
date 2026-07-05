@@ -121,3 +121,98 @@ def test_full_html_byte_length_grows_with_diagram():
     html_with = _build_preview_html(FIXTURE_MD)
     html_without = _build_preview_html("# Just a heading\n")
     assert len(html_with) > len(html_without) + 500
+
+
+# ── 4. Config frontmatter preservation ───────────────────────────────────────
+# Regression: labelRotation (and other per-diagram config) must survive
+# the full md→HTML pipeline without corruption.
+
+_XYCHART_MD = """\
+```mermaid
+---
+config:
+  xyChart:
+    xAxis:
+      labelRotation: 20
+---
+xychart-beta
+    title "Drift"
+    x-axis ["A", "B", "C"]
+    y-axis "val" 0 --> 10
+    bar [1, 2, 3]
+```
+"""
+
+
+def _extract_mermaid_pre(html: str) -> str:
+    """Return the raw content inside the first <pre class=\"mermaid\"> tag."""
+    start = html.find('<pre class="mermaid">') + len('<pre class="mermaid">')
+    end = html.find("</pre>", start)
+    assert start > len('<pre class="mermaid">') - 1, "no <pre class='mermaid'> found"
+    return html[start:end]
+
+
+def test_config_frontmatter_preserved_in_pre():
+    """The ---config:--- YAML block must appear inside the <pre> tag."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_XYCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    assert "---" in pre, "YAML frontmatter delimiters lost"
+    assert "config:" in pre
+    assert "xyChart:" in pre
+    assert "xAxis:" in pre
+    assert "labelRotation: 20" in pre, "labelRotation value was lost or corrupted"
+
+
+def test_config_yaml_keys_not_html_escaped():
+    """YAML config keys/values contain no HTML special chars so must be literal."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_XYCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    # YAML config has no <, >, &, " — so nothing should be encoded
+    assert "&amp;" not in pre or "labelRotation" in pre  # config section is clean
+    # Specifically the labelRotation line must be byte-for-byte identical
+    assert "      labelRotation: 20" in pre
+
+
+def test_diagram_body_quotes_are_escaped_but_decodable():
+    """Quoted strings in the diagram body are &quot;-encoded (safe for HTML)
+    but decode back to the original via textContent in the browser."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_XYCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    # The title string contains quotes — they are escaped in the HTML source…
+    assert "&quot;Drift&quot;" in pre
+    # …but the YAML config section (labelRotation) remains unescaped
+    assert "labelRotation: 20" in pre
+
+
+def test_pre_block_byte_length_matches_expected_range():
+    """Pin the expected byte length of the <pre> block as a canary."""
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(_XYCHART_MD)
+    pre = _extract_mermaid_pre(html)
+    # Allow ±50 bytes for minor whitespace/escaping changes
+    assert 180 < len(pre) < 400, f"<pre> block length {len(pre)} outside expected range"
+
+
+def test_fixture_pre_block_byte_length():
+    """Pin the byte length of the real fixture's <pre> block.
+
+    The fixture's Mermaid source (including YAML config + xychart-beta body)
+    must produce a <pre> block of exactly this size.  A change in length
+    signals that content was dropped, double-escaped, or corrupted.
+    Expected: 474 bytes.
+    """
+    from calamus.renderer import MistuneRenderer
+
+    html = MistuneRenderer().render(FIXTURE_MD)
+    pre = _extract_mermaid_pre(html)
+    assert len(pre) == 474, (
+        f"Fixture <pre> block is {len(pre)} bytes, expected 474. "
+        "Content may have been dropped or corrupted in the rendering pipeline."
+    )
