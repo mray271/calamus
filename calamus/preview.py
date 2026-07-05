@@ -30,11 +30,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 {mermaid_script}
-<script>
-  document.addEventListener('DOMContentLoaded', function() {{
-    mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
-  }});
-</script>
 <style>
   body {{ font-family: sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; }}
   code {{ background: #f4f4f4; padding: 2px 4px; border-radius: 3px; font-family: monospace; }}
@@ -46,7 +41,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 {body}
-{mermaid_init_script}
+<script>
+  mermaid.initialize({{ startOnLoad: false, theme: 'default' }});
+  mermaid.run({{ querySelector: '.mermaid' }});
+</script>
 </body>
 </html>
 """
@@ -83,7 +81,6 @@ class WebKitPreview(AbstractPreview):
         html_text = _HTML_TEMPLATE.format(
             body=html_body,
             mermaid_script=get_mermaid_script_tag(),
-            mermaid_init_script=get_mermaid_init_script(),
         )
         self._view.load_html(html_text, "file:///")
 

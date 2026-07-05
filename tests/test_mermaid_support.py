@@ -134,14 +134,14 @@ def test_get_mermaid_script_tag_local_missing_falls_back_to_cdn(tmp_path, monkey
 
 
 def test_get_mermaid_script_tag_local_file_preferred(tmp_path, monkeypatch):
-    """When local file exists, it should be used instead of CDN."""
+    """When local file exists, its content is inlined instead of using the CDN."""
     import calamus.mermaid_support as ms
 
     local = tmp_path / "mermaid.min.js"
     local.write_text("// fake mermaid")
     monkeypatch.setattr(ms, "MERMAID_LOCAL_PATH", str(local))
     tag = ms.get_mermaid_script_tag(local_first=True)
-    assert "file://" in tag
+    assert "// fake mermaid" in tag
     assert "cdn.jsdelivr.net" not in tag
 
 
