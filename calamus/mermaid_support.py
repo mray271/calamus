@@ -21,14 +21,19 @@ MERMAID_SYSTEM_PATH = "/usr/local/share/calamus/js/mermaid.min.js"
 
 
 def get_mermaid_script_tag(local_first: bool = True) -> str:
-    """Return a <script> tag that loads Mermaid.js."""
+    """Return a <script> tag that loads Mermaid.js.
+
+    When a local copy is available the JS is inlined directly into the tag
+    so WebKit's file:// security restrictions cannot block it.
+    """
     if local_first:
-        local_path = Path(MERMAID_LOCAL_PATH).resolve()
-        if local_path.exists():
-            return f'<script src="file://{local_path}"></script>'
-        system_path = Path(MERMAID_SYSTEM_PATH)
-        if system_path.exists():
-            return f'<script src="file://{system_path}"></script>'
+        for candidate in (
+            Path(MERMAID_LOCAL_PATH).resolve(),
+            Path(MERMAID_SYSTEM_PATH),
+        ):
+            if candidate.exists():
+                js = candidate.read_text(encoding="utf-8")
+                return f"<script>{js}</script>"
     return f'<script src="{MERMAID_CDN_URL}"></script>'
 
 
