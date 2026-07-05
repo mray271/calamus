@@ -181,6 +181,24 @@ docker compose run --rm app bash
 docker compose build --no-cache
 ```
 
+#### Troubleshooting: `Invalid MIT-MAGIC-COOKIE-1 key`
+
+If the app still complains about X authorization after running `xhost +local:docker`,
+mount your `.Xauthority` file into the container. Uncomment the `XAUTHORITY` lines
+in `docker-compose.yml`, or add the flag manually:
+
+```bash
+docker run -it --rm \
+  -e DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  --volume="$HOME/.Xauthority:/root/.Xauthority:ro" \
+  --security-opt label=type:container_runtime_t \
+  <image_name> uv run calamus
+```
+
+> If your container runs as a non-root user, replace `/root/.Xauthority` with
+> that user's home directory, e.g. `/home/myuser/.Xauthority`.
+
 ## Project Structure
 
 ```
