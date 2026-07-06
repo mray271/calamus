@@ -18,6 +18,8 @@ MERMAID_LOCAL_PATH = "calamus/resources/js/mermaid.min.js"
 # System-wide copy baked into the Docker image (outside the volume-mounted /app).
 # Used as a fallback when the volume mount shadows the source-tree copy.
 MERMAID_SYSTEM_PATH = "/usr/local/share/calamus/js/mermaid.min.js"
+# Puppeteer config for mmdc inside Docker (no-sandbox, system Chromium).
+MMDC_PUPPETEER_CONFIG = "/usr/local/share/calamus/mmdc-puppeteer.json"
 
 
 def get_mermaid_script_tag(local_first: bool = True) -> str:
@@ -84,8 +86,14 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
         output_path = work_dir / "diagram.svg"
         input_path.write_text(diagram_source, encoding="utf-8")
         try:
+            puppeteer_config = Path(MMDC_PUPPETEER_CONFIG)
             subprocess.run(
-                ["mmdc", "-i", str(input_path), "-o", str(output_path)],
+                [
+                    "mmdc",
+                    "-i", str(input_path),
+                    "-o", str(output_path),
+                    *(["-p", str(puppeteer_config)] if puppeteer_config.exists() else []),
+                ],
                 check=True,
                 capture_output=True,
                 text=True,

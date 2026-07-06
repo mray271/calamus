@@ -20,7 +20,7 @@ The combined fractional rate difference (planet vs. Earth) is:
 
 Multiplied by 10⁹ gives **nanoseconds per second (ns/s)**.
 
-For **Proxima Centauri b**, the reference frame is extended to account for Proxima Centauri's own velocity relative to the Sun (~32.5 km/s), which adds a significant SR time dilation term:
+For **Proxima Centauri b**, the reference frame is extended to account for Proxima Centauri's own velocity relative to the Sun (≈32.5 km/s), which adds a significant SR time dilation term:
 
 ---
 
@@ -36,7 +36,7 @@ For **Proxima Centauri b**, the reference frame is extended to account for Proxi
 | Saturn | +6.9413 | +7.30 hours |
 | Uranus | +12.2075 | +12.84 hours |
 | Neptune | +11.9378 | +12.56 hours |
-| Oort Cloud (~50,000 AU) | +15.5011 | +0.68 days |
+| Oort Cloud (≈50,000 AU) | +15.5011 | +0.68 days |
 | Proxima Centauri b | −28.4312 | −1.25 days |
 
 **Positive** = clock runs *faster* than Earth's.  
@@ -70,22 +70,22 @@ xychart-beta
 | Saturn | −1.0350 | −0.5224 | −7.0027 | **+6.9413** |
 | Uranus | −0.5143 | −0.2572 | −2.5223 | **+12.2075** |
 | Neptune | −0.3285 | −0.1640 | −3.0710 | **+11.9378** |
-| Oort Cloud (~50k AU) | −0.0002 | −0.0001 | ~0 | **+15.5011** |
+| Oort Cloud (≈50k AU) | −0.0002 | −0.0001 | ≈0 | **+15.5011** |
 | Proxima Centauri b | −24.8492 ¹ | −12.4246 + −5.8781 ² | −0.7807 | **−28.4312** |
 
 ---
 
 ## Notable Results
 
-- **Mercury** has the slowest clocks in the solar system (among the 8 planets + Oort Cloud sampled): it is close to the Sun *and* moves fastest in its orbit. Its clock loses exactly **1 day** relative to Earth over ~120,000 years.
+- **Mercury** has the slowest clocks in the solar system (among the 8 planets + Oort Cloud sampled): it is close to the Sun *and* moves fastest in its orbit. Its clock loses exactly **1 day** relative to Earth over ≈120,000 years.
 
 - **Jupiter** runs *slower* than Earth despite being far from the Sun, because its enormous surface gravity (−19.7 ns/s) overwhelms the benefit of its greater orbital distance.
 
-- **Uranus and Neptune** run the fastest among the 8 planets (~+12 ns/s), gaining roughly half a day on Earth every 120,000 years.
+- **Uranus and Neptune** run the fastest among the 8 planets (≈+12 ns/s), gaining roughly half a day on Earth every 120,000 years.
 
-- **Oort Cloud planetesimal** (~50,000 AU) runs even faster (+15.5 ns/s) because it is so far from the Sun's gravitational well and moves at only ~133 m/s. Its tiny surface gravity (~10 km radius, 500 kg/m³) is negligible.
+- **Oort Cloud planetesimal** (≈50,000 AU) runs even faster (+15.5 ns/s) because it is so far from the Sun's gravitational well and moves at only ≈133 m/s. Its tiny surface gravity (≈10 km radius, 500 kg/m³) is negligible.
 
-- **Proxima Centauri b** has the slowest clock in this table (−28.4 ns/s), losing **1.25 days** relative to Earth over 120,000 years. Three factors compound: Proxima Centauri's deep gravitational well at the planet's tight 0.0485 AU orbit, a fast orbital speed (~47 km/s), and the entire Proxima system moving at ~32.5 km/s relative to the Sun.
+- **Proxima Centauri b** has the slowest clock in this table (−28.4 ns/s), losing **1.25 days** relative to Earth over 120,000 years. Three factors compound: Proxima Centauri's deep gravitational well at the planet's tight 0.0485 AU orbit, a fast orbital speed (≈47 km/s), and the entire Proxima system moving at ≈32.5 km/s relative to the Sun.
 
 ---
 
@@ -94,9 +94,9 @@ xychart-beta
 | Effect | Value (ns/s) |
 |---|---:|
 | Proxima Centauri gravity at orbit | −24.8492 |
-| Orbital velocity around Proxima (~47 km/s) | −12.4246 |
-| Proxima system velocity relative to Sun (~32.5 km/s) | −5.8781 |
-| Surface gravity of planet (~1.04 R⊕, ~1.17 M⊕) | −0.7807 |
+| Orbital velocity around Proxima (≈47 km/s) | −12.4246 |
+| Proxima system velocity relative to Sun (≈32.5 km/s) | −5.8781 |
+| Surface gravity of planet (≈1.04 R~⊕~, ≈1.17 M~⊕~) | −0.7807 |
 | Sun's gravity at 4.24 ly (negligible) | −0.0000 |
 | **Total** | **−28.4312** |
 
@@ -111,7 +111,7 @@ xychart-beta
 |---|---|
 | Mercury drift rate | 22.8466 ns/s |
 | 1 day in nanoseconds | 8.64 × 10¹³ ns |
-| Time to accumulate 1 day of drift | **~119,836 years** (~120,000 years) |
+| Time to accumulate 1 day of drift | **≈119,836 years** (≈120,000 years) |
 
 ---
 
@@ -120,9 +120,9 @@ xychart-beta
 | Constant | Value |
 |---|---|
 | Speed of light *c* | 2.99792458 × 10⁸ m/s |
-| GM_Sun | 1.32712440018 × 10²⁰ m³/s² |
+| GM~☉~ | 1.32712440018 × 10²⁰ m³/s² |
 | 120,000 years in seconds | 3.7869 × 10¹² s |
 
 Planet semi-major axes, orbital velocities, GM, and radii from standard IAU/NASA values.  
 Oort Cloud object assumed at **50,000 AU**, radius **10 km**, density **500 kg/m³** (comet-like).  
-Proxima Centauri b: semi-major axis **0.0485 AU**, M★ = **0.1221 M☉**, planet mass **~1.17 M⊕**, radius **~1.04 R⊕** (rocky scaling), Proxima velocity relative to Sun **~32.5 km/s** (radial −22.2 km/s + transverse ~23.7 km/s from proper motion 3.85″/yr at 4.243 ly).
+Proxima Centauri b: semi-major axis **0.0485 AU**, M~★~ = **0.1221 M~☉~**, planet mass **≈1.17 M~⊕~**, radius **≈1.04 R~⊕~** (rocky scaling), Proxima velocity relative to Sun **≈32.5 km/s** (radial −22.2 km/s + transverse ≈23.7 km/s from proper motion 3.85″/yr at 4.243 ly).

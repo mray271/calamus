@@ -26,7 +26,21 @@ RUN dnf update -y && dnf install -y \
     dbus-tools \
     curl \
     git \
+    nodejs \
+    npm \
+    chromium \
+    google-noto-sans-fonts \
+    google-noto-sans-symbols2-fonts \
+    google-noto-emoji-fonts \
+    unifont-fonts \
     && dnf clean all
+
+# Install mermaid-cli (mmdc) for server-side diagram pre-rendering.
+# PUPPETEER_SKIP_CHROMIUM_DOWNLOAD avoids bundling a second Chromium —
+# we use the system chromium package installed above instead.
+ENV PUPPETEER_SKIP_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+RUN npm install -g @mermaid-js/mermaid-cli@11.16.0
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -47,6 +61,10 @@ COPY . .
 RUN bash scripts/fetch-mermaid.sh && \
     mkdir -p /usr/local/share/calamus/js && \
     cp calamus/resources/js/mermaid.min.js /usr/local/share/calamus/js/mermaid.min.js
+
+# Puppeteer config for mmdc: use system Chromium with no-sandbox flags.
+# Stored outside /app so the volume mount cannot shadow it.
+COPY docker-mmdc-puppeteer.json /usr/local/share/calamus/mmdc-puppeteer.json
 
 # Entrypoint: overlays /sys/block with a bind-mountable directory so
 # WebKit's bwrap sandbox can access it (requires CAP_SYS_ADMIN at runtime).

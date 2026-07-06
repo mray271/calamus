@@ -2,6 +2,34 @@
 
 Thank you for your interest in contributing!
 
+## Code of Conduct
+
+When interacting with this project, the [GNOME Code of Conduct](https://conduct.gnome.org/)
+applies. Please read it before participating.
+
+## Licensing
+
+Calamus is licensed under the **GNU General Public License v3.0 or later
+(GPLv3+)**. By submitting a contribution (pull request, patch, or otherwise)
+you agree that your contribution is licensed under the same terms. You retain
+copyright in your own contributions — no copyright assignment or Contributor
+License Agreement is required.
+
+All contributions must be compatible with GPLv3+. Modifications or
+extensions to the project must preserve this license so that the software
+remains free and open source. Every new source file should carry an SPDX
+identifier in its header:
+
+```python
+# SPDX-License-Identifier: GPL-3.0-or-later
+```
+
+## Questions and Support
+
+Open a [GitHub Discussion](../../discussions) for questions, design ideas, or
+help getting started. For bugs and concrete feature requests, open a
+[GitHub Issue](../../issues) instead.
+
 ## SELinux Compatibility
 
 Calamus targets Fedora as its primary platform, and **Fedora ships with SELinux

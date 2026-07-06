@@ -16,6 +16,27 @@ from calamus.editor import AbstractEditor, MarkdownEditor
 from calamus.preview import AbstractPreview, create_preview
 from calamus.preferences import FileConfigProvider
 
+# Files larger than this will be refused with an error dialog rather than
+# loaded.  Markdown syntax highlighting and live preview rendering become
+# unacceptably slow above this threshold; 20 MB matches VS Code's own
+# large-file optimisation cutoff.
+LARGE_FILE_SIZE_BYTES: int = 20 * 1024 * 1024  # 20 MB
+
+
+class FileTooLargeError(Exception):
+    """Raised when a file exceeds LARGE_FILE_SIZE_BYTES."""
+
+    def __init__(self, path: str, size: int, limit: int) -> None:
+        self.path = path
+        self.size = size
+        self.limit = limit
+        size_mb = size / (1024 * 1024)
+        limit_mb = limit / (1024 * 1024)
+        super().__init__(
+            f"{os.path.basename(path)!r} is {size_mb:.1f} MB "
+            f"(limit is {limit_mb:.0f} MB)"
+        )
+
 
 class AbstractTab(ABC):
     """Defines a tab interface."""
@@ -109,10 +130,19 @@ class EditorTab(Gtk.Box):
     def load_file(self, path: str) -> None:
         self._file_path = path
         try:
+            file_size = os.path.getsize(path)
+            if file_size > LARGE_FILE_SIZE_BYTES:
+                raise FileTooLargeError(path, file_size, LARGE_FILE_SIZE_BYTES)
             with open(path, "r", encoding="utf-8") as handle:
                 content = handle.read()
+        except FileTooLargeError:
+            raise
         except OSError as error:
             content = f"Error loading file: {error}"
+            self.editor.set_text(content)
+            self.preview.update(content)
+            self._modified = False
+            return
         self.editor.set_text(content)
         self.preview.update(content)
         self._modified = False
@@ -212,6 +242,13 @@ class AdwTabManager(AbstractTabManager):
         return tab
 
     def open_file(self, path: str) -> None:
+        try:
+            file_size = os.path.getsize(path)
+        except OSError:
+            file_size = 0
+        if file_size > LARGE_FILE_SIZE_BYTES:
+            self._show_file_too_large_dialog(path, file_size)
+            return
         for index in range(self._tab_view.get_n_pages()):
             page = self._tab_view.get_nth_page(index)
             child = page.get_child()
@@ -246,8 +283,16 @@ class AdwTabManager(AbstractTabManager):
 
     def reload_current(self) -> None:
         tab = self.get_current_tab()
-        if tab is not None:
-            tab.reload()
+        if tab is None or tab.file_path is None:
+            return
+        try:
+            file_size = os.path.getsize(tab.file_path)
+        except OSError:
+            file_size = 0
+        if file_size > LARGE_FILE_SIZE_BYTES:
+            self._show_file_too_large_dialog(tab.file_path, file_size)
+            return
+        tab.reload()
 
     def close_current_tab(self) -> None:
         page = self._tab_view.get_selected_page()
@@ -277,3 +322,17 @@ class AdwTabManager(AbstractTabManager):
         page = self._tab_view.get_selected_page()
         if page is not None:
             page.set_title(tab.title)
+
+    def _show_file_too_large_dialog(self, path: str, size: int) -> None:
+        size_mb = size / (1024 * 1024)
+        limit_mb = LARGE_FILE_SIZE_BYTES / (1024 * 1024)
+        dialog = Adw.AlertDialog.new(
+            "File Too Large to Open",
+            f"\u201c{os.path.basename(path)}\u201d is {size_mb:.1f}\u202fMB, which "
+            f"exceeds the {limit_mb:.0f}\u202fMB limit.\n\n"
+            "Large files would cause slow syntax highlighting and unresponsive "
+            "live preview rendering.",
+        )
+        dialog.add_response("ok", "OK")
+        dialog.set_default_response("ok")
+        dialog.present(self._window)

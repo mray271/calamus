@@ -6,20 +6,20 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - WEBKIT_DISABLE_SANDBOX=1
       - WEBKIT_FORCE_SANDBOX=0
-      # Uncomment if you get "Invalid MIT-MAGIC-COOKIE-1 key" errors:
-      # - XAUTHORITY=${XAUTHORITY:-$HOME/.Xauthority}
+      - XAUTHORITY=${XAUTHORITY:-/root/.Xauthority}
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp}
       - DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}
     volumes:
       - .:/app
       - /tmp/.X11-unix:/tmp/.X11-unix
-      # Uncomment if you get "Invalid MIT-MAGIC-COOKIE-1 key" errors:
-      # - ${XAUTHORITY:-~/.Xauthority}:/root/.Xauthority:ro
+      - ${XAUTHORITY:-~/.Xauthority}:/root/.Xauthority:ro
       - ${XDG_RUNTIME_DIR:-/tmp}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/${WAYLAND_DISPLAY:-wayland-0}:rw
       - ~/.config/Calamus:/root/.config/Calamus
     security_opt:
-      - label=type:container_runtime_t
+      # label=disable is required on Fedora/SELinux so the container can access
+      # the X11 socket.  Run `xhost +local:` on the host before `docker compose up`.
+      - label=disable
       - seccomp=unconfined
     cap_add:
       - SYS_ADMIN

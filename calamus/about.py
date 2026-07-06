@@ -7,7 +7,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw
+from gi.repository import Adw, Gtk
 
 from calamus import MERMAID_VERSION, __version__
 
@@ -18,7 +18,7 @@ def show_about_dialog(parent) -> None:
     dialog.set_application_name("Calamus")
     dialog.set_version(__version__)
     dialog.set_developer_name("Calamus Contributors")
-    dialog.set_license_type(0)
+    dialog.set_license_type(Gtk.License.GPL_3_0)
     dialog.set_comments(
         f"A GTK4 Markdown editor for GNOME.\n\nPowered by Mermaid.js {MERMAID_VERSION}"
     )

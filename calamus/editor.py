@@ -12,7 +12,6 @@ gi.require_version("GtkSource", "5")
 gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk, GtkSource, Pango
-from gi.repository import Gtk
 
 
 class AbstractEditor(ABC):
@@ -71,6 +70,7 @@ class MarkdownEditor(AbstractEditor):
         self._view = GtkSource.View()  # Create a GtkSource.View instance
         self._find_bar: Gtk.Widget | None = None
         self._find_revealer: Gtk.Revealer | None = None
+        self._css_provider = Gtk.CssProvider()
 
     def _setup_buffer(self) -> None:
         language_manager = GtkSource.LanguageManager.get_default()
@@ -95,11 +95,13 @@ class MarkdownEditor(AbstractEditor):
     def _apply_font(self, font_description: Pango.FontDescription) -> None:
         family = font_description.get_family() or "Monospace"
         size_pt = max(1, font_description.get_size() // Pango.SCALE)
-        css = f"textview {{ font-family: {family}; font-size: {size_pt}pt; }}"
-        provider = Gtk.CssProvider()
-        provider.load_from_string(css)
-        self._view.get_style_context().add_provider(
-            provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        css = f"textview.calamus-editor {{ font-family: {family}; font-size: {size_pt}pt; }}"
+        self._css_provider.load_from_string(css)
+        self._view.add_css_class("calamus-editor")
+        Gtk.StyleContext.add_provider_for_display(
+            self._view.get_display(),
+            self._css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
     def get_widget(self) -> GtkSource.View:

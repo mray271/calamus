@@ -36,12 +36,12 @@ class MistuneRenderer(AbstractMarkdownRenderer):
         #   "def_list"    – ExtraMark definition lists (Term\n:   Definition)
         #   "footnotes"   – ExtraMark/GFM footnotes   ([^1] / [^1]: text)
         #   "abbr"        – ExtraMark abbreviations   (*[HTML]: expansion)
-        #   "superscript" – ExtraMark superscript     (x^2^)
-        #   "subscript"   – ExtraMark subscript       (H~2~O)
         # See: tests/test_extramark_compat.py and tests/test_gfm_compat.py
+        # "superscript" and "subscript" are already enabled (x^2^, H~2~O,
+        # and scientific notation such as M~🜨~ for Earth mass).
         self._renderer = mistune.create_markdown(
             renderer=mistune.HTMLRenderer(escape=False),
-            plugins=["strikethrough", "table", "url"],
+            plugins=["strikethrough", "table", "url", "subscript", "superscript"],
         )
 
     def render(self, text: str) -> str:

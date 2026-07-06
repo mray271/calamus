@@ -2,15 +2,15 @@
 
 ## 1. Overview
 
-**Calamus** is a GTK4 desktop Markdown editor targeting GNOME on Fedora, with full compatibility on Ubuntu, Linux Mint, Debian, and openSUSE. It is implemented in Python using PyGObject, licensed under **LGPLv2.1+**, and managed with `uv` for reproducible builds.
+**Calamus** is a GTK4 desktop Markdown editor targeting GNOME on Fedora, with full compatibility on Ubuntu, Linux Mint, Debian, and openSUSE. It is implemented in Python using PyGObject, licensed under **GPLv3+**, and managed with `uv` for reproducible builds.
 
 ---
 
 ## 2. License
 
-- **LGPLv2.1+** (GNU Lesser General Public License v2.1 or later)
-- Rationale: Maximum compatibility with the GNOME ecosystem; allows linking from both free and proprietary software; aligns with GTK's own license.
-- `LICENSE.md` — full LGPLv2.1 license text
+- **GPLv3+** (GNU General Public License v3.0 or later)
+- Rationale: Standard license for GNOME applications (Nautilus, GNOME Calendar, GNOME Text Editor all use GPLv3+); ensures the application and all derivative works remain open source. LGPL is appropriate for libraries, not applications.
+- `LICENSE` — full GPLv3 license text
 
 ---
 
@@ -101,7 +101,7 @@ calamus/
 name = "calamus"
 version = "0.1.0"
 description = "A GTK4 Markdown editor for GNOME"
-license = { text = "LGPL-2.1-or-later" }
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.11"
 dependencies = [
     "PyGObject>=3.46",

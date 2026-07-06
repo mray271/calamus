@@ -7,14 +7,14 @@ name = "calamus"
 version = "0.1.0"
 description = "A GTK4 Markdown editor for GNOME"
 readme = "README.md"
-license = { text = "LGPL-2.1-or-later" }
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.11"
 keywords = ["markdown", "editor", "gtk4", "gnome"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: X11 Applications :: GTK",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -51,6 +51,10 @@ profile = "black"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=calamus --cov-report=term-missing"
+filterwarnings = [
+    # PyGObject emits this internally during GLib proxy initialization — not from our code.
+    "ignore:GLib.unix_signal_add_full is deprecated",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["calamus"]
