@@ -1,5 +1,14 @@
 PREFIX=/usr
 
+up:
+	docker compose up
+
+up-detach:
+	docker compose up -d
+
+down:
+	docker compose down
+
 install:
 	mkdir -p $(DESTDIR)$(PREFIX)/share/applications
 	mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
@@ -28,4 +37,4 @@ uninstall:
 	gtk-update-icon-cache -f $(DESTDIR)$(PREFIX)/share/icons/hicolor || true
 	update-desktop-database $(DESTDIR)$(PREFIX)/share/applications || true
 
-.PHONY: install uninstall
+.PHONY: install uninstall up up-detach down

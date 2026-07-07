@@ -35,32 +35,91 @@ class CalamusWindow(Adw.ApplicationWindow):
         self._config_provider = FileConfigProvider()
         self._recent_files = ConfigFileRecentFilesProvider(self._config_provider)
         self._dir_pane_visible = True
+        self._editor_pane_visible = True
+        self._preview_pane_visible = True
+        self._confirmed_quit = False
         self._printer = GtkPrinter()
         self._build_ui()
         self._build_actions()
+        self.connect("close-request", self._on_close_request)
 
     def _build_ui(self) -> None:
-        outer_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.set_content(outer_box)
+        self.tab_manager = AdwTabManager(self)
+        self.tab_manager.set_title_change_callback(self._update_window_title)
+        tab_view = self.tab_manager.get_tab_view()
 
+        # TabOverview must wrap all content so its "overview.open" action
+        # is an ancestor of the TabButton in the header bar.
+        self._tab_overview = Adw.TabOverview()
+        self._tab_overview.set_view(tab_view)
+        self.set_content(self._tab_overview)
+
+        overview = self._tab_overview  # local alias for closures below
+
+        inner_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        overview.set_child(inner_box)
+
+        # Header bar
         header = Adw.HeaderBar()
+
+        for icon, action, tooltip in [
+            ("document-new-symbolic", "app.new", "New file (Ctrl+N)"),
+            ("document-open-symbolic", "app.open", "Open file (Ctrl+O)"),
+            ("document-save-symbolic", "app.save", "Save (Ctrl+S)"),
+        ]:
+            btn = Gtk.Button(icon_name=icon)
+            btn.set_action_name(action)
+            btn.set_tooltip_text(tooltip)
+            header.pack_start(btn)
+
         menu_button = Gtk.MenuButton()
         menu_button.set_icon_name("open-menu-symbolic")
         menu_button.set_menu_model(self._build_menu())
         header.pack_end(menu_button)
-        outer_box.append(header)
 
+        self._btn_preview = Gtk.ToggleButton(icon_name="view-dual-symbolic")
+        self._btn_preview.set_active(True)
+        self._btn_preview.set_action_name("app.toggle-preview-pane")
+        self._btn_preview.set_tooltip_text("Toggle preview pane (Ctrl+Shift+R)")
+        header.pack_end(self._btn_preview)
+
+        self._btn_editor = Gtk.ToggleButton(icon_name="document-edit-symbolic")
+        self._btn_editor.set_active(True)
+        self._btn_editor.set_action_name("app.toggle-editor-pane")
+        self._btn_editor.set_tooltip_text("Toggle editor pane (Ctrl+Shift+E)")
+        header.pack_end(self._btn_editor)
+
+        self._btn_dir = Gtk.ToggleButton(icon_name="sidebar-show-symbolic")
+        self._btn_dir.set_active(True)
+        self._btn_dir.set_action_name("app.toggle-dir-pane")
+        self._btn_dir.set_tooltip_text("Toggle directory tree (F9)")
+        header.pack_end(self._btn_dir)
+
+        tab_button = Adw.TabButton()
+        tab_button.set_view(tab_view)
+        tab_button.set_tooltip_text("Show all open tabs — click a tab to switch, Esc to close")
+        tab_button.connect("clicked", lambda *_: overview.set_open(True))
+        header.pack_end(tab_button)
+
+        inner_box.append(header)
+
+        # Tab bar spans the full width — above all three panes
+        tab_bar = Adw.TabBar()
+        tab_bar.set_view(tab_view)
+        tab_bar.set_autohide(True)
+        inner_box.append(tab_bar)
+
+        # Three-pane area
         self.paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         self.paned.set_vexpand(True)
-        outer_box.append(self.paned)
+        inner_box.append(self.paned)
 
         self.dir_pane = GtkDirectoryPane()
         self.dir_pane.connect_file_activated(self._on_directory_file_activated)
         self.paned.set_start_child(self.dir_pane)
         self.paned.set_position(220)
 
-        self.tab_manager = AdwTabManager(self)
-        self.paned.set_end_child(self.tab_manager.get_widget())
+        self.paned.set_end_child(tab_view)
 
     def _build_menu(self) -> Gio.MenuModel:
         builder = Gtk.Builder.new_from_string(MENU_XML, -1)
@@ -109,6 +168,21 @@ class CalamusWindow(Adw.ApplicationWindow):
         )
         toggle.connect("activate", self._on_toggle_dir_pane)
         app.add_action(toggle)
+        app.set_accels_for_action("app.toggle-dir-pane", ["F9"])
+
+        toggle_editor = Gio.SimpleAction.new_stateful(
+            "toggle-editor-pane", None, GLib.Variant.new_boolean(True)
+        )
+        toggle_editor.connect("activate", self._on_toggle_editor_pane)
+        app.add_action(toggle_editor)
+        app.set_accels_for_action("app.toggle-editor-pane", ["<primary><shift>e"])
+
+        toggle_preview = Gio.SimpleAction.new_stateful(
+            "toggle-preview-pane", None, GLib.Variant.new_boolean(True)
+        )
+        toggle_preview.connect("activate", self._on_toggle_preview_pane)
+        app.add_action(toggle_preview)
+        app.set_accels_for_action("app.toggle-preview-pane", ["<primary><shift>r"])
 
         for formatting_action in FormattingRegistry.get_all():
             action = Gio.SimpleAction.new(formatting_action.action_name, None)
@@ -123,6 +197,18 @@ class CalamusWindow(Adw.ApplicationWindow):
         if path.endswith((".md", ".markdown", ".txt")):
             self.tab_manager.open_file(path)
             self._recent_files.add(path)
+
+    def _update_window_title(self) -> None:
+        tab = self.tab_manager.get_current_tab()
+        if tab is None:
+            self.set_title("Calamus")
+            return
+        name = os.path.basename(tab.file_path) if tab.file_path else "Untitled"
+        prefix = "\u25cf " if tab.modified else ""
+        if tab.file_path:
+            self.set_title(f"{prefix}{name} \u2014 {tab.file_path}")
+        else:
+            self.set_title(f"{prefix}{name}")
 
     def _on_new(self, _action: Gio.SimpleAction, _param: object) -> None:
         self.tab_manager.new_tab()
@@ -180,10 +266,59 @@ class CalamusWindow(Adw.ApplicationWindow):
         if app is not None:
             app.quit()
 
+    def _on_close_request(self, _window: Gtk.Window) -> bool:
+        if self._confirmed_quit:
+            return False  # Already confirmed — allow close
+
+        tab_count = self.tab_manager.get_tab_count()
+        unsaved = self.tab_manager.get_unsaved_tabs()
+
+        # Single clean tab — no friction needed.
+        if tab_count == 1 and not unsaved:
+            return False
+
+        if unsaved:
+            heading = "Unsaved Changes"
+            body = "At least one file has unsaved changes. Exit Calamus?"
+            quit_label = "Exit Without Saving"
+            appearance = Adw.ResponseAppearance.DESTRUCTIVE
+        else:
+            heading = "Exit Calamus?"
+            body = f"{tab_count} files are open. Exit Calamus?"
+            quit_label = "Exit"
+            appearance = Adw.ResponseAppearance.DEFAULT
+
+        dialog = Adw.AlertDialog.new(heading, body)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("quit", quit_label)
+        dialog.set_response_appearance("quit", appearance)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_quit_dialog_response)
+        dialog.present(self)
+        return True  # Block the close until the user decides
+
+    def _on_quit_dialog_response(
+        self, _dialog: Adw.AlertDialog, response: str
+    ) -> None:
+        if response == "quit":
+            self._confirmed_quit = True
+            self.close()
+
     def _on_toggle_dir_pane(self, action: Gio.SimpleAction, _param: object) -> None:
         self._dir_pane_visible = not self._dir_pane_visible
         self.dir_pane.set_visible(self._dir_pane_visible)
         action.set_state(GLib.Variant.new_boolean(self._dir_pane_visible))
+
+    def _on_toggle_editor_pane(self, action: Gio.SimpleAction, _param: object) -> None:
+        self._editor_pane_visible = not self._editor_pane_visible
+        self.tab_manager.set_editor_pane_visible(self._editor_pane_visible)
+        action.set_state(GLib.Variant.new_boolean(self._editor_pane_visible))
+
+    def _on_toggle_preview_pane(self, action: Gio.SimpleAction, _param: object) -> None:
+        self._preview_pane_visible = not self._preview_pane_visible
+        self.tab_manager.set_preview_pane_visible(self._preview_pane_visible)
+        action.set_state(GLib.Variant.new_boolean(self._preview_pane_visible))
 
     def _on_undo(self, _action: Gio.SimpleAction, _param: object) -> None:
         editor = self.tab_manager.get_current_editor()
@@ -283,7 +418,6 @@ MENU_XML = """
         <attribute name="label">Open Recent</attribute>
         <item><attribute name="label">(No recent files)</attribute><attribute name="action">app.open</attribute></item>
       </submenu>
-      <item><attribute name="label">Show Directory Tree Pane</attribute><attribute name="action">app.toggle-dir-pane</attribute></item>
       <item><attribute name="label">Reload</attribute><attribute name="action">app.reload</attribute></item>
       <item><attribute name="label">Save</attribute><attribute name="action">app.save</attribute></item>
       <item><attribute name="label">Save As…</attribute><attribute name="action">app.save-as</attribute></item>

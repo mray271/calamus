@@ -436,30 +436,38 @@ uv run black .
 ### Using Docker
 
 Docker provides a fully self-contained development environment with all system GTK4
-dependencies pre-installed. No local GTK libraries required.
+dependencies pre-installed — no local GTK libraries required.
 
-**Build the image:**
+#### Running the app (happy path)
+
+```bash
+docker compose up
+```
+
+That's it. The compose file is pre-configured to forward your X11 display into the
+container using your session's `.Xauthority` credentials, so the app window appears
+on your desktop without any extra setup.
+
+> **How X11 forwarding works (no `xhost` needed):**
+> X11 uses MIT-MAGIC-COOKIE authentication. Your session's auth file (pointed to by
+> `$XAUTHORITY` — e.g. `~/.Xauthority` or a session-specific path under
+> `/run/user/1000/`) is mounted read-only into the container. The container is fixed to
+> `XAUTHORITY=/root/.Xauthority` and `XDG_RUNTIME_DIR=/tmp` so GTK4 finds both the
+> auth cookie and the display socket at the expected paths. `network_mode: host` lets
+> the hostname in the cookie match. No `xhost +local:` is needed and the X server
+> remains locked down.
+
+> **Fedora / SELinux note:** `docker-compose.yml` sets `security_opt: label=disable`
+> so the container can access the X11 socket under SELinux enforcing mode without
+> needing `--privileged`.
+
+#### Other common commands
+
+**Build the image** (first time, or after `Dockerfile` changes):
 
 ```bash
 docker compose build
 ```
-
-**Run the application** (requires a running X11 or Wayland display):
-
-```bash
-# Grant local Docker containers access to your X server
-xhost +local:docker
-
-docker compose up app
-```
-
-> **Fedora / SELinux note:** The `docker-compose.yml` passes
-> `--security-opt label=type:container_runtime_t` so the container can reach
-> the X11 socket without needing `--privileged`. The three pieces that work
-> together are:
-> - `xhost +local:docker` — lets local Docker containers connect to your X server
-> - `DISPLAY=$DISPLAY` — tells GTK which display to use
-> - `/tmp/.X11-unix` mount — exposes the Unix socket the app communicates over
 
 **Run the full test suite:**
 
@@ -496,24 +504,6 @@ docker compose run --rm app bash
 ```bash
 docker compose build --no-cache
 ```
-
-#### Troubleshooting: `Invalid MIT-MAGIC-COOKIE-1 key`
-
-If the app still complains about X authorization after running `xhost +local:docker`,
-mount your `.Xauthority` file into the container. Uncomment the `XAUTHORITY` lines
-in `docker-compose.yml`, or add the flag manually:
-
-```bash
-docker run -it --rm \
-  -e DISPLAY=$DISPLAY \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  --volume="$HOME/.Xauthority:/root/.Xauthority:ro" \
-  --security-opt label=type:container_runtime_t \
-  <image_name> uv run calamus
-```
-
-> If your container runs as a non-root user, replace `/root/.Xauthority` with
-> that user's home directory, e.g. `/home/myuser/.Xauthority`.
 
 ## Project Structure
 

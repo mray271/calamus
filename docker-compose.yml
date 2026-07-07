@@ -6,19 +6,20 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - WEBKIT_DISABLE_SANDBOX=1
       - WEBKIT_FORCE_SANDBOX=0
-      - XAUTHORITY=${XAUTHORITY:-/root/.Xauthority}
+      - XAUTHORITY=/root/.Xauthority
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}
-      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp}
+      - XDG_RUNTIME_DIR=/tmp
       - DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}
     volumes:
       - .:/app
-      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ${XAUTHORITY:-~/.Xauthority}:/root/.Xauthority:ro
       - ${XDG_RUNTIME_DIR:-/tmp}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/${WAYLAND_DISPLAY:-wayland-0}:rw
       - ~/.config/Calamus:/root/.config/Calamus
     security_opt:
       # label=disable is required on Fedora/SELinux so the container can access
-      # the X11 socket.  Run `xhost +local:` on the host before `docker compose up`.
+      # the X11 socket.  Authentication is handled via ~/.Xauthority (MIT-MAGIC-COOKIE)
+      # so no `xhost` changes are needed on the host.
       - label=disable
       - seccomp=unconfined
     cap_add:
@@ -35,7 +36,8 @@ services:
     volumes:
       - .:/app
     command: >
-      sh -c "Xvfb :99 -screen 0 1024x768x24 &
+      sh -c "rm -f /tmp/.X99-lock &&
+             Xvfb :99 -screen 0 1024x768x24 &
              sleep 1 &&
              uv run pytest"
 
