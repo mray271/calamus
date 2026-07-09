@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, ABCMeta, abstractmethod
 import configparser
+import os
 
 import gi
 
@@ -12,6 +13,11 @@ gi.require_version("GtkSource", "5")
 gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk, GtkSource, Pango
+
+# Register Calamus custom style schemes (calamus-adwaita, calamus-adwaita-dark)
+# so the StyleSchemeManager can find them before any MarkdownEditor is created.
+_STYLES_DIR = os.path.join(os.path.dirname(__file__), "resources", "styles")
+GtkSource.StyleSchemeManager.get_default().append_search_path(_STYLES_DIR)
 
 
 class AbstractEditor(ABC):
@@ -100,10 +106,12 @@ class MarkdownEditor(AbstractEditor):
         """Switch the GtkSourceView style scheme to match the current dark/light state."""
         dark = self._style_manager.get_dark()
         scheme_manager = GtkSource.StyleSchemeManager.get_default()
+        # Prefer Calamus schemes (full Markdown token coverage), fall back to
+        # the built-in Adwaita variants, then generic fallbacks.
         candidates = (
-            ["Adwaita-dark", "oblivion", "classic-dark"]
+            ["calamus-adwaita-dark", "Adwaita-dark", "oblivion", "classic-dark"]
             if dark
-            else ["Adwaita", "classic", "tango"]
+            else ["calamus-adwaita", "Adwaita", "classic", "tango"]
         )
         scheme = next(
             (

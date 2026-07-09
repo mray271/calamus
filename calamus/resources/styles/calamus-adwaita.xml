@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  calamus-adwaita.xml — Calamus light Markdown style scheme.
+
+  Extends the built-in Adwaita scheme with explicit styles for every
+  markdown:* token ID so that fenced code blocks, inline code, headings,
+  emphasis, links, and other Markdown elements are visibly highlighted.
+
+  Colour choices follow the Adwaita palette and GNOME HIG conventions.
+-->
+<style-scheme id="calamus-adwaita" name="Calamus (Adwaita)" version="1.0">
+  <author>Calamus contributors</author>
+  <description>Adwaita with full Markdown syntax highlighting</description>
+
+  <!-- Inherit everything from the built-in Adwaita scheme. -->
+  <metadata>
+    <property name="extends">Adwaita</property>
+  </metadata>
+
+  <!-- ── Markdown-specific styles ────────────────────────────────────── -->
+
+  <!-- Headings: bold, GNOME Blue -->
+  <style name="markdown:header"          foreground="#1c71d8" bold="true"/>
+
+  <!-- Emphasis / italic -->
+  <style name="markdown:emphasis"        foreground="#613583" italic="true"/>
+
+  <!-- Strong / bold -->
+  <style name="markdown:strong-emphasis" foreground="#613583" bold="true"/>
+
+  <!-- Inline code span: monospace tint, subtle background -->
+  <style name="markdown:code-span"       foreground="#865e3c" background="#f5f0eb"/>
+
+  <!-- Fenced / indented code block: same tint, slightly more visible bg -->
+  <style name="markdown:code-block"      foreground="#865e3c" background="#f0e8dd"/>
+
+  <!-- Block quote marker (>) -->
+  <style name="markdown:blockquote-marker" foreground="#9a9996" italic="true"/>
+
+  <!-- List markers (-, *, 1.) -->
+  <style name="markdown:list-marker"     foreground="#1c71d8" bold="true"/>
+
+  <!-- Horizontal rule -->
+  <style name="markdown:horizontal-rule" foreground="#9a9996"/>
+
+  <!-- Link text [text] -->
+  <style name="markdown:link-text"       foreground="#1c71d8" underline="single"/>
+
+  <!-- URL / href -->
+  <style name="markdown:url"             foreground="#1c71d8" underline="single"/>
+
+  <!-- Reference label -->
+  <style name="markdown:label"           foreground="#1c71d8"/>
+
+  <!-- Image marker ! -->
+  <style name="markdown:image-marker"    foreground="#2ec27e" bold="true"/>
+
+  <!-- Backslash escape -->
+  <style name="markdown:backslash-escape" foreground="#9a9996"/>
+
+  <!-- Line break (trailing spaces) — subtle indicator -->
+  <style name="markdown:line-break"      background="#deddda"/>
+
+</style-scheme>

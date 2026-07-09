@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  calamus-adwaita-dark.xml — Calamus dark Markdown style scheme.
+
+  Extends the built-in Adwaita-dark scheme with the same markdown:* token
+  styles as calamus-adwaita.xml, tuned for dark backgrounds.
+-->
+<style-scheme id="calamus-adwaita-dark" name="Calamus (Adwaita Dark)" version="1.0">
+  <author>Calamus contributors</author>
+  <description>Adwaita Dark with full Markdown syntax highlighting</description>
+
+  <metadata>
+    <property name="extends">Adwaita-dark</property>
+  </metadata>
+
+  <!-- ── Markdown-specific styles ────────────────────────────────────── -->
+
+  <!-- Headings: bold, bright blue -->
+  <style name="markdown:header"          foreground="#78aeed" bold="true"/>
+
+  <!-- Emphasis / italic -->
+  <style name="markdown:emphasis"        foreground="#c061cb" italic="true"/>
+
+  <!-- Strong / bold -->
+  <style name="markdown:strong-emphasis" foreground="#c061cb" bold="true"/>
+
+  <!-- Inline code span -->
+  <style name="markdown:code-span"       foreground="#e9a96e" background="#2d1e13"/>
+
+  <!-- Fenced / indented code block -->
+  <style name="markdown:code-block"      foreground="#e9a96e" background="#281a0e"/>
+
+  <!-- Block quote marker (>) -->
+  <style name="markdown:blockquote-marker" foreground="#77767b" italic="true"/>
+
+  <!-- List markers -->
+  <style name="markdown:list-marker"     foreground="#78aeed" bold="true"/>
+
+  <!-- Horizontal rule -->
+  <style name="markdown:horizontal-rule" foreground="#77767b"/>
+
+  <!-- Link text -->
+  <style name="markdown:link-text"       foreground="#78aeed" underline="single"/>
+
+  <!-- URL / href -->
+  <style name="markdown:url"             foreground="#78aeed" underline="single"/>
+
+  <!-- Reference label -->
+  <style name="markdown:label"           foreground="#78aeed"/>
+
+  <!-- Image marker -->
+  <style name="markdown:image-marker"    foreground="#57e389" bold="true"/>
+
+  <!-- Backslash escape -->
+  <style name="markdown:backslash-escape" foreground="#77767b"/>
+
+  <!-- Line break indicator -->
+  <style name="markdown:line-break"      background="#3d3846"/>
+
+</style-scheme>
