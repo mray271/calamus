@@ -157,7 +157,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         # Banner sits between the tab bar and the editor/preview panes.
         banner = Adw.Banner()
         banner.set_title(
-            "Editing piped input — Save (Ctrl+S) to emit to stdout and exit"
+            "Editing piped input — close the window when done to emit to stdout"
         )
         banner.set_revealed(True)
         self._content_box.insert_child_after(banner, self._tab_bar)
@@ -165,7 +165,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         # Disable actions that don't make sense in a single-use pipe session.
         app = self.get_application()
         if app is not None:
-            for name in ("new", "open", "close-tab"):
+            for name in ("new", "open"):
                 action = app.lookup_action(name)
                 if action is not None:
                     action.set_enabled(False)
@@ -298,14 +298,6 @@ class CalamusWindow(Adw.ApplicationWindow):
         self.dir_pane.load_directory(os.path.dirname(path) or os.path.expanduser("~"))
 
     def _on_save(self, _action: Gio.SimpleAction, _param: object) -> None:
-        if self._pipe_mode:
-            editor = self.tab_manager.get_current_editor()
-            if editor is not None:
-                sys.stdout.write(editor.get_text())
-                sys.stdout.flush()
-            self._confirmed_quit = True
-            self.get_application().quit()
-            return
         self.tab_manager.save_current()
 
     def _on_save_as(self, _action: Gio.SimpleAction, _param: object) -> None:
@@ -331,6 +323,16 @@ class CalamusWindow(Adw.ApplicationWindow):
     def _on_close_request(self, _window: Gtk.Window) -> bool:
         if self._confirmed_quit:
             return False  # Already confirmed — allow close
+
+        # Pipe mode: emit current editor text to stdout then close immediately.
+        # No confirmation dialog — the user closing the window IS the signal
+        # that editing is done (same contract as `gedit --wait`).
+        if self._pipe_mode:
+            editor = self.tab_manager.get_current_editor()
+            if editor is not None:
+                sys.stdout.write(editor.get_text())
+                sys.stdout.flush()
+            return False
 
         tab_count = self.tab_manager.get_tab_count()
         unsaved = self.tab_manager.get_unsaved_tabs()
