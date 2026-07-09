@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+import threading
+
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -11,7 +13,14 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, GLib, Gtk
 
-from calamus.mermaid_support import get_mermaid_init_script, get_mermaid_script_tag
+from calamus.mermaid_support import (
+    MermaidCache,
+    SubprocessMermaidRenderer,
+    extract_mermaid_blocks,
+    get_mermaid_init_script,
+    get_mermaid_script_tag,
+    preprocess_with_cache,
+)
 from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
 from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
 
@@ -134,6 +143,9 @@ class WebKitPreview(AbstractPreview):
         self._last_markdown: str = ""
         self._style_manager = Adw.StyleManager.get_default()
         self._style_manager.connect("notify::dark", self._on_dark_changed)
+        # Layer 2 & 3: async rendering + SVG cache
+        self._mermaid_cache = MermaidCache()
+        self._mmdc_available: bool = SubprocessMermaidRenderer().is_available()
 
     def _on_dark_changed(
         self, _style_manager: Adw.StyleManager, _param: object
@@ -142,19 +154,59 @@ class WebKitPreview(AbstractPreview):
             self.update(self._last_markdown)
 
     def update(self, markdown_text: str) -> None:
-        from calamus.mermaid_support import SubprocessMermaidRenderer
-
         self._last_markdown = markdown_text
         dark = self._style_manager.get_dark()
+
+        if not self._mmdc_available:
+            # No mmdc — use browser-side mermaid.js (instant, no subprocess).
+            html_body = self._renderer.render(markdown_text)
+            self._load_html(html_body, get_mermaid_script_tag(), dark)
+            return
+
+        # Fast path: render immediately using cached SVGs where available.
+        # Uncached blocks fall back to browser-side mermaid.js until the
+        # background thread produces their SVGs.
+        preprocessed = preprocess_with_cache(markdown_text, self._mermaid_cache)
+        html_body = self._renderer.render_preprocessed(preprocessed)
+        uncached = [
+            src
+            for _, src in extract_mermaid_blocks(markdown_text)
+            if not self._mermaid_cache.has(src)
+        ]
+        self._load_html(
+            html_body,
+            get_mermaid_script_tag() if uncached else "",
+            dark,
+        )
+        # Layer 2: background thread renders uncached diagrams, then refreshes.
+        if uncached:
+            thread = threading.Thread(
+                target=self._async_render_worker,
+                args=(markdown_text, uncached),
+                daemon=True,
+            )
+            thread.start()
+
+    def _async_render_worker(self, markdown_text: str, uncached: list[str]) -> None:
+        """Background thread: render uncached diagrams and schedule UI update."""
+        renderer = SubprocessMermaidRenderer()
+        for source in uncached:
+            svg = renderer.render_to_svg(source)
+            if svg:
+                self._mermaid_cache.put(source, svg)
+        GLib.idle_add(self._on_async_render_done, markdown_text)
+
+    def _on_async_render_done(self, markdown_text: str) -> bool:
+        """Main-thread callback: re-render once background SVGs are ready."""
+        if markdown_text == self._last_markdown:
+            preprocessed = preprocess_with_cache(markdown_text, self._mermaid_cache)
+            html_body = self._renderer.render_preprocessed(preprocessed)
+            self._load_html(html_body, "", self._style_manager.get_dark())
+        return GLib.SOURCE_REMOVE
+
+    def _load_html(self, html_body: str, mermaid_script: str, dark: bool) -> None:
         color_scheme = "dark" if dark else "light"
         mermaid_theme = "dark" if dark else "default"
-
-        html_body = self._renderer.render(markdown_text)
-        mermaid_script = (
-            ""
-            if SubprocessMermaidRenderer().is_available()
-            else get_mermaid_script_tag()
-        )
         html_text = _HTML_TEMPLATE.format(
             body=html_body,
             mermaid_script=mermaid_script,
@@ -163,9 +215,8 @@ class WebKitPreview(AbstractPreview):
             highlight_css=get_highlight_css_tag(dark=dark),
             highlight_script=get_highlight_script_tag(),
         )
-        # Use load_bytes with an explicit encoding declaration rather than
-        # load_html, which can fall back to Latin-1 charset sniffing and
-        # corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″ → â…).
+        # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
+        # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
         raw = GLib.Bytes.new(html_text.encode("utf-8"))
         self._view.load_bytes(raw, "text/html", "utf-8", "file:///")
 

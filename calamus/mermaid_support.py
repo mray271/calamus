@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import base64
+import hashlib
 import html
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import threading
 
 MERMAID_VERSION = "11.5.0"
 MERMAID_CDN_URL = (
@@ -74,8 +76,12 @@ class AbstractMermaidRenderer(ABC):
 class SubprocessMermaidRenderer(AbstractMermaidRenderer):
     """Renders Mermaid diagrams using mermaid-cli."""
 
+    _mmdc_available: bool | None = None  # class-level cache; set once per process
+
     def is_available(self) -> bool:
-        return shutil.which("mmdc") is not None
+        if SubprocessMermaidRenderer._mmdc_available is None:
+            SubprocessMermaidRenderer._mmdc_available = shutil.which("mmdc") is not None
+        return SubprocessMermaidRenderer._mmdc_available
 
     def render_to_svg(self, diagram_source: str) -> str | None:
         if not self.is_available():
@@ -139,6 +145,55 @@ def get_best_renderer() -> AbstractMermaidRenderer:
     if renderer.is_available():
         return renderer
     return FallbackMermaidRenderer()
+
+
+class MermaidCache:
+    """Thread-safe cache mapping Mermaid diagram source → rendered SVG string."""
+
+    def __init__(self) -> None:
+        self._cache: dict[str, str] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _key(source: str) -> str:
+        return hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+    def get(self, source: str) -> str | None:
+        with self._lock:
+            return self._cache.get(self._key(source))
+
+    def put(self, source: str, svg: str) -> None:
+        with self._lock:
+            self._cache[self._key(source)] = svg
+
+    def has(self, source: str) -> bool:
+        return self.get(source) is not None
+
+
+def preprocess_with_cache(markdown_text: str, cache: MermaidCache) -> str:
+    """Replace Mermaid fenced blocks using the SVG cache.
+
+    Blocks present in *cache* are replaced with inline ``<img>`` data URIs
+    (same format as :func:`preprocess_markdown_for_static_export`).  Blocks
+    not yet cached are replaced with ``<pre class="mermaid">`` so the
+    browser-side mermaid.js can render them as a fallback while the
+    background thread computes the SVG.
+    """
+    pattern = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL)
+
+    def repl(match: re.Match[str]) -> str:
+        diagram_source = match.group(1).strip()
+        svg = cache.get(diagram_source)
+        if svg is not None:
+            encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+            return (
+                f'\n<img alt="Mermaid diagram" '
+                f'src="data:image/svg+xml;base64,{encoded}" />\n'
+            )
+        escaped = html.escape(diagram_source)
+        return f'\n<pre class="mermaid">{escaped}</pre>\n'
+
+    return pattern.sub(repl, markdown_text)
 
 
 def preprocess_markdown_for_static_export(markdown_text: str) -> str:
