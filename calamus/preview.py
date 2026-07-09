@@ -150,6 +150,15 @@ class WebKitPreview(AbstractPreview):
         # Layer 2 & 3: async rendering + SVG cache
         self._mermaid_cache = MermaidCache()
         self._mmdc_available: bool = SubprocessMermaidRenderer().is_available()
+        # Generation counter: incremented on every update() call.
+        # Background threads check this before posting results — stale renders
+        # (superseded by a newer edit) are silently discarded rather than
+        # updating the preview with out-of-date content.
+        self._render_generation: int = 0
+        # Semaphore: at most one mmdc process runs at a time.
+        # Without this, rapid typing spawns unbounded Chromium processes,
+        # exhausting memory and hanging the application.
+        self._mmdc_semaphore = threading.Semaphore(1)
 
     def _on_dark_changed(
         self, _style_manager: Adw.StyleManager, _param: object
@@ -184,21 +193,39 @@ class WebKitPreview(AbstractPreview):
         )
         # Layer 2: background thread renders uncached diagrams, then refreshes.
         if uncached:
+            self._render_generation += 1
+            generation = self._render_generation
             thread = threading.Thread(
                 target=self._async_render_worker,
-                args=(markdown_text, uncached),
+                args=(markdown_text, uncached, generation),
                 daemon=True,
             )
             thread.start()
 
-    def _async_render_worker(self, markdown_text: str, uncached: list[str]) -> None:
-        """Background thread: render uncached diagrams and schedule UI update."""
-        renderer = SubprocessMermaidRenderer()
-        for source in uncached:
-            svg = renderer.render_to_svg(source)
-            if svg:
-                self._mermaid_cache.put(source, svg)
-        GLib.idle_add(self._on_async_render_done, markdown_text)
+    def _async_render_worker(
+        self, markdown_text: str, uncached: list[str], generation: int
+    ) -> None:
+        """Background thread: render uncached diagrams and schedule UI update.
+
+        Acquires ``_mmdc_semaphore`` so only one mmdc process runs at a time.
+        Checks ``_render_generation`` before each diagram and before posting
+        the result — if the user has typed more, the work is abandoned so the
+        next queued thread can run instead.
+        """
+        if not self._mmdc_semaphore.acquire(timeout=60):
+            return  # another render is stuck; give up rather than hang
+        try:
+            renderer = SubprocessMermaidRenderer()
+            for source in uncached:
+                if generation != self._render_generation:
+                    return  # superseded by a newer edit
+                svg = renderer.render_to_svg(source)
+                if svg:
+                    self._mermaid_cache.put(source, svg)
+        finally:
+            self._mmdc_semaphore.release()
+        if generation == self._render_generation:
+            GLib.idle_add(self._on_async_render_done, markdown_text)
 
     def _on_async_render_done(self, markdown_text: str) -> bool:
         """Main-thread callback: re-render once background SVGs are ready."""
