@@ -24,6 +24,9 @@ RUN dnf update -y && dnf install -y \
     xorg-x11-server-Xvfb \
     dbus-daemon \
     dbus-tools \
+    dbus-x11 \
+    gnome-extensions-app \
+    procps \
     curl \
     git \
     nodejs \

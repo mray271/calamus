@@ -127,8 +127,13 @@ class EditorTab(Gtk.Box):
         if self._file_path is not None:
             self.load_file(self._file_path)
 
+    def load_content(self, text: str) -> None:
+        """Load a string directly into the editor without marking the tab modified."""
+        self.editor.set_text(text)
+        self.preview.update(text)
+        self._modified = False
+
     def load_file(self, path: str) -> None:
-        self._file_path = path
         try:
             file_size = os.path.getsize(path)
             if file_size > LARGE_FILE_SIZE_BYTES:
@@ -235,7 +240,9 @@ class AdwTabManager(AbstractTabManager):
         self._editor_visible = True
         self._preview_visible = True
         self._on_title_changed: object = None
-        self._tab_view.connect("notify::selected-page", lambda *_: self._notify_title_changed())
+        self._tab_view.connect(
+            "notify::selected-page", lambda *_: self._notify_title_changed()
+        )
         self.new_tab()
 
     def get_widget(self) -> Gtk.Widget:
@@ -257,9 +264,11 @@ class AdwTabManager(AbstractTabManager):
         tab.set_preview_visible(self._preview_visible)
         page = self._tab_view.append(tab)
         page.set_title(tab.title)
+
         def _on_buffer_changed(*_args):
             page.set_title(tab.title)
             self._notify_title_changed()
+
         tab.editor.get_buffer().connect("changed", _on_buffer_changed)
         self._tab_view.set_selected_page(page)
         return tab
@@ -310,7 +319,11 @@ class AdwTabManager(AbstractTabManager):
         # Replace a sole clean Untitled tab rather than opening alongside it.
         if self._tab_view.get_n_pages() == 1:
             only = self._tab_view.get_nth_page(0).get_child()
-            if isinstance(only, EditorTab) and only.file_path is None and not only.modified:
+            if (
+                isinstance(only, EditorTab)
+                and only.file_path is None
+                and not only.modified
+            ):
                 only.load_file(path)
                 self._tab_view.get_nth_page(0).set_title(only.title)
                 self._notify_title_changed()

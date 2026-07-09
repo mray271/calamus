@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -50,9 +49,9 @@ def assert_no_crash(md: str) -> str:
 
 def assert_surrounding_content_intact(html: str, marker: str = "MARKER") -> None:
     """Assert that normal Markdown around GFM-specific syntax still renders."""
-    assert marker in html, (
-        f"Surrounding content '{marker}' missing from rendered output"
-    )
+    assert (
+        marker in html
+    ), f"Surrounding content '{marker}' missing from rendered output"
 
 
 # ===========================================================================

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 import gi
 
@@ -19,6 +20,7 @@ from calamus.preferences import FileConfigProvider, PreferencesDialog
 from calamus.printer import GtkPrinter
 from calamus.recentfiles import ConfigFileRecentFilesProvider
 from calamus.tabs import AdwTabManager
+from calamus.theme import ThemeManager
 
 GITHUB_RELEASES_URL = "https://github.com/OWNER/calamus/releases"
 GITHUB_ISSUES_URL = "https://github.com/OWNER/calamus/issues"
@@ -28,10 +30,17 @@ MERMAID_DOCS_URL = "https://mermaid.js.org"
 class CalamusWindow(Adw.ApplicationWindow):
     """Main Calamus window with menus and actions."""
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(
+        self,
+        theme_manager: ThemeManager | None = None,
+        pipe_content: str | None = None,
+        initial_files: list[str] | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.set_title("Calamus")
         self.set_default_size(1200, 800)
+        self._theme_manager = theme_manager or ThemeManager()
         self._config_provider = FileConfigProvider()
         self._recent_files = ConfigFileRecentFilesProvider(self._config_provider)
         self._dir_pane_visible = True
@@ -39,9 +48,17 @@ class CalamusWindow(Adw.ApplicationWindow):
         self._preview_pane_visible = True
         self._confirmed_quit = False
         self._printer = GtkPrinter()
+        self._pipe_content = pipe_content
+        self._pipe_mode = pipe_content is not None
         self._build_ui()
         self._build_actions()
         self.connect("close-request", self._on_close_request)
+        if self._pipe_mode:
+            self._enter_pipe_mode()
+        elif initial_files:
+            for path in initial_files:
+                self.tab_manager.open_file(path)
+                self._recent_files.add(path)
 
     def _build_ui(self) -> None:
         self.tab_manager = AdwTabManager(self)
@@ -57,6 +74,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         overview = self._tab_overview  # local alias for closures below
 
         inner_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._content_box = inner_box
         overview.set_child(inner_box)
 
         # Header bar
@@ -97,7 +115,9 @@ class CalamusWindow(Adw.ApplicationWindow):
 
         tab_button = Adw.TabButton()
         tab_button.set_view(tab_view)
-        tab_button.set_tooltip_text("Show all open tabs — click a tab to switch, Esc to close")
+        tab_button.set_tooltip_text(
+            "Show all open tabs — click a tab to switch, Esc to close"
+        )
         tab_button.connect("clicked", lambda *_: overview.set_open(True))
         header.pack_end(tab_button)
 
@@ -107,6 +127,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         tab_bar = Adw.TabBar()
         tab_bar.set_view(tab_view)
         tab_bar.set_autohide(True)
+        self._tab_bar = tab_bar
         inner_box.append(tab_bar)
 
         # Three-pane area
@@ -124,6 +145,30 @@ class CalamusWindow(Adw.ApplicationWindow):
     def _build_menu(self) -> Gio.MenuModel:
         builder = Gtk.Builder.new_from_string(MENU_XML, -1)
         return builder.get_object("menubar")
+
+    def _enter_pipe_mode(self) -> None:
+        """Load piped content and configure the window for stdin→stdout editing."""
+        tab = self.tab_manager.get_current_tab()
+        if tab is not None:
+            tab.load_content(self._pipe_content or "")
+
+        self.set_title("Calamus — Pipe Mode")
+
+        # Banner sits between the tab bar and the editor/preview panes.
+        banner = Adw.Banner()
+        banner.set_title(
+            "Editing piped input — Save (Ctrl+S) to emit to stdout and exit"
+        )
+        banner.set_revealed(True)
+        self._content_box.insert_child_after(banner, self._tab_bar)
+
+        # Disable actions that don't make sense in a single-use pipe session.
+        app = self.get_application()
+        if app is not None:
+            for name in ("new", "open", "close-tab"):
+                action = app.lookup_action(name)
+                if action is not None:
+                    action.set_enabled(False)
 
     def _build_actions(self) -> None:
         app = self.get_application()
@@ -183,6 +228,15 @@ class CalamusWindow(Adw.ApplicationWindow):
         toggle_preview.connect("activate", self._on_toggle_preview_pane)
         app.add_action(toggle_preview)
         app.set_accels_for_action("app.toggle-preview-pane", ["<primary><shift>r"])
+
+        scheme_action = Gio.SimpleAction.new_stateful(
+            "color-scheme",
+            GLib.VariantType.new("s"),
+            GLib.Variant.new_string(self._theme_manager.get_scheme()),
+        )
+        scheme_action.connect("activate", self._on_color_scheme_action)
+        app.add_action(scheme_action)
+        self._scheme_action = scheme_action
 
         for formatting_action in FormattingRegistry.get_all():
             action = Gio.SimpleAction.new(formatting_action.action_name, None)
@@ -244,6 +298,14 @@ class CalamusWindow(Adw.ApplicationWindow):
         self.dir_pane.load_directory(os.path.dirname(path) or os.path.expanduser("~"))
 
     def _on_save(self, _action: Gio.SimpleAction, _param: object) -> None:
+        if self._pipe_mode:
+            editor = self.tab_manager.get_current_editor()
+            if editor is not None:
+                sys.stdout.write(editor.get_text())
+                sys.stdout.flush()
+            self._confirmed_quit = True
+            self.get_application().quit()
+            return
         self.tab_manager.save_current()
 
     def _on_save_as(self, _action: Gio.SimpleAction, _param: object) -> None:
@@ -298,12 +360,17 @@ class CalamusWindow(Adw.ApplicationWindow):
         dialog.present(self)
         return True  # Block the close until the user decides
 
-    def _on_quit_dialog_response(
-        self, _dialog: Adw.AlertDialog, response: str
-    ) -> None:
+    def _on_quit_dialog_response(self, _dialog: Adw.AlertDialog, response: str) -> None:
         if response == "quit":
             self._confirmed_quit = True
             self.close()
+
+    def _on_color_scheme_action(
+        self, action: Gio.SimpleAction, param: GLib.Variant
+    ) -> None:
+        scheme = param.get_string()
+        action.set_state(GLib.Variant.new_string(scheme))
+        self._theme_manager.set_scheme(scheme)
 
     def _on_toggle_dir_pane(self, action: Gio.SimpleAction, _param: object) -> None:
         self._dir_pane_visible = not self._dir_pane_visible
@@ -358,6 +425,7 @@ class CalamusWindow(Adw.ApplicationWindow):
     def _on_preferences(self, _action: Gio.SimpleAction, _param: object) -> None:
         PreferencesDialog(
             config_provider=self._config_provider,
+            theme_manager=self._theme_manager,
             transient_for=self,
         ).present()
 
@@ -468,6 +536,27 @@ MENU_XML = """
       <item><attribute name="label">Horizontal Rule</attribute><attribute name="action">app.fmt-horizontal-rule</attribute></item>
       <item><attribute name="label">Link…</attribute><attribute name="action">app.fmt-link</attribute></item>
       <item><attribute name="label">Image…</attribute><attribute name="action">app.fmt-image</attribute></item>
+    </submenu>
+    <submenu>
+      <attribute name="label">View</attribute>
+      <section>
+        <attribute name="label">Color Scheme</attribute>
+        <item>
+          <attribute name="label">Follow System</attribute>
+          <attribute name="action">app.color-scheme</attribute>
+          <attribute name="target">system</attribute>
+        </item>
+        <item>
+          <attribute name="label">Light</attribute>
+          <attribute name="action">app.color-scheme</attribute>
+          <attribute name="target">light</attribute>
+        </item>
+        <item>
+          <attribute name="label">Dark</attribute>
+          <attribute name="action">app.color-scheme</attribute>
+          <attribute name="target">dark</attribute>
+        </item>
+      </section>
     </submenu>
     <submenu>
       <attribute name="label">Help</attribute>

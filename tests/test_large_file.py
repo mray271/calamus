@@ -9,7 +9,6 @@ import pytest
 
 from calamus.tabs import LARGE_FILE_SIZE_BYTES, FileTooLargeError
 
-
 # ---------------------------------------------------------------------------
 # FileTooLargeError
 # ---------------------------------------------------------------------------

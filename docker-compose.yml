@@ -8,8 +8,7 @@ services:
       - WEBKIT_FORCE_SANDBOX=0
       - XAUTHORITY=/root/.Xauthority
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}
-      - XDG_RUNTIME_DIR=/tmp
-      - DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}
+      - DBUS_SESSION_BUS_ADDRESS=
     volumes:
       - .:/app
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
@@ -26,7 +25,6 @@ services:
       - SYS_ADMIN
       - NET_ADMIN
     network_mode: host
-    command: ["dbus-run-session", "uv", "run", "calamus"]
 
   test:
     build: .

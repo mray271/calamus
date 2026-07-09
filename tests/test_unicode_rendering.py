@@ -19,19 +19,21 @@ from __future__ import annotations
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _renderer():
     from calamus.renderer import MistuneRenderer
+
     return MistuneRenderer()
 
 
 # ---------------------------------------------------------------------------
 # 1. Subscript / superscript plugin
 # ---------------------------------------------------------------------------
+
 
 class TestSubscriptPlugin:
     """M~⊕~ and friends must produce <sub> elements."""
@@ -128,14 +130,14 @@ class TestSubscriptStrikethroughCoexistence:
 # Characters whose UTF-8 first byte is 0xE2 — the bytes that Latin-1 misreads
 # as â.  If any of these appear as 'â' in the output the encoding is broken.
 E2_CHARS = {
-    "⊕":  "U+2295 CIRCLED PLUS (Earth mass/radius)",
-    "☉":  "U+2609 SUN (solar mass)",
-    "★":  "U+2605 BLACK STAR (stellar mass)",
-    "−":  "U+2212 MINUS SIGN",
-    "″":  "U+2033 DOUBLE PRIME (arc-seconds)",
-    "≈":  "U+2248 ALMOST EQUAL TO",
-    "×":  "U+00D7 MULTIPLICATION SIGN",
-    "→":  "U+2192 RIGHTWARDS ARROW",
+    "⊕": "U+2295 CIRCLED PLUS (Earth mass/radius)",
+    "☉": "U+2609 SUN (solar mass)",
+    "★": "U+2605 BLACK STAR (stellar mass)",
+    "−": "U+2212 MINUS SIGN",
+    "″": "U+2033 DOUBLE PRIME (arc-seconds)",
+    "≈": "U+2248 ALMOST EQUAL TO",
+    "×": "U+00D7 MULTIPLICATION SIGN",
+    "→": "U+2192 RIGHTWARDS ARROW",
 }
 
 
@@ -154,9 +156,9 @@ def test_e2_char_not_corrupted_to_a_circumflex(char, description):
     """Corruption manifests as â (U+00E2) replacing the real character."""
     html = _renderer().render(f"value is {char} here")
     # â must not appear unless it was in the original input
-    assert "\u00e2" not in html, (
-        f"{description} was corrupted to â (Latin-1 mojibake) in rendered HTML."
-    )
+    assert (
+        "\u00e2" not in html
+    ), f"{description} was corrupted to â (Latin-1 mojibake) in rendered HTML."
 
 
 def test_smp_alchemical_earth_preserved():
@@ -180,11 +182,11 @@ def test_unicode_minus_sign_distinct_from_hyphen():
 
 # These are the characters reported broken before the load_bytes fix.
 MOJIBAKE_REGRESSION_CHARS = [
-    ("⊕",       "U+2295 Earth mass/radius"),
-    ("☉",       "U+2609 Solar mass"),
-    ("★",       "U+2605 Stellar mass"),
-    ("−",       "U+2212 Minus sign"),
-    ("″",       "U+2033 Double prime"),
+    ("⊕", "U+2295 Earth mass/radius"),
+    ("☉", "U+2609 Solar mass"),
+    ("★", "U+2605 Stellar mass"),
+    ("−", "U+2212 Minus sign"),
+    ("″", "U+2033 Double prime"),
     ("\U0001f728", "U+1F728 Alchemical Earth"),
 ]
 
@@ -201,7 +203,9 @@ def test_html_utf8_bytes_roundtrip(char, description):
     from calamus.preview import _HTML_TEMPLATE
 
     html_body = _renderer().render(f"Symbol: {char}")
-    html_page = _HTML_TEMPLATE.format(body=html_body, mermaid_script="")
+    html_page = _HTML_TEMPLATE.format(
+        body=html_body, mermaid_script="", color_scheme="light", mermaid_theme="default"
+    )
 
     # Encode as UTF-8 (what load_bytes receives)
     encoded = html_page.encode("utf-8")
@@ -209,12 +213,12 @@ def test_html_utf8_bytes_roundtrip(char, description):
     # Decode back — must succeed without errors
     decoded = encoded.decode("utf-8")
 
-    assert char in decoded, (
-        f"{description}: character lost after UTF-8 encode→decode roundtrip"
-    )
-    assert "\u00e2" not in decoded or char == "\u00e2", (
-        f"{description}: â (mojibake) appeared in UTF-8 roundtrip output"
-    )
+    assert (
+        char in decoded
+    ), f"{description}: character lost after UTF-8 encode→decode roundtrip"
+    assert (
+        "\u00e2" not in decoded or char == "\u00e2"
+    ), f"{description}: â (mojibake) appeared in UTF-8 roundtrip output"
 
 
 def test_html_template_encoding_is_valid_utf8():
@@ -223,7 +227,9 @@ def test_html_template_encoding_is_valid_utf8():
 
     body = "M~⊕~ R~⊕~ M~☉~ M~★~ − ″ \U0001f728 x^2^"
     html_body = _renderer().render(body)
-    page = _HTML_TEMPLATE.format(body=html_body, mermaid_script="")
+    page = _HTML_TEMPLATE.format(
+        body=html_body, mermaid_script="", color_scheme="light", mermaid_theme="default"
+    )
 
     try:
         raw = page.encode("utf-8")
@@ -238,7 +244,9 @@ def test_html_template_declares_utf8_charset():
     """The template must declare charset=utf-8 so browsers never sniff Latin-1."""
     from calamus.preview import _HTML_TEMPLATE
 
-    page = _HTML_TEMPLATE.format(body="x", mermaid_script="")
+    page = _HTML_TEMPLATE.format(
+        body="x", mermaid_script="", color_scheme="light", mermaid_theme="default"
+    )
     assert 'charset="utf-8"' in page.lower() or "charset=utf-8" in page.lower(), (
         "HTML template missing charset=utf-8 declaration. "
         "Without it, WebKit may fall back to Latin-1 sniffing."
@@ -254,9 +262,11 @@ def test_html_template_has_explicit_sub_font_size():
     from calamus.preview import _HTML_TEMPLATE
     import re
 
-    page = _HTML_TEMPLATE.format(body="x", mermaid_script="")
+    page = _HTML_TEMPLATE.format(
+        body="x", mermaid_script="", color_scheme="light", mermaid_theme="default"
+    )
     # Find font-size declarations inside sub/sup rules
-    match = re.search(r'sub\s*,\s*sup\s*\{[^}]*font-size:\s*([\d.]+)em', page)
+    match = re.search(r"sub\s*,\s*sup\s*\{[^}]*font-size:\s*([\d.]+)em", page)
     assert match, "No explicit font-size found in sub, sup CSS rule"
     size = float(match.group(1))
     assert size <= 0.80, (
@@ -273,6 +283,7 @@ def test_no_load_html_call_in_preview():
     """
     import inspect
     from calamus import preview
+
     source = inspect.getsource(preview)
     assert "load_html(" not in source, (
         "preview.py contains a call to load_html(). "

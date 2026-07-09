@@ -422,7 +422,9 @@ def test_directive_mmdc_path_produces_svg():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
-    assert "data:image/svg+xml;base64," in html, "no SVG from mmdc for directive diagram"
+    assert (
+        "data:image/svg+xml;base64," in html
+    ), "no SVG from mmdc for directive diagram"
     assert '<pre class="mermaid">' not in html
 
 
@@ -454,9 +456,9 @@ def test_directive_mmdc_path_svg_contains_graph_content():
     svg = base64.b64decode(match.group(1)).decode("utf-8", errors="replace")
     # At least one node label must appear in the rendered SVG
     node_labels = ["Christmas", "shopping", "Laptop", "iPhone", "Car"]
-    assert any(label in svg for label in node_labels), (
-        f"No graph node labels found in SVG. Present: {svg[:300]!r}"
-    )
+    assert any(
+        label in svg for label in node_labels
+    ), f"No graph node labels found in SVG. Present: {svg[:300]!r}"
 
 
 # ── 8. Mermaid math syntax ($$...$$, KaTeX — Mermaid v10.9.0+) ───────────────
@@ -574,9 +576,9 @@ def test_math_double_dollar_preserved_in_pre_flowchart():
     html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
     pre = _extract_mermaid_pre(html)
     # Node A["$$x^2$$"] → pre contains: A[&quot;$$x^2$$&quot;]
-    assert "$$x^2$$" in pre, (
-        f"$$x^2$$ dollar delimiters lost or escaped; pre: {pre[:200]!r}"
-    )
+    assert (
+        "$$x^2$$" in pre
+    ), f"$$x^2$$ dollar delimiters lost or escaped; pre: {pre[:200]!r}"
 
 
 @pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
@@ -587,7 +589,9 @@ def test_math_double_dollar_preserved_in_pre_sequence():
     html = MistuneRenderer().render(_MATH_SEQUENCE_MD)
     pre = _extract_mermaid_pre(html)
     # participant 1 as $$\alpha$$ — no " quoting, so no &quot; escaping either
-    assert "$$" in pre, f"$$ delimiters missing from sequence pre block; pre: {pre[:200]!r}"
+    assert (
+        "$$" in pre
+    ), f"$$ delimiters missing from sequence pre block; pre: {pre[:200]!r}"
 
 
 @pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
@@ -672,7 +676,7 @@ def test_math_quoted_node_label_quotes_become_entities():
     html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
     pre = _extract_mermaid_pre(html)
     # The " around $$x^2$$ is escaped; the $$ is not
-    assert "&quot;" in pre, 'double-quote in node label should become &quot;'
+    assert "&quot;" in pre, "double-quote in node label should become &quot;"
     assert "$$x^2$$" in pre, "math content inside quoted label was lost"
 
 
@@ -715,9 +719,9 @@ def test_math_complex_expression_not_truncated():
     html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
     pre = _extract_mermaid_pre(html)
     # The bmatrix expression from node E
-    assert r"\bmatrix" in pre or "bmatrix" in pre, (
-        "\\bmatrix expression was truncated or dropped"
-    )
+    assert (
+        r"\bmatrix" in pre or "bmatrix" in pre
+    ), "\\bmatrix expression was truncated or dropped"
 
 
 # ── 8d. mmdc pre-render path: math-containing diagrams ───────────────────────
@@ -729,9 +733,9 @@ def test_math_flowchart_mmdc_produces_svg():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
-    assert "data:image/svg+xml;base64," in html, (
-        "mmdc did not produce SVG for math-containing flowchart"
-    )
+    assert (
+        "data:image/svg+xml;base64," in html
+    ), "mmdc did not produce SVG for math-containing flowchart"
     assert '<pre class="mermaid">' not in html
 
 
@@ -741,9 +745,9 @@ def test_math_sequence_mmdc_produces_svg():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_MATH_SEQUENCE_MD)
-    assert "data:image/svg+xml;base64," in html, (
-        "mmdc did not produce SVG for math-containing sequence diagram"
-    )
+    assert (
+        "data:image/svg+xml;base64," in html
+    ), "mmdc did not produce SVG for math-containing sequence diagram"
 
 
 @pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not installed")
@@ -767,6 +771,6 @@ def test_math_simple_mmdc_produces_svg():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_MATH_SIMPLE_MD)
-    assert "data:image/svg+xml;base64," in html, (
-        "mmdc failed to render simple math flowchart"
-    )
+    assert (
+        "data:image/svg+xml;base64," in html
+    ), "mmdc failed to render simple math flowchart"

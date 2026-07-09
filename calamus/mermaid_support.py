@@ -90,9 +90,15 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
             subprocess.run(
                 [
                     "mmdc",
-                    "-i", str(input_path),
-                    "-o", str(output_path),
-                    *(["-p", str(puppeteer_config)] if puppeteer_config.exists() else []),
+                    "-i",
+                    str(input_path),
+                    "-o",
+                    str(output_path),
+                    *(
+                        ["-p", str(puppeteer_config)]
+                        if puppeteer_config.exists()
+                        else []
+                    ),
                 ],
                 check=True,
                 capture_output=True,

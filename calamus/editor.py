@@ -67,10 +67,15 @@ class MarkdownEditor(AbstractEditor):
 
     def __init__(self) -> None:
         super().__init__()
-        self._view = GtkSource.View()  # Create a GtkSource.View instance
+        self._view = GtkSource.View()
         self._find_bar: Gtk.Widget | None = None
         self._find_revealer: Gtk.Revealer | None = None
         self._css_provider = Gtk.CssProvider()
+        self._setup_buffer()
+        self._setup_view()
+        self._style_manager = Adw.StyleManager.get_default()
+        self._apply_style_scheme()
+        self._style_manager.connect("notify::dark", self._on_dark_changed)
 
     def _setup_buffer(self) -> None:
         language_manager = GtkSource.LanguageManager.get_default()
@@ -79,18 +84,42 @@ class MarkdownEditor(AbstractEditor):
         if language is not None:
             buffer.set_language(language)
         buffer.set_highlight_syntax(True)
-        buffer.set_undo_manager(None)
         self._view.set_buffer(buffer)
 
     def _setup_view(self) -> None:
-        self.set_show_line_numbers(True)
-        self.set_auto_indent(True)
-        self.set_tab_width(4)
-        self.set_insert_spaces_instead_of_tabs(True)
-        self.set_highlight_current_line(True)
-        self.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self._view.set_show_line_numbers(True)
+        self._view.set_auto_indent(True)
+        self._view.set_tab_width(4)
+        self._view.set_insert_spaces_instead_of_tabs(True)
+        self._view.set_highlight_current_line(True)
+        self._view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self._apply_font(Pango.FontDescription.from_string("Monospace 11"))
-        self.set_monospace(True)
+        self._view.set_monospace(True)
+
+    def _apply_style_scheme(self) -> None:
+        """Switch the GtkSourceView style scheme to match the current dark/light state."""
+        dark = self._style_manager.get_dark()
+        scheme_manager = GtkSource.StyleSchemeManager.get_default()
+        candidates = (
+            ["Adwaita-dark", "oblivion", "classic-dark"]
+            if dark
+            else ["Adwaita", "classic", "tango"]
+        )
+        scheme = next(
+            (
+                scheme_manager.get_scheme(name)
+                for name in candidates
+                if scheme_manager.get_scheme(name) is not None
+            ),
+            None,
+        )
+        if scheme is not None:
+            self._view.get_buffer().set_style_scheme(scheme)
+
+    def _on_dark_changed(
+        self, _style_manager: Adw.StyleManager, _param: object
+    ) -> None:
+        self._apply_style_scheme()
 
     def _apply_font(self, font_description: Pango.FontDescription) -> None:
         family = font_description.get_family() or "Monospace"

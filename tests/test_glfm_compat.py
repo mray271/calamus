@@ -22,10 +22,10 @@ import re
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def render(md: str) -> str:
     """Return HTML produced by MistuneRenderer for the given Markdown."""
@@ -44,9 +44,9 @@ def assert_no_crash(md: str) -> str:
 
 def assert_surrounding_content_intact(html: str, marker: str = "MARKER") -> None:
     """Assert that normal Markdown around GLFM syntax renders correctly."""
-    assert marker in html, (
-        f"Surrounding paragraph content '{marker}' missing from rendered output"
-    )
+    assert (
+        marker in html
+    ), f"Surrounding paragraph content '{marker}' missing from rendered output"
 
 
 # ===========================================================================
@@ -353,7 +353,9 @@ class TestTableOfContents:
 
 
 class TestAlerts:
-    @pytest.mark.parametrize("alert_type", ["note", "tip", "important", "caution", "warning"])
+    @pytest.mark.parametrize(
+        "alert_type", ["note", "tip", "important", "caution", "warning"]
+    )
     def test_alert_type_does_not_crash(self, alert_type: str):
         f"""Alert type '[!{alert_type}]' must not crash."""
         md = f"> [!{alert_type}]\n> Alert body text.\n"
@@ -393,15 +395,18 @@ class TestAlerts:
 
 
 class TestColorChips:
-    @pytest.mark.parametrize("color_code", [
-        "#FF0000",
-        "#F00",
-        "#FF0000AA",
-        "RGB(255, 0, 0)",
-        "RGBA(255, 0, 0, 0.5)",
-        "HSL(0, 100%, 50%)",
-        "HSLA(0, 100%, 50%, 0.3)",
-    ])
+    @pytest.mark.parametrize(
+        "color_code",
+        [
+            "#FF0000",
+            "#F00",
+            "#FF0000AA",
+            "RGB(255, 0, 0)",
+            "RGBA(255, 0, 0, 0.5)",
+            "HSL(0, 100%, 50%)",
+            "HSLA(0, 100%, 50%, 0.3)",
+        ],
+    )
     def test_color_code_in_backticks_does_not_crash(self, color_code: str):
         """Color codes in backticks must not crash."""
         html = assert_no_crash(f"Color: `{color_code}`")
@@ -532,14 +537,17 @@ class TestIncludes:
 
 
 class TestPlaceholders:
-    @pytest.mark.parametrize("placeholder", [
-        "%{project_name}",
-        "%{project_path}",
-        "%{default_branch}",
-        "%{gitlab_server}",
-        "%{latest_tag}",
-        "%{commit_sha}",
-    ])
+    @pytest.mark.parametrize(
+        "placeholder",
+        [
+            "%{project_name}",
+            "%{project_path}",
+            "%{default_branch}",
+            "%{gitlab_server}",
+            "%{latest_tag}",
+            "%{commit_sha}",
+        ],
+    )
     def test_placeholder_does_not_crash(self, placeholder: str):
         f"""Placeholder {placeholder!r} must not crash."""
         html = assert_no_crash(f"Value: {placeholder}")

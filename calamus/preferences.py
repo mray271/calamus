@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import configparser
 import os
+from typing import TYPE_CHECKING
 
 import gi
 
@@ -12,6 +13,9 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk
+
+if TYPE_CHECKING:
+    from calamus.theme import ThemeManager
 
 CONFIG_DIR = os.path.expanduser("~/.config/Calamus")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "Calamus.conf")
@@ -110,12 +114,14 @@ class PreferencesDialog(Adw.PreferencesWindow):
     def __init__(
         self,
         config_provider: AbstractConfigProvider | None = None,
+        theme_manager: ThemeManager | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.set_title("Preferences")
         self.set_default_size(600, 500)
         self._config_provider = config_provider or FileConfigProvider()
+        self._theme_manager = theme_manager
         self._config = self._config_provider.load()
         self._build_ui()
 
@@ -172,7 +178,10 @@ class PreferencesDialog(Adw.PreferencesWindow):
         theme_row = Adw.ComboRow.new()
         theme_row.set_title("Color Scheme")
         theme_row.set_model(Gtk.StringList.new(["System", "Light", "Dark"]))
-        scheme = self._config.get("Appearance", "color_scheme", fallback="system")
+        if self._theme_manager is not None:
+            scheme = self._theme_manager.get_scheme()
+        else:
+            scheme = self._config.get("Appearance", "color_scheme", fallback="system")
         theme_row.set_selected({"system": 0, "light": 1, "dark": 2}.get(scheme, 0))
         appearance_group.add(theme_row)
 
@@ -200,7 +209,9 @@ class PreferencesDialog(Adw.PreferencesWindow):
         ).lower()
         self._config["Editor"]["word_wrap"] = str(self._wrap_row.get_active()).lower()
         schemes = ["system", "light", "dark"]
-        self._config["Appearance"]["color_scheme"] = schemes[
-            self._theme_row.get_selected()
-        ]
-        self._config_provider.save(self._config)
+        chosen = schemes[self._theme_row.get_selected()]
+        if self._theme_manager is not None:
+            self._theme_manager.set_scheme(chosen)
+        else:
+            self._config["Appearance"]["color_scheme"] = chosen
+            self._config_provider.save(self._config)

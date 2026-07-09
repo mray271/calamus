@@ -7,8 +7,9 @@ from abc import ABC, abstractmethod
 import gi
 
 gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
 
-from gi.repository import GLib, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 from calamus.mermaid_support import get_mermaid_init_script, get_mermaid_script_tag
 from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
@@ -29,6 +30,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="{color_scheme}">
 {mermaid_script}
 <style>
   /* Explicit fallback chain for Unicode symbol ranges.
@@ -50,11 +52,30 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     unicode-range: U+2100-U+214F, U+2190-U+21FF, U+2200-U+22FF,
                    U+2300-U+23FF, U+25A0-U+25FF, U+2600-U+26FF;
   }}
-  body {{ font-family: "Noto Sans", "DejaVu Sans", "NotoSymbols2", "NotoSymbols", sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; }}
-  code {{ background: #f4f4f4; padding: 2px 4px; border-radius: 3px; font-family: monospace; }}
-  pre {{ background: #f4f4f4; padding: 1em; border-radius: 4px; overflow-x: auto; }}
+  :root {{
+    --bg: #ffffff;
+    --fg: #1c1c1c;
+    --code-bg: #f4f4f4;
+    --blockquote-color: #666666;
+    --blockquote-border: #cccccc;
+    --link-color: #0066cc;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{
+      --bg: #1e1e1e;
+      --fg: #eeeeee;
+      --code-bg: #2d2d2d;
+      --blockquote-color: #aaaaaa;
+      --blockquote-border: #555555;
+      --link-color: #6699cc;
+    }}
+  }}
+  body {{ font-family: "Noto Sans", "DejaVu Sans", "NotoSymbols2", "NotoSymbols", sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
+  a {{ color: var(--link-color); }}
+  code {{ background: var(--code-bg); padding: 2px 4px; border-radius: 3px; font-family: monospace; }}
+  pre {{ background: var(--code-bg); padding: 1em; border-radius: 4px; overflow-x: auto; }}
   pre.mermaid {{ background: transparent; padding: 0; }}
-  blockquote {{ border-left: 4px solid #ccc; margin: 0; padding-left: 1em; color: #666; }}
+  blockquote {{ border-left: 4px solid var(--blockquote-border); margin: 0; padding-left: 1em; color: var(--blockquote-color); }}
   img {{ max-width: 100%; }}
   /* Explicit sub/sup sizing — WebKit's UA default (font-size: smaller ≈ 83%)
      is not visually distinct enough, especially for symbol glyphs.
@@ -73,7 +94,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
 {body}
 <script>
-  mermaid.initialize({{ startOnLoad: false, theme: 'default' }});
+  mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
   mermaid.run({{ querySelector: '.mermaid' }});
 </script>
 </body>
@@ -106,9 +127,23 @@ class WebKitPreview(AbstractPreview):
         self._view = _WebKitModule.WebView()
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
+        self._last_markdown: str = ""
+        self._style_manager = Adw.StyleManager.get_default()
+        self._style_manager.connect("notify::dark", self._on_dark_changed)
+
+    def _on_dark_changed(
+        self, _style_manager: Adw.StyleManager, _param: object
+    ) -> None:
+        if self._last_markdown:
+            self.update(self._last_markdown)
 
     def update(self, markdown_text: str) -> None:
         from calamus.mermaid_support import SubprocessMermaidRenderer
+
+        self._last_markdown = markdown_text
+        dark = self._style_manager.get_dark()
+        color_scheme = "dark" if dark else "light"
+        mermaid_theme = "dark" if dark else "default"
 
         html_body = self._renderer.render(markdown_text)
         mermaid_script = (
@@ -119,6 +154,8 @@ class WebKitPreview(AbstractPreview):
         html_text = _HTML_TEMPLATE.format(
             body=html_body,
             mermaid_script=mermaid_script,
+            color_scheme=color_scheme,
+            mermaid_theme=mermaid_theme,
         )
         # Use load_bytes with an explicit encoding declaration rather than
         # load_html, which can fall back to Latin-1 charset sniffing and
