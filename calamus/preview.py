@@ -106,9 +106,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
 {body}
 <script>
-  mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
-  mermaid.run({{ querySelector: '.mermaid' }});
-  hljs.highlightAll();
+  if (typeof mermaid !== 'undefined') {{
+    mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
+    mermaid.run({{ querySelector: '.mermaid' }});
+  }}
+  if (typeof hljs !== 'undefined') {{
+    hljs.highlightAll();
+  }}
 </script>
 </body>
 </html>
