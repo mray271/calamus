@@ -65,6 +65,13 @@ RUN bash scripts/fetch-mermaid.sh && \
     mkdir -p /usr/local/share/calamus/js && \
     cp calamus/resources/js/mermaid.min.js /usr/local/share/calamus/js/mermaid.min.js
 
+# Download highlight.js (code syntax highlighting in preview) at build time.
+RUN bash scripts/fetch-highlight.sh && \
+    mkdir -p /usr/local/share/calamus/js /usr/local/share/calamus/css && \
+    cp calamus/resources/js/highlight.min.js /usr/local/share/calamus/js/highlight.min.js && \
+    cp calamus/resources/css/highlight-github.min.css /usr/local/share/calamus/css/highlight-github.min.css && \
+    cp calamus/resources/css/highlight-github-dark.min.css /usr/local/share/calamus/css/highlight-github-dark.min.css
+
 # Puppeteer config for mmdc: use system Chromium with no-sandbox flags.
 # Stored outside /app so the volume mount cannot shadow it.
 COPY docker-mmdc-puppeteer.json /usr/local/share/calamus/mmdc-puppeteer.json

@@ -13,6 +13,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from calamus.mermaid_support import get_mermaid_init_script, get_mermaid_script_tag
 from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
+from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
 
 try:
     gi.require_version("WebKit", "6.0")
@@ -32,6 +33,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="color-scheme" content="{color_scheme}">
 {mermaid_script}
+{highlight_css}
+{highlight_script}
 <style>
   /* Explicit fallback chain for Unicode symbol ranges.
      "Noto Sans Symbols 2" covers partial alchemical symbols; "Unifont Upper"
@@ -96,6 +99,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <script>
   mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
   mermaid.run({{ querySelector: '.mermaid' }});
+  hljs.highlightAll();
 </script>
 </body>
 </html>
@@ -156,6 +160,8 @@ class WebKitPreview(AbstractPreview):
             mermaid_script=mermaid_script,
             color_scheme=color_scheme,
             mermaid_theme=mermaid_theme,
+            highlight_css=get_highlight_css_tag(dark=dark),
+            highlight_script=get_highlight_script_tag(),
         )
         # Use load_bytes with an explicit encoding declaration rather than
         # load_html, which can fall back to Latin-1 charset sniffing and
