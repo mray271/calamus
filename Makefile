@@ -53,9 +53,9 @@ down:
 # ── Formatting ────────────────────────────────────────────────────────────────
 
 format:
-	docker compose run --rm test sh -c "uv run black . && uv run isort ."
+	docker compose run --rm test sh -c "uv run black . && uvx isort ."
 
 format-check:
-	docker compose run --rm test sh -c "uv run black --check . && uv run isort --check-only --diff ."
+	docker compose run --rm test sh -c "uv run black --check . && uvx isort --check-only --diff ."
 
 .PHONY: all install uninstall clean reconfigure up up-detach down format format-check

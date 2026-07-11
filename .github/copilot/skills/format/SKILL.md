@@ -17,7 +17,7 @@ Both must be run inside Docker to match the CI environment exactly.
 To format all files in place, run both tools via Docker:
 
 ```bash
-docker compose run --rm test sh -c "uv run black . && uv run isort ."
+docker compose run --rm test sh -c "uv run black . && uvx isort ."
 ```
 
 ## Checking only (no changes written)
@@ -25,7 +25,7 @@ docker compose run --rm test sh -c "uv run black . && uv run isort ."
 To check without modifying files — mirroring what CI does:
 
 ```bash
-docker compose run --rm test sh -c "uv run black --check . && uv run isort --check-only --diff ."
+docker compose run --rm test sh -c "uv run black --check . && uvx isort --check-only --diff ."
 ```
 
 ## Important notes
