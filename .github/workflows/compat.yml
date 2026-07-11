@@ -164,12 +164,13 @@ jobs:
             install_cmd: >
               zypper --non-interactive refresh &&
               zypper --non-interactive install
-              bash gcc
+              bash gcc gcc-c++
               python3 python3-gobject python3-cairo
               typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1 typelib-1_0-GtkSource-5
               libgtk-4-1 libadwaita-1-0
               xvfb-run dbus-1 curl git
-              cairo-devel gobject-introspection-devel python3-devel pkg-config
+              cairo-devel gobject-introspection-devel python3-devel pkg-config &&
+              ln -sf /usr/bin/gcc /usr/bin/cc && hash -r
 
     container:
       image: ${{ matrix.container }}
