@@ -196,6 +196,7 @@ jobs:
           echo "LD=/usr/bin/ld" >> $GITHUB_ENV
           echo "STRIP=/usr/bin/strip" >> $GITHUB_ENV
           echo "RANLIB=/usr/bin/gcc-ranlib" >> $GITHUB_ENV
+          echo "PKG_CONFIG=/usr/bin/pkg-config" >> $GITHUB_ENV
 
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
