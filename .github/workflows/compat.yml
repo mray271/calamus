@@ -47,7 +47,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libcairo2-dev \
-            libgirepository1.0-dev \
+            libgirepository-2.0-dev \
             pkg-config \
             python3-dev
 
@@ -135,7 +135,7 @@ jobs:
               gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5
               libgtk-4-1 libadwaita-1-0
               xvfb dbus curl git
-              libcairo2-dev libgirepository1.0-dev pkg-config python3-dev
+              libcairo2-dev libgirepository-2.0-dev pkg-config python3-dev
 
           - distro: debian-13
             container: debian:trixie
@@ -145,7 +145,7 @@ jobs:
               gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5
               libgtk-4-1 libadwaita-1-0
               xvfb dbus curl git
-              libcairo2-dev libgirepository1.0-dev pkg-config python3-dev
+              libcairo2-dev libgirepository-2.0-dev pkg-config python3-dev
 
           - distro: opensuse-tumbleweed
             container: opensuse/tumbleweed
