@@ -192,6 +192,10 @@ jobs:
         run: |
           echo "CC=/usr/bin/gcc" >> $GITHUB_ENV
           echo "CXX=/usr/bin/g++" >> $GITHUB_ENV
+          echo "AR=/usr/bin/gcc-ar" >> $GITHUB_ENV
+          echo "LD=/usr/bin/ld" >> $GITHUB_ENV
+          echo "STRIP=/usr/bin/strip" >> $GITHUB_ENV
+          echo "RANLIB=/usr/bin/gcc-ranlib" >> $GITHUB_ENV
 
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
