@@ -35,7 +35,12 @@ jobs:
             libcairo2-dev \
             libgirepository-2.0-dev \
             pkg-config \
-            python3-dev
+            python3-dev \
+            gir1.2-gtk-4.0 \
+            gir1.2-adw-1 \
+            gir1.2-gtksource-5 \
+            libgtk-4-1 \
+            libadwaita-1-0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
