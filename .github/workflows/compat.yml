@@ -123,7 +123,7 @@ jobs:
       contents: read
     defaults:
       run:
-        shell: bash
+        shell: /bin/bash {0}
     strategy:
       fail-fast: false
       matrix:
@@ -136,7 +136,7 @@ jobs:
               gtk4 libadwaita gtksourceview5
               gobject-introspection gcc
               xorg-x11-server-Xvfb dbus-daemon dbus-tools curl git
-              cairo-devel gobject-introspection-devel python3-devel pkg-config
+              cairo-devel cairo-gobject-devel gobject-introspection-devel python3-devel pkg-config
               && dnf clean all
 
           - distro: ubuntu-25.04
@@ -162,7 +162,9 @@ jobs:
           - distro: opensuse-tumbleweed
             container: opensuse/tumbleweed
             install_cmd: >
+              zypper --non-interactive refresh &&
               zypper --non-interactive install
+              bash
               python3 python3-gobject python3-cairo
               typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1 typelib-1_0-GtkSource-5
               libgtk-4-1 libadwaita-1-0

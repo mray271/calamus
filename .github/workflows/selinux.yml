@@ -106,7 +106,7 @@ jobs:
             policycoreutils \
             python3-libselinux \
             curl git \
-            cairo-devel gobject-introspection-devel python3-devel pkg-config \
+            cairo-devel cairo-gobject-devel gobject-introspection-devel python3-devel pkg-config \
             && dnf clean all
 
       - name: Install uv

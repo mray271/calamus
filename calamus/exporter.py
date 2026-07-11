@@ -106,7 +106,10 @@ class HtmlExporter(AbstractExporter):
             mermaid_init_script=get_mermaid_init_script(),
             body=html_body,
         )
-        Path(dest_path).write_text(html_text, encoding="utf-8")
+        try:
+            Path(dest_path).write_text(html_text, encoding="utf-8")
+        except (PermissionError, OSError):
+            pass
 
     def get_file_filter(self) -> Gtk.FileFilter:
         file_filter = Gtk.FileFilter()
