@@ -47,7 +47,7 @@ def test_renderer_produces_html_not_raw_markdown():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(FIXTURE_MD)
-    assert "<h1>" in html, "headings not rendered"
+    assert "<h1" in html, "headings not rendered"
     assert "# Relativistic" not in html, "raw markdown leaked through"
 
 
@@ -199,7 +199,12 @@ def _build_preview_html(md: str, fake_js: str = "/* mermaid */") -> str:
     ):
         html_body = MistuneRenderer().render(md)
         return _HTML_TEMPLATE.format(
-            body=html_body, mermaid_script=f"<script>{fake_js}</script>"
+            body=html_body,
+            mermaid_script=f"<script>{fake_js}</script>",
+            color_scheme="light",
+            mermaid_theme="default",
+            highlight_css="",
+            highlight_script="",
         )
 
 

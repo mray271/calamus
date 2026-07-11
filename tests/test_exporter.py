@@ -26,7 +26,7 @@ def test_html_exporter_writes_file(tmp_path):
     dest = str(tmp_path / "output.html")
     exporter.export("# Hello\n\nThis is a **test**.", dest)
     content = (tmp_path / "output.html").read_text()
-    assert "<h1>" in content
+    assert "<h1" in content
     assert "<strong>" in content
 
 

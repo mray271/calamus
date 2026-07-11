@@ -2,6 +2,8 @@
 
 A GTK4 Markdown editor for GNOME — clean, fast, and compatible with Fedora, Ubuntu, Linux Mint, Debian, and openSUSE.
 
+> **Installing?** See **[INSTALL.md](INSTALL.md)** for system install (`make && sudo make install`) and developer setup.
+
 ## Features
 
 - Tabbed Markdown editing with live preview
@@ -11,7 +13,7 @@ A GTK4 Markdown editor for GNOME — clean, fast, and compatible with Fedora, Ub
 - Print and Print Preview via GTK
 - Recent files (last 10 opened Markdown files)
 - Find, Go to Line, Undo/Redo
-- Preferences stored in `~/.config/Calamus/Calamus.conf`
+- User preferences stored in `~/.config/Calamus/Calamus.conf`
 - Dark/light/system theme support via Libadwaita
 
 ## Markdown Support
@@ -268,10 +270,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ## Installation
 
+See **[INSTALL.md](INSTALL.md)** for full instructions. Quick reference:
+
+**System install** (end users — installs to `/usr`, appears in app grid):
 ```bash
-git clone https://github.com/OWNER/calamus.git
-cd calamus
+make && sudo make install
+```
+
+**Developer install** (run from source with `uv`):
+```bash
 uv sync --extra dev
+uv run calamus
 ```
 
 ### Download Mermaid.js (required for diagram support)
@@ -292,32 +301,19 @@ python -m calamus
 
 ## Packaging & Distribution
 
-### Desktop Integration (Makefile)
+### System install (meson + make)
 
-The `Makefile` installs the `.desktop` launcher and icon files into the XDG
-standard paths so Calamus appears in the GNOME application grid.
+The `Makefile` wraps [meson](https://mesonbuild.com/) to give users the
+familiar `make` workflow.  It installs the complete application: Python
+package, `calamus` launcher binary, desktop entry, and all icon sizes.
 
-**System-wide install** (requires `sudo`):
+See **[INSTALL.md](INSTALL.md)** for the full walkthrough including per-distro
+dependency commands, per-user install, and troubleshooting.
+
 ```bash
-sudo make install           # installs to /usr
+make && sudo make install      # installs to /usr
+make uninstall                 # removes everything meson installed
 ```
-
-**Per-user install** (no `sudo` required):
-```bash
-make install PREFIX=~/.local
-```
-
-**Uninstall:**
-```bash
-sudo make uninstall
-# or for per-user:
-make uninstall PREFIX=~/.local
-```
-
-> The Makefile only installs the desktop integration files (icons + `.desktop`
-> entry).  The Python package itself is installed separately with `uv` or `pip`.
-
----
 
 ### RPM (Fedora)
 

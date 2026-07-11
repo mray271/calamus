@@ -204,7 +204,12 @@ def test_html_utf8_bytes_roundtrip(char, description):
 
     html_body = _renderer().render(f"Symbol: {char}")
     html_page = _HTML_TEMPLATE.format(
-        body=html_body, mermaid_script="", color_scheme="light", mermaid_theme="default"
+        body=html_body,
+        mermaid_script="",
+        color_scheme="light",
+        mermaid_theme="default",
+        highlight_css="",
+        highlight_script="",
     )
 
     # Encode as UTF-8 (what load_bytes receives)
@@ -228,7 +233,12 @@ def test_html_template_encoding_is_valid_utf8():
     body = "M~⊕~ R~⊕~ M~☉~ M~★~ − ″ \U0001f728 x^2^"
     html_body = _renderer().render(body)
     page = _HTML_TEMPLATE.format(
-        body=html_body, mermaid_script="", color_scheme="light", mermaid_theme="default"
+        body=html_body,
+        mermaid_script="",
+        color_scheme="light",
+        mermaid_theme="default",
+        highlight_css="",
+        highlight_script="",
     )
 
     try:
@@ -245,7 +255,12 @@ def test_html_template_declares_utf8_charset():
     from calamus.preview import _HTML_TEMPLATE
 
     page = _HTML_TEMPLATE.format(
-        body="x", mermaid_script="", color_scheme="light", mermaid_theme="default"
+        body="x",
+        mermaid_script="",
+        color_scheme="light",
+        mermaid_theme="default",
+        highlight_css="",
+        highlight_script="",
     )
     assert 'charset="utf-8"' in page.lower() or "charset=utf-8" in page.lower(), (
         "HTML template missing charset=utf-8 declaration. "
@@ -263,7 +278,12 @@ def test_html_template_has_explicit_sub_font_size():
     import re
 
     page = _HTML_TEMPLATE.format(
-        body="x", mermaid_script="", color_scheme="light", mermaid_theme="default"
+        body="x",
+        mermaid_script="",
+        color_scheme="light",
+        mermaid_theme="default",
+        highlight_css="",
+        highlight_script="",
     )
     # Find font-size declarations inside sub/sup rules
     match = re.search(r"sub\s*,\s*sup\s*\{[^}]*font-size:\s*([\d.]+)em", page)
