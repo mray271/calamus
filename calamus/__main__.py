@@ -41,8 +41,12 @@ def parse_args(
             gtk_argv.append(arg)
 
     # Auto-detect piped stdin only when no explicit files or --pipe given.
+    # Guard against Docker/non-TTY environments where stdin is /dev/null or an
+    # empty pipe: only enter pipe mode when stdin actually contains content.
     if pipe_content is None and not initial_files and not stdin_is_tty:
-        pipe_content = read_stdin()
+        content = read_stdin()
+        if content:
+            pipe_content = content
 
     return pipe_content, initial_files, gtk_argv
 

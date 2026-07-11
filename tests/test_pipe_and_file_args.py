@@ -150,6 +150,15 @@ class TestParseArgsAutoDetect:
         )
         assert pipe == "auto piped"
 
+    def test_non_tty_empty_stdin_does_not_trigger_pipe_mode(self):
+        """Docker/non-TTY with empty stdin (e.g. /dev/null) must not enter pipe mode."""
+        pipe, _, _ = parse_args(
+            ["calamus"],
+            stdin_is_tty=False,
+            read_stdin=lambda: "",
+        )
+        assert pipe is None, "Empty stdin must not activate pipe mode"
+
     def test_non_tty_stdin_not_read_when_files_given(self):
         """File paths suppress auto-detect — opening a file is not pipe mode."""
         path = _make_tempfile()
