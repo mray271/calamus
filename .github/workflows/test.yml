@@ -13,8 +13,8 @@ concurrency:
 jobs:
   test:
     name: pytest (${{ matrix.python-version }})
-    # ubuntu-25.04 ships GTK 4.22.x (GTK >= 4.22.4 required)
-    runs-on: ubuntu-25.04
+    # ubuntu-24.04 ships GTK 4.x; GTK >= 4.22.4 required
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]

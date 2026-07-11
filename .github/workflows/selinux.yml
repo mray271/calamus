@@ -18,8 +18,8 @@ jobs:
   # ---------------------------------------------------------------------------
   selinux-audit:
     name: SELinux audit + behavioral regression
-    # ubuntu-25.04 ships GTK 4.22.x; no real SELinux but audit+behavioral tests run here
-    runs-on: ubuntu-25.04
+    # ubuntu-24.04; no real SELinux but audit+behavioral tests run here
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
   # ---------------------------------------------------------------------------
   selinux-fedora-container:
     name: SELinux audit (Fedora 44 container)
-    runs-on: ubuntu-25.04
+    runs-on: ubuntu-24.04
 
     container:
       image: fedora:44

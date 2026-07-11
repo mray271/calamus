@@ -33,7 +33,7 @@ jobs:
   # ---------------------------------------------------------------------------
   python-matrix:
     name: Pure Python tests (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-25.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -99,7 +99,7 @@ jobs:
   # ---------------------------------------------------------------------------
   distro-matrix:
     name: GTK tests (${{ matrix.distro }})
-    runs-on: ubuntu-25.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
