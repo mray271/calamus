@@ -190,8 +190,8 @@ jobs:
 
       - name: Set C compiler environment for meson
         run: |
-          echo "CC=gcc" >> $GITHUB_ENV
-          echo "CXX=g++" >> $GITHUB_ENV
+          echo "CC=/usr/bin/gcc" >> $GITHUB_ENV
+          echo "CXX=/usr/bin/g++" >> $GITHUB_ENV
 
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
