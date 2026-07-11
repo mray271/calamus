@@ -189,57 +189,42 @@ class TestParseArgsAutoDetect:
 
 
 class TestPipeModeSave:
-    """Verify that _on_save in pipe mode writes to stdout and quits the app.
+    """Ctrl+S in pipe mode saves internally but does NOT emit to stdout or quit.
 
-    Calls ``CalamusWindow._on_save`` as an unbound method with a
-    ``SimpleNamespace`` stub — no display or GObject construction needed.
+    The gedit --wait contract: the user signals "done" by closing the window,
+    not by saving.  Saving mid-session is a normal editing action.
     """
 
-    def _make_window_stub(self, editor_text: str):
+    def test_ctrl_s_does_not_write_stdout(self):
         import types
+        from calamus.window import CalamusWindow
 
-        mock_editor = MagicMock()
-        mock_editor.get_text.return_value = editor_text
         mock_tab_manager = MagicMock()
-        mock_tab_manager.get_current_editor.return_value = mock_editor
+        stub = types.SimpleNamespace(
+            _pipe_mode=True,
+            tab_manager=mock_tab_manager,
+        )
+        captured_calls = []
+        with patch("calamus.window.sys.stdout") as mock_stdout:
+            mock_stdout.write.side_effect = lambda s: captured_calls.append(s)
+            CalamusWindow._on_save(stub, MagicMock(), None)
+
+        assert not captured_calls, "Ctrl+S must not write to stdout in pipe mode"
+        mock_tab_manager.save_current.assert_called_once()
+
+    def test_ctrl_s_does_not_quit(self):
+        import types
+        from calamus.window import CalamusWindow
+
+        mock_tab_manager = MagicMock()
         mock_app = MagicMock()
         stub = types.SimpleNamespace(
             _pipe_mode=True,
-            _confirmed_quit=False,
             tab_manager=mock_tab_manager,
             get_application=lambda: mock_app,
         )
-        return stub, mock_app
-
-    def test_pipe_save_writes_editor_text_to_stdout(self):
-        import io
-        from calamus.window import CalamusWindow
-
-        stub, _ = self._make_window_stub("# Edited content\n\nParagraph.")
-        captured = io.StringIO()
-        with patch("calamus.window.sys.stdout", captured):
-            CalamusWindow._on_save(stub, MagicMock(), None)
-
-        assert captured.getvalue() == "# Edited content\n\nParagraph."
-
-    def test_pipe_save_calls_app_quit(self):
-        from calamus.window import CalamusWindow
-
-        stub, mock_app = self._make_window_stub("content")
-        with patch("calamus.window.sys.stdout"):
-            CalamusWindow._on_save(stub, MagicMock(), None)
-
-        mock_app.quit.assert_called_once()
-
-    def test_pipe_save_sets_confirmed_quit(self):
-        """confirmed_quit must be True so close-request skips the dialog."""
-        from calamus.window import CalamusWindow
-
-        stub, _ = self._make_window_stub("content")
-        with patch("calamus.window.sys.stdout"):
-            CalamusWindow._on_save(stub, MagicMock(), None)
-
-        assert stub._confirmed_quit is True
+        CalamusWindow._on_save(stub, MagicMock(), None)
+        mock_app.quit.assert_not_called()
 
     def test_normal_save_does_not_write_stdout(self):
         import types
@@ -257,3 +242,75 @@ class TestPipeModeSave:
 
         assert not captured_calls, "stdout must not be written in normal save mode"
         mock_tab_manager.save_current.assert_called_once()
+
+
+class TestPipeModeClose:
+    """Closing the window in pipe mode emits editor text to stdout immediately
+    with no confirmation dialog (gedit --wait contract).
+    """
+
+    def _make_close_stub(self, editor_text: str, pipe_mode: bool = True):
+        import types
+
+        mock_editor = MagicMock()
+        mock_editor.get_text.return_value = editor_text
+        mock_tab_manager = MagicMock()
+        mock_tab_manager.get_current_editor.return_value = mock_editor
+        stub = types.SimpleNamespace(
+            _confirmed_quit=False,
+            _pipe_mode=pipe_mode,
+            tab_manager=mock_tab_manager,
+        )
+        return stub
+
+    def test_close_emits_editor_text_to_stdout(self):
+        import io
+        from calamus.window import CalamusWindow
+
+        stub = self._make_close_stub("# My edited document\n")
+        captured = io.StringIO()
+        with patch("calamus.window.sys.stdout", captured):
+            result = CalamusWindow._on_close_request(stub, MagicMock())
+
+        assert captured.getvalue() == "# My edited document\n"
+
+    def test_close_returns_false_to_allow_window_close(self):
+        """_on_close_request must return False so GTK proceeds with the close."""
+        from calamus.window import CalamusWindow
+
+        stub = self._make_close_stub("content")
+        with patch("calamus.window.sys.stdout"):
+            result = CalamusWindow._on_close_request(stub, MagicMock())
+
+        assert result is False
+
+    def test_close_emits_even_with_unsaved_edits(self):
+        """User's last state is what matters — no save prompt in pipe mode."""
+        import io
+        from calamus.window import CalamusWindow
+
+        stub = self._make_close_stub("# Unsaved edits here")
+        captured = io.StringIO()
+        with patch("calamus.window.sys.stdout", captured):
+            CalamusWindow._on_close_request(stub, MagicMock())
+
+        assert captured.getvalue() == "# Unsaved edits here"
+
+    def test_normal_close_does_not_emit_to_stdout(self):
+        """Non-pipe-mode close must never touch stdout."""
+        import io, types
+        from calamus.window import CalamusWindow
+
+        mock_tab_manager = MagicMock()
+        mock_tab_manager.get_tab_count.return_value = 1
+        mock_tab_manager.get_unsaved_tabs.return_value = []
+        stub = types.SimpleNamespace(
+            _confirmed_quit=False,
+            _pipe_mode=False,
+            tab_manager=mock_tab_manager,
+        )
+        captured = io.StringIO()
+        with patch("calamus.window.sys.stdout", captured):
+            CalamusWindow._on_close_request(stub, MagicMock())
+
+        assert captured.getvalue() == ""
