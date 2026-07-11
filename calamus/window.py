@@ -23,6 +23,40 @@ from calamus.tabs import AdwTabManager
 from calamus.theme import ThemeManager
 
 GITHUB_RELEASES_URL = "https://github.com/OWNER/calamus/releases"
+
+# Extensions Calamus treats as openable text/Markdown files.
+_TEXT_EXTENSIONS: frozenset[str] = frozenset({
+    ".md", ".markdown", ".mdown", ".mkd", ".mdx",
+    ".txt", ".text", ".rst", ".adoc", ".asciidoc",
+    ".org", ".wiki", ".tex", ".csv", ".log", ".yaml", ".yml",
+    ".toml", ".json", ".xml", ".html", ".htm", ".css", ".js",
+    ".py", ".sh", ".bash", ".zsh", ".fish", ".rb", ".go",
+    ".c", ".h", ".cpp", ".java", ".ts", ".rs", ".sql",
+})
+
+# Number of bytes to sniff for binary detection on extensionless files.
+_BINARY_SNIFF_BYTES = 512
+
+
+def _is_openable(path: str) -> bool:
+    """Return True if *path* should be opened in the editor.
+
+    Checks the file extension first; for files with no recognised extension
+    (including no extension at all) sniffs the first bytes for null bytes,
+    which reliably identify binary content.
+    """
+    ext = os.path.splitext(path)[1].lower()
+    if ext in _TEXT_EXTENSIONS:
+        return True
+    if ext:
+        # Known non-text extension — reject without sniffing.
+        return False
+    # No extension: sniff for binary content.
+    try:
+        with open(path, "rb") as fh:
+            return b"\x00" not in fh.read(_BINARY_SNIFF_BYTES)
+    except OSError:
+        return False
 GITHUB_ISSUES_URL = "https://github.com/OWNER/calamus/issues"
 MERMAID_DOCS_URL = "https://mermaid.js.org"
 
@@ -248,9 +282,19 @@ class CalamusWindow(Adw.ApplicationWindow):
         return editor.get_text() if editor is not None else ""
 
     def _on_directory_file_activated(self, path: str) -> None:
-        if path.endswith((".md", ".markdown", ".txt")):
+        if _is_openable(path):
             self.tab_manager.open_file(path)
             self._recent_files.add(path)
+        else:
+            name = os.path.basename(path)
+            dialog = Adw.AlertDialog.new(
+                "Unsupported File Type",
+                f"\u201c{name}\u201d appears to be a binary or unsupported file "
+                "type.\n\nCalamus can only open plain-text and Markdown files.",
+            )
+            dialog.add_response("ok", "OK")
+            dialog.set_default_response("ok")
+            dialog.present(self)
 
     def _update_window_title(self) -> None:
         tab = self.tab_manager.get_current_tab()
@@ -269,13 +313,30 @@ class CalamusWindow(Adw.ApplicationWindow):
 
     def _on_open(self, _action: Gio.SimpleAction, _param: object) -> None:
         dialog = Gtk.FileDialog.new()
-        file_filter = Gtk.FileFilter()
-        file_filter.set_name("Markdown files")
-        file_filter.add_pattern("*.md")
-        file_filter.add_pattern("*.markdown")
+
+        md_filter = Gtk.FileFilter()
+        md_filter.set_name("Markdown files (*.md, *.markdown)")
+        md_filter.add_pattern("*.md")
+        md_filter.add_pattern("*.markdown")
+        md_filter.add_pattern("*.mdown")
+        md_filter.add_pattern("*.mkd")
+        md_filter.add_pattern("*.mdx")
+
+        text_filter = Gtk.FileFilter()
+        text_filter.set_name("All text files")
+        for ext in sorted(_TEXT_EXTENSIONS):
+            text_filter.add_pattern(f"*{ext}")
+
+        all_filter = Gtk.FileFilter()
+        all_filter.set_name("All files")
+        all_filter.add_pattern("*")
+
         filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(file_filter)
+        filters.append(md_filter)
+        filters.append(text_filter)
+        filters.append(all_filter)
         dialog.set_filters(filters)
+        dialog.set_default_filter(md_filter)
         config = self._config_provider.load()
         initial_dir = (
             config.get("Files", "default_open_dir", fallback="") or os.getcwd()
