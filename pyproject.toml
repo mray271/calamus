@@ -48,6 +48,24 @@ Changelog = "https://github.com/OWNER/calamus/blob/main/CHANGELOG.md"
 [tool.isort]
 profile = "black"
 
+[tool.coverage.run]
+source = ["calamus"]
+
+[tool.coverage.report]
+# Exclude GTK application-shell modules that require a live display/compositor
+# to instantiate. These are integration-tested via the distro-matrix container
+# jobs and are not unit-testable without a full GNOME session.
+omit = [
+    "calamus/app.py",
+    "calamus/window.py",
+    "calamus/tabs.py",
+    "calamus/preview.py",
+    "calamus/about.py",
+    "calamus/directorytree.py",
+    "calamus/printer.py",
+    "calamus/highlight_support.py",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=calamus --cov-report=term-missing"
