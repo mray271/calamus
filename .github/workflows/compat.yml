@@ -112,6 +112,10 @@ jobs:
   distro-matrix:
     name: GTK tests (${{ matrix.distro }})
     runs-on: ubuntu-24.04
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:

@@ -20,6 +20,10 @@ jobs:
     name: SELinux audit + behavioral regression
     # ubuntu-24.04; no real SELinux but audit+behavioral tests run here
     runs-on: ubuntu-24.04
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
