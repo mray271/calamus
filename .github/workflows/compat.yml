@@ -22,6 +22,10 @@ on:
 #    Windows and macOS are intentionally excluded — Calamus is a Linux/GNOME
 #    application and GTK4 is not a supported runtime on those platforms.
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ---------------------------------------------------------------------------
   # 1. Python version matrix — pure Python tests, no GTK required.
