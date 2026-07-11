@@ -28,6 +28,7 @@ coverage.xml
 *.gresource
 *.gresource.xml.bak
 calamus/resources/js/mermaid.min.js
+calamus/resources/.mermaid-render/
 
 # Editors
 .vscode/
