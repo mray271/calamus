@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import os
+from abc import ABC, abstractmethod
 
 import gi
 
@@ -13,8 +13,8 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk
 
 from calamus.editor import AbstractEditor, MarkdownEditor
-from calamus.preview import AbstractPreview, create_preview
 from calamus.preferences import FileConfigProvider
+from calamus.preview import AbstractPreview, create_preview
 
 # Files larger than this will be refused with an error dialog rather than
 # loaded.  Markdown syntax highlighting and live preview rendering become

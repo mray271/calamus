@@ -50,4 +50,12 @@ up-detach:
 down:
 	docker compose down
 
-.PHONY: all install uninstall clean reconfigure up up-detach down
+# ── Formatting ────────────────────────────────────────────────────────────────
+
+format:
+	docker compose run --rm test sh -c "uv run black . && uv run isort ."
+
+format-check:
+	docker compose run --rm test sh -c "uv run black --check . && uv run isort --check-only --diff ."
+
+.PHONY: all install uninstall clean reconfigure up up-detach down format format-check

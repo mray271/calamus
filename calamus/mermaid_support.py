@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import base64
 import hashlib
 import html
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import threading
+from abc import ABC, abstractmethod
+from pathlib import Path
 
 MERMAID_VERSION = "11.5.0"
 MERMAID_CDN_URL = (

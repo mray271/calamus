@@ -206,6 +206,7 @@ class TestPipeModeSave:
 
     def test_ctrl_s_does_not_write_stdout(self):
         import types
+
         from calamus.window import CalamusWindow
 
         mock_tab_manager = MagicMock()
@@ -223,6 +224,7 @@ class TestPipeModeSave:
 
     def test_ctrl_s_does_not_quit(self):
         import types
+
         from calamus.window import CalamusWindow
 
         mock_tab_manager = MagicMock()
@@ -237,6 +239,7 @@ class TestPipeModeSave:
 
     def test_normal_save_does_not_write_stdout(self):
         import types
+
         from calamus.window import CalamusWindow
 
         mock_tab_manager = MagicMock()
@@ -274,6 +277,7 @@ class TestPipeModeClose:
 
     def test_close_emits_editor_text_to_stdout(self):
         import io
+
         from calamus.window import CalamusWindow
 
         stub = self._make_close_stub("# My edited document\n")
@@ -296,6 +300,7 @@ class TestPipeModeClose:
     def test_close_emits_even_with_unsaved_edits(self):
         """User's last state is what matters — no save prompt in pipe mode."""
         import io
+
         from calamus.window import CalamusWindow
 
         stub = self._make_close_stub("# Unsaved edits here")
@@ -307,7 +312,9 @@ class TestPipeModeClose:
 
     def test_normal_close_does_not_emit_to_stdout(self):
         """Non-pipe-mode close must never touch stdout."""
-        import io, types
+        import io
+        import types
+
         from calamus.window import CalamusWindow
 
         mock_tab_manager = MagicMock()

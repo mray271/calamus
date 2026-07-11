@@ -23,14 +23,13 @@ import os
 import subprocess
 from unittest.mock import MagicMock, call, patch
 
-import pytest
-
 import gi
+import pytest
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, GLib, Gio
+from gi.repository import Adw, Gio, GLib
 
 from calamus.preferences import AbstractConfigProvider
 
@@ -251,8 +250,9 @@ class TestGsettingsSignalHandler:
         )
 
     def test_gsettings_connection_failure_does_not_crash(self):
-        from calamus.theme import ThemeManager
         import warnings
+
+        from calamus.theme import ThemeManager
 
         config_provider = MemoryConfigProvider()
         style_manager = _make_mock_style_manager()

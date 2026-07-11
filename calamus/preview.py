@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from collections.abc import Callable
 import os
 import threading
+from abc import ABC, abstractmethod
+from collections.abc import Callable
 from urllib.parse import unquote
 
 import gi
@@ -13,8 +13,9 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, GLib, Gio, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk
 
+from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
 from calamus.mermaid_support import (
     MermaidCache,
     SubprocessMermaidRenderer,
@@ -24,7 +25,6 @@ from calamus.mermaid_support import (
     preprocess_with_cache,
 )
 from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
-from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
 
 try:
     gi.require_version("WebKit", "6.0")

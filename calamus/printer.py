@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import re
+from abc import ABC, abstractmethod
 
 import gi
 
