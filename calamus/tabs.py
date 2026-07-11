@@ -139,6 +139,7 @@ class EditorTab(Gtk.Box):
         self._modified = False
 
     def load_file(self, path: str) -> None:
+        self._file_path = path
         try:
             file_size = os.path.getsize(path)
             if file_size > LARGE_FILE_SIZE_BYTES:
