@@ -190,6 +190,7 @@ jobs:
 
       - name: Set C compiler environment for meson
         run: |
+          echo "/usr/bin" >> $GITHUB_PATH
           echo "CC=/usr/bin/gcc" >> $GITHUB_ENV
           echo "CXX=/usr/bin/g++" >> $GITHUB_ENV
           echo "AR=/usr/bin/gcc-ar" >> $GITHUB_ENV
