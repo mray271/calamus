@@ -65,6 +65,8 @@ def test_subprocess_renderer_unavailable_when_no_mmdc(monkeypatch):
     """SubprocessMermaidRenderer.is_available() returns False when mmdc is not on PATH."""
     monkeypatch.setattr(shutil, "which", lambda _: None)
     from calamus.mermaid_support import SubprocessMermaidRenderer
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
+    from calamus.mermaid_support import SubprocessMermaidRenderer
 
     renderer = SubprocessMermaidRenderer()
     assert renderer.is_available() is False
@@ -72,6 +74,8 @@ def test_subprocess_renderer_unavailable_when_no_mmdc(monkeypatch):
 
 def test_subprocess_renderer_render_returns_none_when_unavailable(monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _: None)
+    from calamus.mermaid_support import SubprocessMermaidRenderer
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
     from calamus.mermaid_support import SubprocessMermaidRenderer
 
     renderer = SubprocessMermaidRenderer()
@@ -81,6 +85,8 @@ def test_subprocess_renderer_render_returns_none_when_unavailable(monkeypatch):
 
 def test_get_best_renderer_returns_fallback_when_no_mmdc(monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _: None)
+    from calamus.mermaid_support import SubprocessMermaidRenderer
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
     from calamus.mermaid_support import FallbackMermaidRenderer, get_best_renderer
 
     renderer = get_best_renderer()
@@ -129,6 +135,7 @@ def test_get_mermaid_script_tag_local_missing_falls_back_to_cdn(tmp_path, monkey
     import calamus.mermaid_support as ms
 
     monkeypatch.setattr(ms, "MERMAID_LOCAL_PATH", str(tmp_path / "nonexistent.js"))
+    monkeypatch.setattr(ms, "MERMAID_SYSTEM_PATH", str(tmp_path / "nonexistent_system.js"))
     tag = ms.get_mermaid_script_tag(local_first=True)
     assert "cdn.jsdelivr.net" in tag
 

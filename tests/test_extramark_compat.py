@@ -187,30 +187,30 @@ class TestHeadingAnchors:
         """# Heading must not crash (anchor not required)."""
         html = assert_no_crash("# Top Level\n")
         assert "Top Level" in html
-        assert "<h1>" in html
+        assert "<h1" in html
 
     def test_h2_renders_without_crash(self):
         """## Heading must not crash."""
         html = assert_no_crash("## Section\n")
         assert "Section" in html
-        assert "<h2>" in html
+        assert "<h2" in html
 
     def test_h3_renders_without_crash(self):
         """### Heading must not crash."""
         html = assert_no_crash("### Sub-section\n")
         assert "Sub-section" in html
-        assert "<h3>" in html
+        assert "<h3" in html
 
     def test_h4_renders_without_crash(self):
         """#### h4 (beyond anchor scope) must still render."""
         html = assert_no_crash("#### Deep\n")
         assert "Deep" in html
-        assert "<h4>" in html
+        assert "<h4" in html
 
     def test_heading_without_id_attribute_is_acceptable(self):
         """Without anchor support, headings have no id= — that is acceptable."""
         html = render("## My Section\n")
-        assert "<h2>" in html
+        assert "<h2" in html
         assert "My Section" in html
         # id attribute is not required for graceful fail-over
 
@@ -667,7 +667,7 @@ Visit https://extramark.example.com for more.
     def test_mixed_document_heading_renders(self):
         """Heading in mixed document must render."""
         html = render(self._MIXED)
-        assert "<h1>" in html
+        assert "<h1" in html
         assert "Title" in html
 
     def test_mixed_document_term_visible(self):

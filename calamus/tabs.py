@@ -77,14 +77,14 @@ class AbstractTab(ABC):
 class EditorTab(Gtk.Box):
     """Concrete editor tab implementation."""
 
-    def __init__(self, file_path: str | None = None) -> None:
+    def __init__(self, file_path: str | None = None, on_open_path=None) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._file_path = file_path
         self._modified = False
         self.search_bar = Gtk.SearchBar()
         self.search_entry = Gtk.SearchEntry()
         self.editor: MarkdownEditor = MarkdownEditor()
-        self.preview: AbstractPreview = create_preview()
+        self.preview: AbstractPreview = create_preview(on_open_path=on_open_path)
         self._preview_timer_id: int | None = None
         config = FileConfigProvider().load()
         self._preview_delay_ms: int = config.getint(
@@ -109,6 +109,7 @@ class EditorTab(Gtk.Box):
     @file_path.setter
     def file_path(self, value: str | None) -> None:
         self._file_path = value
+        self.preview.set_file_path(value)
 
     @property
     def modified(self) -> bool:
@@ -140,6 +141,7 @@ class EditorTab(Gtk.Box):
 
     def load_file(self, path: str) -> None:
         self._file_path = path
+        self.preview.set_file_path(path)
         try:
             file_size = os.path.getsize(path)
             if file_size > LARGE_FILE_SIZE_BYTES:
@@ -276,7 +278,7 @@ class AdwTabManager(AbstractTabManager):
             self._on_title_changed()
 
     def new_tab(self, file_path: str | None = None) -> AbstractTab:
-        tab = EditorTab(file_path)
+        tab = EditorTab(file_path, on_open_path=self.open_file)
         tab.set_editor_visible(self._editor_visible)
         tab.set_preview_visible(self._preview_visible)
         page = self._tab_view.append(tab)

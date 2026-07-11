@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-
+from collections.abc import Callable
+import os
 import threading
+from urllib.parse import unquote
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, GLib, Gio, Gtk
 
 from calamus.mermaid_support import (
     MermaidCache,
@@ -130,12 +132,21 @@ class AbstractPreview(ABC):
     def get_widget(self) -> Gtk.Widget:
         """Return the widget used to render the preview."""
 
+    def set_file_path(self, path: str | None) -> None:
+        """Notify the preview of the current file path for relative link resolution."""
+
 
 class WebKitPreview(AbstractPreview):
     """Preview implementation backed by WebKit (6.0) or WebKit2 (4.1)."""
 
-    def __init__(self, renderer: AbstractMarkdownRenderer | None = None) -> None:
+    def __init__(
+        self,
+        renderer: AbstractMarkdownRenderer | None = None,
+        on_open_path: Callable[[str], None] | None = None,
+    ) -> None:
         self._renderer = renderer or MistuneRenderer()
+        self._on_open_path = on_open_path
+        self._base_uri = "file:///"
         # Disable the bwrap/dbus-proxy sandbox — required when running inside
         # Docker where bubblewrap cannot create user namespaces.
         context = _WebKitModule.WebContext.get_default()
@@ -144,6 +155,7 @@ class WebKitPreview(AbstractPreview):
         self._view = _WebKitModule.WebView()
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
+        self._view.connect("decide-policy", self._on_decide_policy)
         self._last_markdown: str = ""
         self._style_manager = Adw.StyleManager.get_default()
         self._style_manager.connect("notify::dark", self._on_dark_changed)
@@ -160,6 +172,59 @@ class WebKitPreview(AbstractPreview):
         # exhausting memory and hanging the application.
         self._mmdc_semaphore = threading.Semaphore(1)
 
+    def set_file_path(self, path: str | None) -> None:
+        """Update the base URI used for resolving relative links in the preview."""
+        if path is not None:
+            directory = os.path.dirname(os.path.abspath(path))
+            self._base_uri = f"file://{directory}/"
+        else:
+            self._base_uri = "file:///"
+
+    def _on_decide_policy(
+        self,
+        _webview: object,
+        decision: object,
+        decision_type: object,
+    ) -> None:
+        """Intercept all WebKit navigation to prevent the preview from navigating away.
+
+        * In-page anchor links (#section) → let WebKit handle natively (scroll).
+        * file:// links to .md files → open in the editor via callback.
+        * http/https links → open in the system default browser.
+        * Everything else → silently ignored (preview stays on current content).
+        """
+        if decision_type != _WebKitModule.PolicyDecisionType.NAVIGATION_ACTION:
+            decision.use()
+            return
+        nav_action = decision.get_navigation_action()
+        if nav_action.get_navigation_type() != _WebKitModule.NavigationType.LINK_CLICKED:
+            decision.use()
+            return
+        uri = nav_action.get_request().get_uri()
+
+        if uri.startswith("file://"):
+            raw_path = unquote(uri[len("file://"):])
+            path, _, fragment = raw_path.partition("#")
+            # Pure anchor link — path resolves to the current directory.
+            # WebKit can't scroll within load_bytes pages by URL fragment, so
+            # we do it explicitly with JavaScript.
+            if not path or os.path.isdir(path):
+                decision.ignore()
+                if fragment:
+                    self._scroll_to_anchor(fragment)
+                return
+            decision.ignore()
+            if self._on_open_path is not None:
+                self._on_open_path(path)
+        elif uri.startswith(("http://", "https://")):
+            decision.ignore()
+            try:
+                Gio.AppInfo.launch_default_for_uri(uri, None)
+            except GLib.Error:
+                pass
+        else:
+            decision.ignore()
+
     def _on_dark_changed(
         self, _style_manager: Adw.StyleManager, _param: object
     ) -> None:
@@ -173,7 +238,7 @@ class WebKitPreview(AbstractPreview):
         if not self._mmdc_available:
             # No mmdc — use browser-side mermaid.js (instant, no subprocess).
             html_body = self._renderer.render(markdown_text)
-            self._load_html(html_body, get_mermaid_script_tag(), dark)
+            self._render_page(html_body, get_mermaid_script_tag(), dark)
             return
 
         # Fast path: render immediately using cached SVGs where available.
@@ -186,7 +251,7 @@ class WebKitPreview(AbstractPreview):
             for _, src in extract_mermaid_blocks(markdown_text)
             if not self._mermaid_cache.has(src)
         ]
-        self._load_html(
+        self._render_page(
             html_body,
             get_mermaid_script_tag() if uncached else "",
             dark,
@@ -232,10 +297,10 @@ class WebKitPreview(AbstractPreview):
         if markdown_text == self._last_markdown:
             preprocessed = preprocess_with_cache(markdown_text, self._mermaid_cache)
             html_body = self._renderer.render_preprocessed(preprocessed)
-            self._load_html(html_body, "", self._style_manager.get_dark())
+            self._render_page(html_body, "", self._style_manager.get_dark())
         return GLib.SOURCE_REMOVE
 
-    def _load_html(self, html_body: str, mermaid_script: str, dark: bool) -> None:
+    def _render_page(self, html_body: str, mermaid_script: str, dark: bool) -> None:
         color_scheme = "dark" if dark else "light"
         mermaid_theme = "dark" if dark else "default"
         html_text = _HTML_TEMPLATE.format(
@@ -249,7 +314,22 @@ class WebKitPreview(AbstractPreview):
         # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
         # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
         raw = GLib.Bytes.new(html_text.encode("utf-8"))
-        self._view.load_bytes(raw, "text/html", "utf-8", "file:///")
+        self._view.load_bytes(raw, "text/html", "utf-8", self._base_uri)
+
+    def _scroll_to_anchor(self, anchor_id: str) -> None:
+        """Scroll the preview to the element with the given id."""
+        # Sanitize: only allow characters valid in HTML id attributes.
+        safe = "".join(c for c in anchor_id if c.isalnum() or c in "-_")
+        if not safe:
+            return
+        js = (
+            f"var el = document.getElementById('{safe}');"
+            f"if (el) el.scrollIntoView({{behavior:'smooth', block:'start'}});"
+        )
+        if hasattr(self._view, "evaluate_javascript"):
+            self._view.evaluate_javascript(js, -1, None, None, None, None, None)
+        elif hasattr(self._view, "run_javascript"):
+            self._view.run_javascript(js, None, None, None)
 
     def get_widget(self) -> Gtk.Widget:
         return self._view
@@ -272,8 +352,8 @@ class TextViewPreview(AbstractPreview):
         return self._view
 
 
-def create_preview() -> AbstractPreview:
+def create_preview(on_open_path: Callable[[str], None] | None = None) -> AbstractPreview:
     """Create the best preview implementation for the current system."""
     if _WEBKIT_AVAILABLE:
-        return WebKitPreview()
+        return WebKitPreview(on_open_path=on_open_path)
     return TextViewPreview()

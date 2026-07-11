@@ -43,7 +43,7 @@ class TestEditorTabLargeFileSafetyNet:
         """Return an EditorTab-like object with load_file bound but GTK faked."""
         from calamus.tabs import EditorTab, LARGE_FILE_SIZE_BYTES
 
-        tab = object.__new__(EditorTab)
+        tab = EditorTab.__new__(EditorTab)
         tab._file_path = None
         tab._modified = False
         tab.editor = MagicMock()

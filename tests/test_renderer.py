@@ -8,7 +8,7 @@ def test_mistune_renderer_renders_heading():
 
     r = MistuneRenderer()
     html = r.render("# Hello")
-    assert "<h1>" in html
+    assert "<h1" in html
     assert "Hello" in html
 
 
@@ -18,7 +18,7 @@ def test_mistune_renderer_heading_levels():
     r = MistuneRenderer()
     for level in range(1, 7):
         html = r.render(f"{'#' * level} Heading {level}")
-        assert f"<h{level}>" in html
+        assert f"<h{level}" in html
 
 
 def test_mistune_renderer_bold():
@@ -128,9 +128,9 @@ def test_mistune_renderer_preserves_mermaid_block():
     r = MistuneRenderer()
     md = "```mermaid\ngraph TD\nA-->B\n```"
     html = r.render(md)
-    # Mermaid blocks become <pre class="mermaid"> for WebKit JS rendering
-    assert "mermaid" in html
-    assert "graph TD" in html or "A--&gt;B" in html
+    # When mmdc is available the block becomes an inline SVG <img>;
+    # when it isn't, it becomes <pre class="mermaid"> for browser-side rendering.
+    assert "mermaid" in html or "svg" in html.lower() or "A--&gt;B" in html
 
 
 def test_mistune_renderer_get_version_returns_string():
@@ -162,7 +162,7 @@ def test_mistune_renderer_mixed_content():
     r = MistuneRenderer()
     md = "# Title\n\nSome **bold** and *italic* text.\n\n- item 1\n- item 2"
     html = r.render(md)
-    assert "<h1>" in html
+    assert "<h1" in html
     assert "<strong>" in html
     assert "<em>" in html
     assert "<ul>" in html

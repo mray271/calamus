@@ -240,6 +240,8 @@ class TestMermaidSubprocessGracefulFailure:
         import shutil
 
         monkeypatch.setattr(shutil, "which", lambda _: None)
+        from calamus.mermaid_support import SubprocessMermaidRenderer
+        monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
         from calamus.mermaid_support import FallbackMermaidRenderer, get_best_renderer
 
         renderer = get_best_renderer()
@@ -256,6 +258,8 @@ class TestMermaidSubprocessGracefulFailure:
         import shutil
 
         monkeypatch.setattr(shutil, "which", lambda _: None)
+        from calamus.mermaid_support import SubprocessMermaidRenderer
+        monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
         from calamus.mermaid_support import preprocess_markdown_for_static_export
 
         text = "Before\n```mermaid\ngraph TD\nA-->B\n```\nAfter"

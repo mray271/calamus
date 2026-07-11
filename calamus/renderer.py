@@ -5,10 +5,38 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import html
 import re
+import unicodedata
 
 import mistune
 
 from calamus import MERMAID_VERSION
+
+
+def _slugify(text: str) -> str:
+    """Convert heading text to a GitHub-style anchor id."""
+    text = text.lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_]+", "-", text.strip())
+    return text
+
+
+_HEADING_RE = re.compile(r"(<h([1-6])>)(.*?)(</h[1-6]>)", re.DOTALL)
+
+
+def _add_heading_ids(html_text: str) -> str:
+    """Post-process rendered HTML to add id attributes to headings."""
+    if not isinstance(html_text, str):
+        return html_text
+    def _repl(m: re.Match) -> str:
+        open_tag, level, inner, close_tag = m.group(1), m.group(2), m.group(3), m.group(4)
+        plain = re.sub(r"<[^>]+>", "", inner)
+        slug = _slugify(plain)
+        if slug:
+            return f'<h{level} id="{slug}">{inner}{close_tag}'
+        return m.group(0)
+    return _HEADING_RE.sub(_repl, html_text)
 
 
 class AbstractMarkdownRenderer(ABC):
@@ -45,12 +73,8 @@ class MistuneRenderer(AbstractMarkdownRenderer):
         )
 
     def render_preprocessed(self, text: str) -> str:
-        """Run mistune on *text* without any Mermaid preprocessing.
-
-        Use when the caller has already substituted Mermaid blocks (e.g. with
-        cached SVGs via :func:`~calamus.mermaid_support.preprocess_with_cache`).
-        """
-        return self._renderer(text)
+        """Run mistune on *text* without any Mermaid preprocessing."""
+        return _add_heading_ids(self._renderer(text))
 
     def render(self, text: str) -> str:
         from calamus.mermaid_support import (
@@ -59,16 +83,11 @@ class MistuneRenderer(AbstractMarkdownRenderer):
         )
 
         if SubprocessMermaidRenderer().is_available():
-            # mmdc is installed: pre-render all diagrams to inline SVG data
-            # URIs so config frontmatter (e.g. labelRotation) is applied
-            # server-side, matching the behaviour of the md2html command.
             text = preprocess_markdown_for_static_export(text)
-            return self._renderer(text)
+            return _add_heading_ids(self._renderer(text))
 
-        # Fallback: embed raw source in <pre class="mermaid"> and let the
-        # browser-side mermaid.js handle rendering.
         prepared = self._prepare_mermaid_blocks(text)
-        return self._renderer(prepared)
+        return _add_heading_ids(self._renderer(prepared))
 
     def get_version(self) -> str:
         return getattr(mistune, "__version__", "unknown")
