@@ -44,6 +44,14 @@ class MistuneRenderer(AbstractMarkdownRenderer):
             plugins=["strikethrough", "table", "url", "subscript", "superscript"],
         )
 
+    def render_preprocessed(self, text: str) -> str:
+        """Run mistune on *text* without any Mermaid preprocessing.
+
+        Use when the caller has already substituted Mermaid blocks (e.g. with
+        cached SVGs via :func:`~calamus.mermaid_support.preprocess_with_cache`).
+        """
+        return self._renderer(text)
+
     def render(self, text: str) -> str:
         from calamus.mermaid_support import (
             SubprocessMermaidRenderer,

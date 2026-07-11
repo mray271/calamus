@@ -85,8 +85,13 @@ class EditorTab(Gtk.Box):
         self.search_entry = Gtk.SearchEntry()
         self.editor: MarkdownEditor = MarkdownEditor()
         self.preview: AbstractPreview = create_preview()
+        self._preview_timer_id: int | None = None
+        config = FileConfigProvider().load()
+        self._preview_delay_ms: int = config.getint(
+            "Preview", "refresh_delay_ms", fallback=500
+        )
         self._build_ui()
-        self.editor.configure_from_prefs(FileConfigProvider().load())
+        self.editor.configure_from_prefs(config)
         if file_path is not None:
             self.load_file(file_path)
         else:
@@ -179,7 +184,18 @@ class EditorTab(Gtk.Box):
 
     def _on_buffer_changed(self, _buffer: object) -> None:
         self._modified = True
+        # Debounce: cancel any pending preview refresh and restart the timer.
+        # The preview only updates after the user pauses for _preview_delay_ms.
+        if self._preview_timer_id is not None:
+            GLib.source_remove(self._preview_timer_id)
+        self._preview_timer_id = GLib.timeout_add(
+            self._preview_delay_ms, self._flush_preview
+        )
+
+    def _flush_preview(self) -> bool:
+        self._preview_timer_id = None
         self.preview.update(self.editor.get_text())
+        return GLib.SOURCE_REMOVE
 
 
 class AbstractTabManager(ABC):
