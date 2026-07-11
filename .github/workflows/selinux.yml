@@ -24,6 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install C build dependencies for pycairo/PyGObject
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            pkg-config \
+            python3-dev
+
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
