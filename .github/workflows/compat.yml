@@ -164,7 +164,7 @@ jobs:
             install_cmd: >
               zypper --non-interactive refresh &&
               zypper --non-interactive install
-              bash
+              bash gcc
               python3 python3-gobject python3-cairo
               typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1 typelib-1_0-GtkSource-5
               libgtk-4-1 libadwaita-1-0
