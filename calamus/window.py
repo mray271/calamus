@@ -25,14 +25,48 @@ from calamus.theme import ThemeManager
 GITHUB_RELEASES_URL = "https://github.com/OWNER/calamus/releases"
 
 # Extensions Calamus treats as openable text/Markdown files.
-_TEXT_EXTENSIONS: frozenset[str] = frozenset({
-    ".md", ".markdown", ".mdown", ".mkd", ".mdx",
-    ".txt", ".text", ".rst", ".adoc", ".asciidoc",
-    ".org", ".wiki", ".tex", ".csv", ".log", ".yaml", ".yml",
-    ".toml", ".json", ".xml", ".html", ".htm", ".css", ".js",
-    ".py", ".sh", ".bash", ".zsh", ".fish", ".rb", ".go",
-    ".c", ".h", ".cpp", ".java", ".ts", ".rs", ".sql",
-})
+_TEXT_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".md",
+        ".markdown",
+        ".mdown",
+        ".mkd",
+        ".mdx",
+        ".txt",
+        ".text",
+        ".rst",
+        ".adoc",
+        ".asciidoc",
+        ".org",
+        ".wiki",
+        ".tex",
+        ".csv",
+        ".log",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".json",
+        ".xml",
+        ".html",
+        ".htm",
+        ".css",
+        ".js",
+        ".py",
+        ".sh",
+        ".bash",
+        ".zsh",
+        ".fish",
+        ".rb",
+        ".go",
+        ".c",
+        ".h",
+        ".cpp",
+        ".java",
+        ".ts",
+        ".rs",
+        ".sql",
+    }
+)
 
 # Number of bytes to sniff for binary detection on extensionless files.
 _BINARY_SNIFF_BYTES = 512
@@ -57,6 +91,8 @@ def _is_openable(path: str) -> bool:
             return b"\x00" not in fh.read(_BINARY_SNIFF_BYTES)
     except OSError:
         return False
+
+
 GITHUB_ISSUES_URL = "https://github.com/OWNER/calamus/issues"
 MERMAID_DOCS_URL = "https://mermaid.js.org"
 

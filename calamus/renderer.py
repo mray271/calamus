@@ -29,13 +29,20 @@ def _add_heading_ids(html_text: str) -> str:
     """Post-process rendered HTML to add id attributes to headings."""
     if not isinstance(html_text, str):
         return html_text
+
     def _repl(m: re.Match) -> str:
-        open_tag, level, inner, close_tag = m.group(1), m.group(2), m.group(3), m.group(4)
+        open_tag, level, inner, close_tag = (
+            m.group(1),
+            m.group(2),
+            m.group(3),
+            m.group(4),
+        )
         plain = re.sub(r"<[^>]+>", "", inner)
         slug = _slugify(plain)
         if slug:
             return f'<h{level} id="{slug}">{inner}{close_tag}'
         return m.group(0)
+
     return _HEADING_RE.sub(_repl, html_text)
 
 

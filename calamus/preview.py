@@ -197,13 +197,16 @@ class WebKitPreview(AbstractPreview):
             decision.use()
             return
         nav_action = decision.get_navigation_action()
-        if nav_action.get_navigation_type() != _WebKitModule.NavigationType.LINK_CLICKED:
+        if (
+            nav_action.get_navigation_type()
+            != _WebKitModule.NavigationType.LINK_CLICKED
+        ):
             decision.use()
             return
         uri = nav_action.get_request().get_uri()
 
         if uri.startswith("file://"):
-            raw_path = unquote(uri[len("file://"):])
+            raw_path = unquote(uri[len("file://") :])
             path, _, fragment = raw_path.partition("#")
             # Pure anchor link — path resolves to the current directory.
             # WebKit can't scroll within load_bytes pages by URL fragment, so
@@ -352,7 +355,9 @@ class TextViewPreview(AbstractPreview):
         return self._view
 
 
-def create_preview(on_open_path: Callable[[str], None] | None = None) -> AbstractPreview:
+def create_preview(
+    on_open_path: Callable[[str], None] | None = None,
+) -> AbstractPreview:
     """Create the best preview implementation for the current system."""
     if _WEBKIT_AVAILABLE:
         return WebKitPreview(on_open_path=on_open_path)
