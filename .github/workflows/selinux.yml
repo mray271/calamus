@@ -99,7 +99,7 @@ jobs:
           dnf install -y \
             python3 python3-pip python3-gobject \
             policycoreutils \
-            python3-selinux \
+            python3-libselinux \
             curl git \
             cairo-devel gobject-introspection-devel python3-devel pkg-config \
             && dnf clean all
