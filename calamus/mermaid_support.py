@@ -109,10 +109,11 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=30,
             )
             if output_path.exists():
                 return output_path.read_text(encoding="utf-8")
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return None
         finally:
             for path in (input_path, output_path):
