@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-12
+
+### Added
+- `--preview` CLI flag opens Calamus in read-only preview mode: only the preview pane is shown, the editor is non-editable, and closing the window produces no output
+- Preview mode works with both file arguments (`calamus --preview file.md`) and piped input (`echo "# Hello" | calamus --preview`)
+- Editing and saving actions (new, open, save, save-as, undo, redo) are disabled while in preview mode
+
 ## [0.2.0] - 2026-07-12
 
 ### Added

@@ -385,6 +385,13 @@ class AdwTabManager(AbstractTabManager):
             tab.mark_saved()
             self._notify_title_changed()
 
+    def set_all_editors_editable(self, editable: bool) -> None:
+        """Set the editable state of every open editor tab."""
+        for index in range(self._tab_view.get_n_pages()):
+            child = self._tab_view.get_nth_page(index).get_child()
+            if isinstance(child, EditorTab):
+                child.get_editor().set_editable(editable)
+
     def save_as_current(self, parent: Gtk.Window) -> None:
         dialog = Gtk.FileDialog.new()
         dialog.save(parent, None, self._on_save_as_response)

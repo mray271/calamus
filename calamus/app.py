@@ -20,6 +20,7 @@ class CalamusApplication(Adw.Application):
         self,
         pipe_content: str | None = None,
         initial_files: list[str] | None = None,
+        preview_mode: bool = False,
     ) -> None:
         super().__init__(application_id="io.github.calamus.Calamus")
         GLib.set_application_name("Calamus")
@@ -27,6 +28,7 @@ class CalamusApplication(Adw.Application):
         self._theme_manager: ThemeManager | None = None
         self._pipe_content = pipe_content
         self._initial_files: list[str] = initial_files or []
+        self._preview_mode = preview_mode
 
     def do_activate(self) -> None:
         if self._theme_manager is None:
@@ -39,5 +41,6 @@ class CalamusApplication(Adw.Application):
                 theme_manager=self._theme_manager,
                 pipe_content=self._pipe_content,
                 initial_files=self._initial_files,
+                preview_mode=self._preview_mode,
             )
         window.present()
