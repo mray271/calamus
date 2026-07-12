@@ -166,3 +166,30 @@ def test_mistune_renderer_mixed_content():
     assert "<strong>" in html
     assert "<em>" in html
     assert "<ul>" in html
+
+
+def test_add_heading_ids_non_string_passthrough():
+    from calamus.renderer import _add_heading_ids
+
+    result = _add_heading_ids(42)
+    assert result == 42
+
+
+def test_add_heading_ids_empty_slug_preserves_original():
+    from calamus.renderer import _add_heading_ids
+
+    # Heading whose text is all punctuation → slug becomes empty → return m.group(0)
+    html = "<h1>!!!</h1>"
+    result = _add_heading_ids(html)
+    assert result == html
+
+
+def test_renderer_render_fallback_path_when_mmdc_unavailable(monkeypatch):
+    from calamus.mermaid_support import SubprocessMermaidRenderer
+    from calamus.renderer import MistuneRenderer
+
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", False)
+
+    r = MistuneRenderer()
+    result = r.render("```mermaid\ngraph TD\nA-->B\n```\n")
+    assert '<pre class="mermaid">' in result

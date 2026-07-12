@@ -360,3 +360,35 @@ def test_all_actions_have_non_empty_name_and_action_name():
         assert action.name, f"{type(action).__name__}.name is empty"
         assert action.action_name, f"{type(action).__name__}.action_name is empty"
         assert action.action_name.startswith("fmt-")
+
+
+def test_ordered_list_no_selection_inserts_prefix():
+    from calamus.formatting import OrderedListAction
+
+    editor = FakeEditor()
+    OrderedListAction().apply(editor)
+    assert any("1. " in str(item) for item in editor._inserted)
+
+
+def test_dialog_action_set_parent_stores_value():
+    from calamus.formatting import LinkAction
+
+    action = LinkAction()
+    action.set_parent("mock_window")
+    assert action._require_parent() == "mock_window"
+
+
+def test_link_action_apply_with_no_parent_returns_early():
+    from calamus.formatting import LinkAction
+
+    editor = FakeEditor()
+    LinkAction().apply(editor)  # parent is None → early return, nothing inserted
+    assert editor._inserted == []
+
+
+def test_image_action_apply_with_no_parent_returns_early():
+    from calamus.formatting import ImageAction
+
+    editor = FakeEditor()
+    ImageAction().apply(editor)  # parent is None → early return, nothing inserted
+    assert editor._inserted == []

@@ -14,6 +14,8 @@ RUN dnf update -y && dnf install -y \
     python3-pip \
     python3-gobject \
     python3-cairo \
+    cairo-devel \
+    cairo-gobject-devel \
     gtk4 \
     libadwaita \
     gobject-introspection \
