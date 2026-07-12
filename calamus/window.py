@@ -257,7 +257,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         """Configure the window for read-only preview of content."""
         # Show only the preview pane.
         # We use emit to make sure UI state
-        # is synced with the state of the toggle 
+        # is synced with the state of the toggle
         # buttons.
         if self._btn_editor.props.active:
             self._btn_editor.emit("clicked")
