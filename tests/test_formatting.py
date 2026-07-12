@@ -1,5 +1,7 @@
 """Unit tests for calamus.formatting helpers."""
 
+import types
+
 import pytest
 
 

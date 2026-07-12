@@ -56,3 +56,22 @@ def test_save_config_writes_file(tmp_path, monkeypatch):
     prefs.save_config(config)
 
     assert os.path.exists(config_file)
+
+
+def test_save_config_ignores_permission_error(tmp_path, monkeypatch):
+    import configparser
+
+    import calamus.preferences as prefs
+
+    monkeypatch.setattr(prefs, "CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(prefs, "CONFIG_FILE", str(tmp_path / "Calamus.conf"))
+    monkeypatch.setattr(prefs.os, "makedirs", lambda *args, **kwargs: None)
+
+    def fail_open(*args, **kwargs):
+        raise PermissionError("read-only")
+
+    monkeypatch.setattr("builtins.open", fail_open)
+
+    config = configparser.ConfigParser()
+    config["Editor"] = {"font_size": "12"}
+    prefs.save_config(config)
