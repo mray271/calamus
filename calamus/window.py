@@ -265,11 +265,6 @@ class CalamusWindow(Adw.ApplicationWindow):
 
         self.set_title("Calamus \u2014 Preview Mode")
 
-        banner = Adw.Banner()
-        banner.set_title("Preview mode \u2014 read-only")
-        banner.set_revealed(True)
-        self._content_box.insert_child_after(banner, self._tab_bar)
-
         app = self.get_application()
         if app is not None:
             for name in ("new", "open", "save", "save-as", "undo", "redo"):
