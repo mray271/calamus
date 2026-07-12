@@ -13,12 +13,16 @@ concurrency:
 jobs:
   # ---------------------------------------------------------------------------
   # Tier 1 + 2: Static audit and behavioral regression
-  # Runs on every PR via GitHub-hosted runner (no real SELinux available).
-  # Enforces the subprocess allowlist and graceful-failure guarantees.
+  # Runs on every PR via GitHub-hosted runner.
+  # Note: ubuntu-24.04 GitHub-hosted runners use AppArmor, not SELinux.
+  # Real SELinux enforcement is only available on the self-hosted Fedora 44
+  # runner (Tier 3 below). These tests validate the static subprocess
+  # allowlist and graceful-failure behaviour without requiring enforcement.
   # ---------------------------------------------------------------------------
   selinux-audit:
     name: SELinux audit + behavioral regression
-    # ubuntu-24.04; no real SELinux but audit+behavioral tests run here
+    # ubuntu-24.04 uses AppArmor (not SELinux); static audit + behavioral
+    # regression tests run here as they do not require SELinux enforcement.
     runs-on: ubuntu-24.04
     permissions:
       checks: write
