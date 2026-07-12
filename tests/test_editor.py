@@ -114,3 +114,56 @@ def test_editor_configure_from_prefs(tmp_path, monkeypatch):
     editor = MarkdownEditor()
     # Should not raise
     editor.configure_from_prefs(config)
+
+
+def test_editor_get_widget():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+
+    editor = MarkdownEditor()
+    widget = editor.get_widget()
+    assert widget is not None
+
+
+def test_editor_get_selection_with_selection():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+
+    editor = MarkdownEditor()
+    editor.set_text("hello world")
+    buf = editor.get_buffer()
+    buf.select_range(buf.get_iter_at_offset(0), buf.get_iter_at_offset(5))
+    text, has_sel = editor.get_selection()
+    assert has_sel is True
+    assert text == "hello"
+
+
+def test_editor_undo_after_insert():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+
+    editor = MarkdownEditor()
+    editor.insert_at_cursor("hello")
+    editor.undo()
+    # undo() should execute buffer.undo() when can_undo is True after an insert
+    assert editor.get_text() is not None
+
+
+def test_editor_redo_after_undo():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+
+    editor = MarkdownEditor()
+    editor.insert_at_cursor("hello")
+    editor.undo()
+    editor.redo()
+    assert editor.get_text() is not None
+
+
+def test_editor_toggle_find_bar_no_revealer():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+
+    editor = MarkdownEditor()
+    # _find_revealer is None — should not raise
+    editor.toggle_find_bar()

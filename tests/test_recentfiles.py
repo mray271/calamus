@@ -54,3 +54,14 @@ def test_clear(tmp_path):
     recent.add(str(file_path))
     recent.clear()
     assert ConfigFileRecentFilesProvider(provider).get_list() == []
+
+
+def test_get_list_returns_empty_when_no_recent_files_section(tmp_path):
+    import configparser
+
+    from calamus.recentfiles import ConfigFileRecentFilesProvider
+
+    provider = FileConfigProvider(str(tmp_path / "Calamus.conf"))
+    recent = ConfigFileRecentFilesProvider(provider)
+    config = configparser.ConfigParser()  # fresh config with no RecentFiles section
+    assert recent._get_list(config) == []

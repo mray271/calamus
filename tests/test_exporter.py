@@ -40,6 +40,18 @@ def test_html_exporter_includes_mermaid_script(tmp_path):
     assert "mermaid" in content
 
 
+def test_html_exporter_silences_oserror(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from calamus.exporter import HtmlExporter
+
+    def fail_write(self, *args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "write_text", fail_write)
+    HtmlExporter().export("# Hello", str(tmp_path / "out.html"))  # must not raise
+
+
 def test_html_exporter_with_mermaid_block(tmp_path):
     from calamus.exporter import HtmlExporter
 

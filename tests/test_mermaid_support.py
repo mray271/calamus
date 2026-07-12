@@ -205,3 +205,105 @@ def test_preprocess_multiple_blocks():
     assert "```mermaid" not in result
     assert "Middle" in result
     assert result.count("<img") == 2
+
+
+# ---------------------------------------------------------------------------
+# MermaidCache
+# ---------------------------------------------------------------------------
+
+
+def test_mermaid_cache_put_and_get():
+    from calamus.mermaid_support import MermaidCache
+
+    cache = MermaidCache()
+    cache.put("graph TD\nA-->B", "<svg>test</svg>")
+    assert cache.get("graph TD\nA-->B") == "<svg>test</svg>"
+
+
+def test_mermaid_cache_miss_returns_none():
+    from calamus.mermaid_support import MermaidCache
+
+    cache = MermaidCache()
+    assert cache.get("nonexistent diagram") is None
+
+
+def test_mermaid_cache_has_returns_false_before_put():
+    from calamus.mermaid_support import MermaidCache
+
+    cache = MermaidCache()
+    assert cache.has("anything") is False
+
+
+def test_mermaid_cache_has_returns_true_after_put():
+    from calamus.mermaid_support import MermaidCache
+
+    cache = MermaidCache()
+    cache.put("diagram source", "<svg/>")
+    assert cache.has("diagram source") is True
+
+
+def test_mermaid_cache_stores_multiple_entries_independently():
+    from calamus.mermaid_support import MermaidCache
+
+    cache = MermaidCache()
+    cache.put("A", "<svg>A</svg>")
+    cache.put("B", "<svg>B</svg>")
+    assert cache.get("A") == "<svg>A</svg>"
+    assert cache.get("B") == "<svg>B</svg>"
+
+
+# ---------------------------------------------------------------------------
+# preprocess_with_cache
+# ---------------------------------------------------------------------------
+
+
+def test_preprocess_with_cache_hit_returns_img_tag():
+    from calamus.mermaid_support import MermaidCache, preprocess_with_cache
+
+    cache = MermaidCache()
+    diagram = "graph TD\nA-->B"
+    cache.put(diagram, "<svg>cached</svg>")
+    result = preprocess_with_cache(f"```mermaid\n{diagram}\n```", cache)
+    assert "<img" in result
+    assert "data:image/svg+xml;base64," in result
+    assert "```mermaid" not in result
+
+
+def test_preprocess_with_cache_miss_returns_pre_mermaid():
+    from calamus.mermaid_support import MermaidCache, preprocess_with_cache
+
+    cache = MermaidCache()
+    result = preprocess_with_cache("```mermaid\ngraph TD\nA-->B\n```", cache)
+    assert '<pre class="mermaid">' in result
+    assert "```mermaid" not in result
+
+
+def test_preprocess_with_cache_passthrough_when_no_blocks():
+    from calamus.mermaid_support import MermaidCache, preprocess_with_cache
+
+    cache = MermaidCache()
+    text = "# Just markdown\nNo diagrams."
+    assert preprocess_with_cache(text, cache) == text
+
+
+# ---------------------------------------------------------------------------
+# SubprocessMermaidRenderer — output file not created
+# ---------------------------------------------------------------------------
+
+
+def test_subprocess_renderer_returns_none_when_output_not_created(monkeypatch):
+    """render_to_svg returns None when subprocess succeeds but creates no output file."""
+    import subprocess
+
+    from calamus.mermaid_support import SubprocessMermaidRenderer
+
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mmdc")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    renderer = SubprocessMermaidRenderer()
+    assert renderer.render_to_svg("graph TD\nA-->B") is None
