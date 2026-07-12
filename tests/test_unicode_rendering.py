@@ -274,8 +274,9 @@ def test_html_template_has_explicit_sub_font_size():
     WebKit's 'font-size: smaller' is not visually distinct enough for
     symbol glyphs — explicit sizing (≤ 0.80em) is required.
     """
-    from calamus.preview import _HTML_TEMPLATE
     import re
+
+    from calamus.preview import _HTML_TEMPLATE
 
     page = _HTML_TEMPLATE.format(
         body="x",
@@ -302,6 +303,7 @@ def test_no_load_html_call_in_preview():
     Only load_bytes() with an explicit encoding is safe.
     """
     import inspect
+
     from calamus import preview
 
     source = inspect.getsource(preview)

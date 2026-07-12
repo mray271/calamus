@@ -85,21 +85,27 @@ def test_pdf_exporter_preprocesses_mermaid(monkeypatch):
 
     def fake_preprocess(text):
         calls.append(text)
-        return text  # return unchanged so weasyprint can attempt (may fail, that's ok)
+        return text
 
     monkeypatch.setattr(
         exporter_module, "preprocess_markdown_for_static_export", fake_preprocess
     )
 
-    # We don't actually need weasyprint to succeed — just verify preprocessing is called
+    # Mock WeasyPrint's HTML class to avoid actual PDF rendering which
+    # segfaults in headless/minimal containers (Pango font lookup crash).
+    # PdfExporter does `from weasyprint import HTML` lazily inside export(),
+    # so we must patch at the weasyprint module level, not calamus.exporter.
+    import unittest.mock as mock
+
+    fake_html = mock.MagicMock()
+    fake_html.return_value.write_pdf = mock.MagicMock()
+    monkeypatch.setattr("weasyprint.HTML", fake_html)
+
     from calamus.exporter import PdfExporter
 
     exporter = PdfExporter()
     md = "# Hello\n```mermaid\ngraph TD\nA-->B\n```"
-    try:
-        exporter.export(md, "/tmp/test_calamus_output.pdf")
-    except Exception:
-        pass  # weasyprint may not be installed; we only care that preprocess was called
+    exporter.export(md, "/tmp/test_calamus_output.pdf")
 
     assert len(calls) == 1
     assert "graph TD" in calls[0]

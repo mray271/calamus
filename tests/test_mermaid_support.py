@@ -97,8 +97,12 @@ def test_get_best_renderer_returns_fallback_when_no_mmdc(monkeypatch):
 
 
 def test_get_best_renderer_returns_subprocess_when_mmdc_available(monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mmdc")
     from calamus.mermaid_support import SubprocessMermaidRenderer, get_best_renderer
+
+    # Reset the class-level cache so is_available() re-checks shutil.which.
+    # Without this, a prior test run in the full suite may have cached False.
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mmdc")
 
     renderer = get_best_renderer()
     assert isinstance(renderer, SubprocessMermaidRenderer)

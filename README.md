@@ -127,12 +127,12 @@ Calamus supports [Mermaid](https://mermaid.js.org/) diagrams in fenced
 `scripts/fetch-mermaid.sh`) and inlined into the WebKit preview.  No network
 access is required at runtime.
 
-```markdown
+````markdown
 ```mermaid
 graph LR
     A --> B --> C
 ```
-```
+````
 
 ### Path 2 — Server-side pre-rendering (mmdc CLI, optional)
 

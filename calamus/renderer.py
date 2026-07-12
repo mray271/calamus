@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import html
 import re
 import unicodedata
+from abc import ABC, abstractmethod
 
 import mistune
 

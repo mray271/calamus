@@ -22,6 +22,10 @@ on:
 #    Windows and macOS are intentionally excluded — Calamus is a Linux/GNOME
 #    application and GTK4 is not a supported runtime on those platforms.
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ---------------------------------------------------------------------------
   # 1. Python version matrix — pure Python tests, no GTK required.
@@ -29,7 +33,7 @@ jobs:
   # ---------------------------------------------------------------------------
   python-matrix:
     name: Pure Python tests (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-25.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -38,8 +42,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install C build dependencies for pycairo/PyGObject
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2-dev \
+            libgirepository-2.0-dev \
+            pkg-config \
+            python3-dev \
+            gir1.2-gtk-4.0 \
+            gir1.2-adw-1 \
+            gir1.2-gtksource-5 \
+            libgtk-4-1 \
+            libadwaita-1-0
+
       - name: Install uv
         uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
@@ -95,7 +116,14 @@ jobs:
   # ---------------------------------------------------------------------------
   distro-matrix:
     name: GTK tests (${{ matrix.distro }})
-    runs-on: ubuntu-25.04
+    runs-on: ubuntu-24.04
+    permissions:
+      checks: write
+      pull-requests: write
+      contents: read
+    defaults:
+      run:
+        shell: /bin/bash {0}
     strategy:
       fail-fast: false
       matrix:
@@ -106,8 +134,9 @@ jobs:
               dnf install -y
               python3 python3-gobject python3-cairo
               gtk4 libadwaita gtksourceview5
-              typelib-GLib-2_0 typelib-Gtk-4_0 typelib-Adw-1 typelib-GtkSource-5
-              xorg-x11-server-Xvfb dbus dbus-tools curl git
+              gobject-introspection gcc
+              xorg-x11-server-Xvfb dbus-daemon dbus-tools curl git
+              cairo-devel cairo-gobject-devel gobject-introspection-devel python3-devel pkg-config
               && dnf clean all
 
           - distro: ubuntu-25.04
@@ -118,6 +147,7 @@ jobs:
               gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5
               libgtk-4-1 libadwaita-1-0
               xvfb dbus curl git
+              libcairo2-dev libgirepository-2.0-dev pkg-config python3-dev
 
           - distro: debian-13
             container: debian:trixie
@@ -127,15 +157,20 @@ jobs:
               gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gtksource-5
               libgtk-4-1 libadwaita-1-0
               xvfb dbus curl git
+              libcairo2-dev libgirepository-2.0-dev pkg-config python3-dev
 
           - distro: opensuse-tumbleweed
             container: opensuse/tumbleweed
             install_cmd: >
+              zypper --non-interactive refresh &&
               zypper --non-interactive install
+              bash gcc gcc-c++
               python3 python3-gobject python3-cairo
               typelib-1_0-Gtk-4_0 typelib-1_0-Adw-1 typelib-1_0-GtkSource-5
               libgtk-4-1 libadwaita-1-0
               xvfb-run dbus-1 curl git
+              cairo-devel gobject-introspection-devel python3-devel pkg-config &&
+              ln -sf /usr/bin/gcc /usr/bin/cc && hash -r
 
     container:
       image: ${{ matrix.container }}
@@ -143,8 +178,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache uv packages
+        uses: actions/cache@v4
+        with:
+          path: /root/.cache/uv
+          key: uv-${{ matrix.distro }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ matrix.distro }}-
+
       - name: Install system GTK dependencies
         run: ${{ matrix.install_cmd }}
+
+      - name: Set C compiler environment for meson
+        run: |
+          echo "/usr/bin" >> $GITHUB_PATH
+          echo "CC=/usr/bin/gcc" >> $GITHUB_ENV
+          echo "CXX=/usr/bin/g++" >> $GITHUB_ENV
+          echo "AR=/usr/bin/gcc-ar" >> $GITHUB_ENV
+          echo "LD=/usr/bin/ld" >> $GITHUB_ENV
+          echo "STRIP=/usr/bin/strip" >> $GITHUB_ENV
+          echo "RANLIB=/usr/bin/gcc-ranlib" >> $GITHUB_ENV
+          echo "PKG_CONFIG=/usr/bin/pkg-config" >> $GITHUB_ENV
 
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from abc import ABC, ABCMeta, abstractmethod
 import configparser
 import os
+from abc import ABC, ABCMeta, abstractmethod
 
 import gi
 

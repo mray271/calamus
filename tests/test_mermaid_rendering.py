@@ -123,6 +123,7 @@ def test_mmdc_path_svg_contains_rotate_transform():
     """The pre-rendered SVG must include rotate(20) for labelRotation:20."""
     import base64
     import re
+
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(FIXTURE_MD)
@@ -139,6 +140,7 @@ def test_mmdc_path_svg_larger_than_fallback():
     """A real rendered SVG must be substantially larger than the FallbackMermaidRenderer output."""
     import base64
     import re
+
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(FIXTURE_MD)
@@ -438,6 +440,7 @@ def test_directive_mmdc_path_svg_non_trivial():
     """The SVG produced by mmdc for the directive diagram must be non-trivial."""
     import base64
     import re
+
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
@@ -453,6 +456,7 @@ def test_directive_mmdc_path_svg_contains_graph_content():
     """The rendered SVG must contain content from the flowchart nodes."""
     import base64
     import re
+
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
@@ -760,6 +764,7 @@ def test_math_mmdc_svg_is_non_trivial():
     """The SVG produced for a math flowchart must be non-trivial."""
     import base64
     import re
+
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_MATH_FLOWCHART_MD)
