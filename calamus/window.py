@@ -255,14 +255,12 @@ class CalamusWindow(Adw.ApplicationWindow):
 
     def _enter_preview_mode(self) -> None:
         """Configure the window for read-only preview of content."""
-        # Show only the preview pane.
-        # We use emit to make sure UI state
-        # is synced with the state of the toggle
-        # buttons.
-        if self._btn_editor.props.active:
-            self._btn_editor.emit("clicked")
-        if self._btn_dir.props.active:
-            self._btn_dir.emit("clicked")
+        app = self.get_application()
+        if app is not None:
+            for name in ("toggle-editor-pane", "toggle-dir-pane"):
+                action = app.lookup_action(name)
+                if action is not None and action.get_state().get_boolean():
+                    action.activate(None)
 
         self.tab_manager.set_all_editors_editable(False)
 
