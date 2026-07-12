@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-12
+
+### Added
+- Pipe mode: Ctrl+S now commits a snapshot of the current editor text as the "saved" state; the window title gains a `●` prefix when there are uncommitted edits, matching the indicator used in normal file mode
+- Pipe mode: closing the window without saving now emits the original piped input unchanged (Meld-as-mergetool contract); closing after saving emits the last saved snapshot
+- `Save As` action is disabled in pipe mode (no file path concept)
+
 ### Added
 - Mermaid.js 11.5.0 diagram support in Preview, HTML/PDF/ODT Export, and Print
 - Mermaid version displayed in Help menu and About dialog
