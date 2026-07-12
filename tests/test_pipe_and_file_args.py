@@ -30,6 +30,7 @@ def _make_tempfile(suffix: str = ".md", content: str = "# Hello") -> str:
 
 def _make_app_stub(
     pipe_content: str | None = None,
+    pipe_base_path: str | None = None,
     initial_files: list[str] | None = None,
     preview_mode: bool = False,
 ) -> types.SimpleNamespace:
@@ -38,6 +39,7 @@ def _make_app_stub(
 
     return types.SimpleNamespace(
         _pipe_content=pipe_content,
+        _pipe_base_path=pipe_base_path,
         _initial_files=initial_files or [],
         _preview_mode=preview_mode,
         _handle_options=CalamusApplication._handle_options,
@@ -53,8 +55,11 @@ def _make_app_stub(
 class TestHandleOptionsNormal:
     def test_no_args_leaves_defaults(self):
         app = _make_app_stub()
-        result = app._handle_options(app, preview=False, argv=["calamus"])
+        result = app._handle_options(
+            app, preview=False, pipe_base_path=None, argv=["calamus"]
+        )
         assert app._pipe_content is None
+        assert app._pipe_base_path is None
         assert app._initial_files == []
         assert app._preview_mode is False
         assert result == -1
@@ -62,7 +67,10 @@ class TestHandleOptionsNormal:
     def test_nonexistent_file_returns_1(self):
         app = _make_app_stub()
         result = app._handle_options(
-            app, preview=False, argv=["calamus", "/no/such/file.md"]
+            app,
+            preview=False,
+            pipe_base_path=None,
+            argv=["calamus", "/no/such/file.md"],
         )
         assert result == 1
 
@@ -70,10 +78,45 @@ class TestHandleOptionsNormal:
         path = _make_tempfile()
         try:
             app = _make_app_stub()
-            result = app._handle_options(app, preview=False, argv=["calamus", path])
+            result = app._handle_options(
+                app, preview=False, pipe_base_path=None, argv=["calamus", path]
+            )
             assert result == -1
         finally:
             os.unlink(path)
+
+    def test_pipe_base_path_is_normalized_and_stored(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _make_app_stub()
+            result = app._handle_options(
+                app,
+                preview=False,
+                pipe_base_path=tmpdir,
+                argv=["calamus"],
+            )
+            assert result == -1
+            assert app._pipe_base_path == os.path.abspath(tmpdir)
+
+    def test_pipe_base_path_argument_is_not_treated_as_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _make_app_stub()
+            result = app._handle_options(
+                app,
+                preview=False,
+                pipe_base_path=tmpdir,
+                argv=["calamus", "--pipe-base-path", tmpdir],
+            )
+            assert result == -1
+
+    def test_invalid_pipe_base_path_returns_1(self):
+        app = _make_app_stub()
+        result = app._handle_options(
+            app,
+            preview=False,
+            pipe_base_path="/no/such/base",
+            argv=["calamus"],
+        )
+        assert result == 1
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +176,52 @@ class TestMaybeReadPipedStdin:
             os.unlink(path)
 
 
+class TestPipeBasePathPropagation:
+    def test_load_content_overrides_preview_base_path(self):
+        import types
+
+        from calamus.tabs import EditorTab
+
+        preview = MagicMock()
+        editor = MagicMock()
+        stub = types.SimpleNamespace(
+            preview=preview,
+            editor=editor,
+            _file_path=None,
+            _modified=True,
+        )
+
+        EditorTab.load_content(stub, "# piped", preview_base_path="/tmp/docs")
+
+        preview.set_base_path.assert_called_once_with("/tmp/docs")
+        preview.set_file_path.assert_not_called()
+        editor.set_text.assert_called_once_with("# piped")
+        preview.update.assert_called_once_with("# piped")
+        assert stub._modified is False
+
+    def test_load_content_uses_current_file_path_when_not_overridden(self):
+        import types
+
+        from calamus.tabs import EditorTab
+
+        preview = MagicMock()
+        editor = MagicMock()
+        stub = types.SimpleNamespace(
+            preview=preview,
+            editor=editor,
+            _file_path="/tmp/README.md",
+            _modified=True,
+        )
+
+        EditorTab.load_content(stub, "# piped")
+
+        preview.set_file_path.assert_called_once_with("/tmp/README.md")
+        preview.set_base_path.assert_not_called()
+        editor.set_text.assert_called_once_with("# piped")
+        preview.update.assert_called_once_with("# piped")
+        assert stub._modified is False
+
+
 # ---------------------------------------------------------------------------
 # _handle_options — --preview flag
 # ---------------------------------------------------------------------------
@@ -141,20 +230,24 @@ class TestMaybeReadPipedStdin:
 class TestHandleOptionsPreviewFlag:
     def test_preview_flag_sets_preview_mode(self):
         app = _make_app_stub()
-        result = app._handle_options(app, preview=True, argv=["calamus"])
+        result = app._handle_options(
+            app, preview=True, pipe_base_path=None, argv=["calamus"]
+        )
         assert app._preview_mode is True
         assert result == -1
 
     def test_no_flags_preview_mode_is_false(self):
         app = _make_app_stub()
-        app._handle_options(app, preview=False, argv=["calamus"])
+        app._handle_options(app, preview=False, pipe_base_path=None, argv=["calamus"])
         assert app._preview_mode is False
 
     def test_preview_with_existing_file(self):
         path = _make_tempfile()
         try:
             app = _make_app_stub()
-            result = app._handle_options(app, preview=True, argv=["calamus", path])
+            result = app._handle_options(
+                app, preview=True, pipe_base_path=None, argv=["calamus", path]
+            )
             assert app._preview_mode is True
             assert result == -1
         finally:
@@ -163,7 +256,10 @@ class TestHandleOptionsPreviewFlag:
     def test_preview_with_nonexistent_file_returns_1(self):
         app = _make_app_stub()
         result = app._handle_options(
-            app, preview=True, argv=["calamus", "/no/such/file.md"]
+            app,
+            preview=True,
+            pipe_base_path=None,
+            argv=["calamus", "/no/such/file.md"],
         )
         assert result == 1
 

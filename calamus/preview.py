@@ -132,8 +132,13 @@ class AbstractPreview(ABC):
     def get_widget(self) -> Gtk.Widget:
         """Return the widget used to render the preview."""
 
+    @abstractmethod
     def set_file_path(self, path: str | None) -> None:
         """Notify the preview of the current file path for relative link resolution."""
+
+    @abstractmethod
+    def set_base_path(self, path: str | None) -> None:
+        """Override the preview base path for resolving relative links."""
 
 
 class WebKitPreview(AbstractPreview):
@@ -174,11 +179,17 @@ class WebKitPreview(AbstractPreview):
 
     def set_file_path(self, path: str | None) -> None:
         """Update the base URI used for resolving relative links in the preview."""
-        if path is not None:
-            directory = os.path.dirname(os.path.abspath(path))
-            self._base_uri = f"file://{directory}/"
-        else:
+        self.set_base_path(path)
+
+    def set_base_path(self, path: str | None) -> None:
+        """Set the base directory or file path used to resolve relative links."""
+        if path is None:
             self._base_uri = "file:///"
+            return
+
+        resolved = os.path.abspath(path)
+        directory = resolved if os.path.isdir(resolved) else os.path.dirname(resolved)
+        self._base_uri = f"file://{directory}/"
 
     def _on_decide_policy(
         self,
@@ -350,6 +361,12 @@ class TextViewPreview(AbstractPreview):
 
     def update(self, markdown_text: str) -> None:
         self._view.get_buffer().set_text(markdown_text)
+
+    def set_file_path(self, path: str | None) -> None:
+        """Text fallback does not resolve links."""
+
+    def set_base_path(self, path: str | None) -> None:
+        """Text fallback does not resolve links."""
 
     def get_widget(self) -> Gtk.Widget:
         return self._view

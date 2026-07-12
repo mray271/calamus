@@ -299,6 +299,16 @@ uv run calamus
 python -m calamus
 ```
 
+Common options:
+
+```bash
+calamus --preview README.md
+echo "# Foo" | calamus --pipe-base-path /path/to/project
+```
+
+Use `--preview` for read-only viewing, and `--pipe-base-path` to resolve
+relative links correctly when Markdown is piped in from stdin.
+
 ## Packaging & Distribution
 
 ### System install (meson + make)

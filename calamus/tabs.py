@@ -141,8 +141,12 @@ class EditorTab(Gtk.Box):
         if self._file_path is not None:
             self.load_file(self._file_path)
 
-    def load_content(self, text: str) -> None:
+    def load_content(self, text: str, preview_base_path: str | None = None) -> None:
         """Load a string directly into the editor without marking the tab modified."""
+        if preview_base_path is not None:
+            self.preview.set_base_path(preview_base_path)
+        elif self._file_path is not None:
+            self.preview.set_file_path(self._file_path)
         self.editor.set_text(text)
         self.preview.update(text)
         self._modified = False

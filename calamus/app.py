@@ -36,10 +36,19 @@ class CalamusApplication(Adw.Application):
             "Preview mode",
             None,
         )
+        self.add_main_option(
+            "pipe-base-path",
+            "\x00",
+            GLib.OptionFlags.NONE,
+            GLib.OptionArg.STRING,
+            "Base path for resolving relative links in piped input",
+            "PATH",
+        )
         GLib.set_application_name("Calamus")
         GLib.set_prgname("calamus")
         self._theme_manager: ThemeManager | None = None
         self._pipe_content: str | None = None
+        self._pipe_base_path: str | None = None
         self._initial_files: list[str] = []
         self._preview_mode: bool = False
 
@@ -48,8 +57,14 @@ class CalamusApplication(Adw.Application):
     # ------------------------------------------------------------------
 
     def do_handle_local_options(self, options: GLib.VariantDict) -> int:
+        pipe_base_path = None
+        if options.contains("pipe-base-path"):
+            value = options.lookup_value("pipe-base-path", None)
+            if value is not None:
+                pipe_base_path = value.get_string()
         return self._handle_options(
             preview=options.contains("preview"),
+            pipe_base_path=pipe_base_path,
             argv=sys.argv,
         )
 
@@ -71,6 +86,7 @@ class CalamusApplication(Adw.Application):
                 application=self,
                 theme_manager=self._theme_manager,
                 pipe_content=self._pipe_content,
+                pipe_base_path=self._pipe_base_path,
                 initial_files=self._initial_files,
                 preview_mode=self._preview_mode,
             )
@@ -83,18 +99,39 @@ class CalamusApplication(Adw.Application):
     def _handle_options(
         self,
         preview: bool,
+        pipe_base_path: str | None,
         argv: list[str],
     ) -> int:
         """Apply parsed CLI flags. Returns GApplication exit code (-1 = continue)."""
-        for arg in argv[1:]:
+        value_options = {"--pipe-base-path"}
+        i = 1
+        while i < len(argv):
+            arg = argv[i]
+            if arg in value_options:
+                i += 2
+                continue
+            if any(arg.startswith(f"{opt}=") for opt in value_options):
+                i += 1
+                continue
             if not arg.startswith("-"):
                 path = os.path.abspath(arg)
                 if not os.path.isfile(path):
                     print(f"calamus: file not found: {arg}", file=sys.stderr)
                     return 1
+            i += 1
 
         if preview:
             self._preview_mode = True
+
+        if pipe_base_path is not None:
+            resolved = os.path.abspath(pipe_base_path)
+            if not (os.path.isdir(resolved) or os.path.isfile(resolved)):
+                print(
+                    f"calamus: pipe base path not found: {pipe_base_path}",
+                    file=sys.stderr,
+                )
+                return 1
+            self._pipe_base_path = resolved
 
         return -1
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--pipe-base-path PATH` lets piped Markdown resolve relative links from an assumed file or directory path instead of `/`
+
 ## [0.3.0] - 2026-07-12
 
 ### Added

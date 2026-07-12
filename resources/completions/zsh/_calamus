@@ -5,6 +5,7 @@
 _calamus() {
     _arguments \
         '(-p --preview)'{-p,--preview}'[open in read-only preview mode]' \
+        '--pipe-base-path=[base path for resolving relative links in piped input]:path:_files' \
         '--help[show help options]' \
         '--help-all[show all help options]' \
         '--help-gapplication[show GApplication options]' \
