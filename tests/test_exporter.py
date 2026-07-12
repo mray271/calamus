@@ -93,11 +93,13 @@ def test_pdf_exporter_preprocesses_mermaid(monkeypatch):
 
     # Mock WeasyPrint's HTML class to avoid actual PDF rendering which
     # segfaults in headless/minimal containers (Pango font lookup crash).
+    # PdfExporter does `from weasyprint import HTML` lazily inside export(),
+    # so we must patch at the weasyprint module level, not calamus.exporter.
     import unittest.mock as mock
 
     fake_html = mock.MagicMock()
     fake_html.return_value.write_pdf = mock.MagicMock()
-    monkeypatch.setattr("calamus.exporter.HTML", fake_html, raising=False)
+    monkeypatch.setattr("weasyprint.HTML", fake_html)
 
     from calamus.exporter import PdfExporter
 
