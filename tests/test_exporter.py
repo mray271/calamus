@@ -72,6 +72,172 @@ def test_html_exporter_appends_suffix_if_missing(tmp_path):
     assert (tmp_path / "output.html").exists()
 
 
+def test_html_exporter_appends_suffix_if_missing_and_keeps_existing_suffix(tmp_path):
+    from calamus.exporter import HtmlExporter
+
+    exporter = HtmlExporter()
+    dest = str(tmp_path / "output.html")
+    exporter.export("# Hello", dest)
+    assert (tmp_path / "output.html").exists()
+
+
+# ---------------------------------------------------------------------------
+# AbstractExporter dialog wiring / save handling
+# ---------------------------------------------------------------------------
+
+
+class _DummyExporter:
+    def __init__(self):
+        self.export_calls = []
+        self.filter = object()
+        self.title = "Dummy export"
+        self.suffix = ".dummy"
+
+    def export(self, markdown_text: str, dest_path: str) -> None:
+        self.export_calls.append((markdown_text, dest_path))
+
+    def get_file_filter(self):
+        return self.filter
+
+    def get_file_suffix(self) -> str:
+        return self.suffix
+
+    def get_dialog_title(self) -> str:
+        return self.title
+
+
+def test_run_export_dialog_wires_title_filters_and_save_callback(monkeypatch):
+    from calamus import exporter as exporter_module
+
+    dummy = _DummyExporter()
+    calls = {}
+
+    class FakeDialog:
+        def set_title(self, title):
+            calls["title"] = title
+
+        def set_filters(self, filters):
+            calls["filters"] = filters
+
+        def save(self, parent, cancellable, callback):
+            calls["save_args"] = (parent, cancellable)
+            calls["callback"] = callback
+
+    monkeypatch.setattr(exporter_module.Gtk.FileDialog, "new", lambda: FakeDialog())
+    monkeypatch.setattr(
+        exporter_module.GioListStoreFactory,
+        "create",
+        lambda file_filter: ("filters", file_filter),
+    )
+
+    exporter_module.AbstractExporter.run_export_dialog(
+        dummy, parent="parent-window", markdown_text="# hello"
+    )
+
+    assert calls["title"] == "Dummy export"
+    assert calls["filters"] == ("filters", dummy.filter)
+    assert calls["save_args"] == ("parent-window", None)
+    assert callable(calls["callback"])
+
+
+def test_on_save_finish_appends_suffix_and_exports(monkeypatch):
+    from calamus import exporter as exporter_module
+
+    dummy = _DummyExporter()
+
+    class FakeFile:
+        def get_path(self):
+            return "/tmp/output"
+
+    class FakeDialog:
+        def save_finish(self, result):
+            return FakeFile()
+
+    exporter_module.AbstractExporter._on_save_finish(
+        dummy,
+        FakeDialog(),
+        result=object(),
+        markdown_text="# hello",
+        parent="parent-window",
+    )
+
+    assert dummy.export_calls == [("# hello", "/tmp/output.dummy")]
+
+
+def test_on_save_finish_ignores_cancelled_dialog(monkeypatch):
+    from calamus import exporter as exporter_module
+
+    dummy = _DummyExporter()
+
+    class FakeDialog:
+        def save_finish(self, result):
+            return None
+
+    exporter_module.AbstractExporter._on_save_finish(
+        dummy,
+        FakeDialog(),
+        result=object(),
+        markdown_text="# hello",
+        parent="parent-window",
+    )
+
+    assert dummy.export_calls == []
+
+
+def test_on_save_finish_routes_glib_error_to_show_error(monkeypatch):
+    from calamus import exporter as exporter_module
+
+    dummy = _DummyExporter()
+    shown = {}
+
+    class FakeGLibError(Exception):
+        pass
+
+    class FakeDialog:
+        def save_finish(self, result):
+            raise FakeGLibError("broken")
+
+    monkeypatch.setattr(exporter_module.GLib, "Error", FakeGLibError)
+    dummy._show_error = lambda parent, message: shown.update(
+        parent=parent, message=message
+    )
+
+    exporter_module.AbstractExporter._on_save_finish(
+        dummy,
+        FakeDialog(),
+        result=object(),
+        markdown_text="# hello",
+        parent="parent-window",
+    )
+
+    assert shown == {"parent": "parent-window", "message": "broken"}
+
+
+def test_on_save_finish_routes_oserror_to_show_error(monkeypatch):
+    from calamus import exporter as exporter_module
+
+    dummy = _DummyExporter()
+    shown = {}
+
+    class FakeDialog:
+        def save_finish(self, result):
+            raise OSError("disk full")
+
+    dummy._show_error = lambda parent, message: shown.update(
+        parent=parent, message=message
+    )
+
+    exporter_module.AbstractExporter._on_save_finish(
+        dummy,
+        FakeDialog(),
+        result=object(),
+        markdown_text="# hello",
+        parent="parent-window",
+    )
+
+    assert shown == {"parent": "parent-window", "message": "disk full"}
+
+
 # ---------------------------------------------------------------------------
 # PdfExporter
 # ---------------------------------------------------------------------------

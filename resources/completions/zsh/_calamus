@@ -1,0 +1,14 @@
+#compdef calamus
+# zsh completion for calamus
+# Install to: /usr/share/zsh/site-functions/_calamus
+
+_calamus() {
+    _arguments \
+        '(-p --preview)'{-p,--preview}'[open in read-only preview mode]' \
+        '--help[show help options]' \
+        '--help-all[show all help options]' \
+        '--help-gapplication[show GApplication options]' \
+        '*:markdown file:_files -g "*.md"'
+}
+
+_calamus

@@ -1,0 +1,21 @@
+# bash completion for calamus
+# Install to: /usr/share/bash-completion/completions/calamus
+
+_calamus() {
+    local cur prev
+    _init_completion || return
+
+    case "$cur" in
+        -*)
+            COMPREPLY=($(compgen -W \
+                "-p --preview --help --help-all --help-gapplication" \
+                -- "$cur"))
+            return
+            ;;
+    esac
+
+    # Positional arguments: prefer .md files, fall back to all files
+    _filedir 'md'
+}
+
+complete -F _calamus calamus

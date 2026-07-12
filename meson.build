@@ -86,5 +86,19 @@ install_data(
   rename: 'calamus.png',
 )
 
+# ── Shell completions ─────────────────────────────────────────────────────────
+install_data(
+  'resources/completions/bash/calamus',
+  install_dir: datadir / 'bash-completion' / 'completions',
+)
+install_data(
+  'resources/completions/zsh/_calamus',
+  install_dir: datadir / 'zsh' / 'site-functions',
+)
+install_data(
+  'resources/completions/fish/calamus.fish',
+  install_dir: datadir / 'fish' / 'vendor_completions.d',
+)
+
 # ── Post-install: refresh desktop and icon caches ────────────────────────────
 meson.add_install_script(python.full_path(), files('build-aux/meson_post_install.py'))
