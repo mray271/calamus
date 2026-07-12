@@ -25,9 +25,12 @@ class CalamusApplication(Adw.Application):
             application_id="io.github.calamus.Calamus",
             flags=Gio.ApplicationFlags.HANDLES_OPEN,
         )
+        # When adding options here (or via add_main_option_entries /
+        # add_option_group), update resources/completions/{bash,zsh,fish}/.
+        # test_completion_sync.py enforces this automatically.
         self.add_main_option(
             "preview",
-            ord("p"),
+            "p",
             GLib.OptionFlags.NONE,
             GLib.OptionArg.NONE,
             "Preview mode",
