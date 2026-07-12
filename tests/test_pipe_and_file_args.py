@@ -1,19 +1,19 @@
 """Tests for CLI argument parsing and pipe mode behaviour.
 
-``parse_args`` is pure Python (no GTK/display required) so all tests here run
-in any environment.  The pipe-mode save test patches ``sys.stdout`` to verify
-that Ctrl+S in pipe mode emits the editor text to stdout.
+The option-parsing helpers on CalamusApplication are pure Python (no GTK
+display required), so all tests here run in any environment.  The pipe-mode
+save tests patch ``sys.stdout`` to verify that Ctrl+S in pipe mode captures
+the editor text correctly.
 """
 
 from __future__ import annotations
 
 import os
 import tempfile
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from calamus.__main__ import parse_args
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -28,168 +28,144 @@ def _make_tempfile(suffix: str = ".md", content: str = "# Hello") -> str:
     return path
 
 
+def _make_app_stub(
+    pipe_content: str | None = None,
+    initial_files: list[str] | None = None,
+    preview_mode: bool = False,
+) -> types.SimpleNamespace:
+    """Lightweight stand-in for CalamusApplication (no GTK required)."""
+    from calamus.app import CalamusApplication
+
+    return types.SimpleNamespace(
+        _pipe_content=pipe_content,
+        _initial_files=initial_files or [],
+        _preview_mode=preview_mode,
+        _handle_options=CalamusApplication._handle_options,
+        _maybe_read_piped_stdin=CalamusApplication._maybe_read_piped_stdin,
+    )
+
+
 # ---------------------------------------------------------------------------
-# parse_args — normal (no pipe) mode
+# _handle_options — no-flag baseline
 # ---------------------------------------------------------------------------
 
 
-class TestParseArgsNormal:
-    def test_no_args_returns_empty(self):
-        pipe, files, gtk, _ = parse_args(["calamus"], stdin_is_tty=True)
-        assert pipe is None
-        assert files == []
-        assert gtk == ["calamus"]
+class TestHandleOptionsNormal:
+    def test_no_args_leaves_defaults(self):
+        app = _make_app_stub()
+        result = app._handle_options(app, preview=False, argv=["calamus"])
+        assert app._pipe_content is None
+        assert app._initial_files == []
+        assert app._preview_mode is False
+        assert result == -1
 
-    def test_single_file_arg(self):
+    def test_nonexistent_file_returns_1(self):
+        app = _make_app_stub()
+        result = app._handle_options(
+            app, preview=False, argv=["calamus", "/no/such/file.md"]
+        )
+        assert result == 1
+
+    def test_existing_file_returns_minus_1(self):
         path = _make_tempfile()
         try:
-            pipe, files, gtk, _ = parse_args(["calamus", path], stdin_is_tty=True)
-            assert pipe is None
-            assert files == [path]
-            assert gtk == ["calamus"]
-        finally:
-            os.unlink(path)
-
-    def test_multiple_file_args(self):
-        p1 = _make_tempfile()
-        p2 = _make_tempfile()
-        try:
-            pipe, files, gtk, _ = parse_args(["calamus", p1, p2], stdin_is_tty=True)
-            assert files == [p1, p2]
-        finally:
-            os.unlink(p1)
-            os.unlink(p2)
-
-    def test_file_arg_made_absolute(self):
-        path = _make_tempfile()
-        try:
-            _, files, _, _ = parse_args(["calamus", path], stdin_is_tty=True)
-            assert os.path.isabs(files[0])
-        finally:
-            os.unlink(path)
-
-    def test_nonexistent_file_exits_with_1(self):
-        with pytest.raises(SystemExit) as exc_info:
-            parse_args(["calamus", "/no/such/file.md"], stdin_is_tty=True)
-        assert exc_info.value.code == 1
-
-    def test_gtk_flags_passed_through(self):
-        _, _, gtk, _ = parse_args(["calamus", "--display=:1"], stdin_is_tty=True)
-        assert "--display=:1" in gtk
-
-    def test_tty_stdin_with_no_args_does_not_read_stdin(self):
-        read_called = []
-
-        def fake_read():
-            read_called.append(True)
-            return "content"
-
-        parse_args(["calamus"], stdin_is_tty=True, read_stdin=fake_read)
-        assert not read_called, "stdin must not be read when it is a TTY"
-
-
-# ---------------------------------------------------------------------------
-# parse_args — explicit --pipe flag
-# ---------------------------------------------------------------------------
-
-
-class TestParseArgsPipeFlag:
-    def test_pipe_flag_reads_stdin(self):
-        pipe, files, gtk, _ = parse_args(
-            ["calamus", "--pipe"],
-            stdin_is_tty=True,
-            read_stdin=lambda: "# piped content",
-        )
-        assert pipe == "# piped content"
-        assert files == []
-
-    def test_pipe_flag_stripped_from_gtk_argv(self):
-        _, _, gtk, _ = parse_args(
-            ["calamus", "--pipe"],
-            stdin_is_tty=True,
-            read_stdin=lambda: "",
-        )
-        assert "--pipe" not in gtk
-
-    def test_pipe_flag_with_other_gtk_flags(self):
-        _, _, gtk, _ = parse_args(
-            ["calamus", "--pipe", "--display=:1"],
-            stdin_is_tty=True,
-            read_stdin=lambda: "",
-        )
-        assert "--pipe" not in gtk
-        assert "--display=:1" in gtk
-
-    def test_pipe_flag_overrides_file_args(self):
-        """--pipe and file args are mutually exclusive; --pipe wins."""
-        path = _make_tempfile()
-        try:
-            # File arg comes AFTER --pipe — it still gets parsed as a file.
-            # The point is --pipe itself triggers pipe_content regardless.
-            pipe, _, _, _ = parse_args(
-                ["calamus", "--pipe"],
-                stdin_is_tty=True,
-                read_stdin=lambda: "piped",
-            )
-            assert pipe == "piped"
+            app = _make_app_stub()
+            result = app._handle_options(app, preview=False, argv=["calamus", path])
+            assert result == -1
         finally:
             os.unlink(path)
 
 
 # ---------------------------------------------------------------------------
-# parse_args — auto-detect piped stdin (stdin_is_tty=False)
+# _maybe_read_piped_stdin — auto-detect piped stdin
 # ---------------------------------------------------------------------------
 
 
-class TestParseArgsAutoDetect:
+class TestMaybeReadPipedStdin:
     def test_non_tty_stdin_reads_automatically(self):
-        pipe, _, _, _ = parse_args(
-            ["calamus"],
-            stdin_is_tty=False,
-            read_stdin=lambda: "auto piped",
+        app = _make_app_stub()
+        app._maybe_read_piped_stdin(
+            app, stdin_is_tty=False, read_stdin=lambda: "auto piped"
         )
-        assert pipe == "auto piped"
+        assert app._pipe_content == "auto piped"
 
     def test_non_tty_empty_stdin_does_not_trigger_pipe_mode(self):
         """Docker/non-TTY with empty stdin (e.g. /dev/null) must not enter pipe mode."""
-        pipe, _, _, _ = parse_args(
-            ["calamus"],
-            stdin_is_tty=False,
-            read_stdin=lambda: "",
-        )
-        assert pipe is None, "Empty stdin must not activate pipe mode"
+        app = _make_app_stub()
+        app._maybe_read_piped_stdin(app, stdin_is_tty=False, read_stdin=lambda: "")
+        assert app._pipe_content is None, "Empty stdin must not activate pipe mode"
 
-    def test_non_tty_stdin_not_read_when_files_given(self):
+    def test_tty_stdin_does_not_read(self):
+        read_called = []
+        app = _make_app_stub()
+        app._maybe_read_piped_stdin(
+            app,
+            stdin_is_tty=True,
+            read_stdin=lambda: read_called.append(True) or "content",
+        )
+        assert not read_called
+
+    def test_skipped_when_pipe_content_already_set(self):
+        read_called = []
+        app = _make_app_stub(pipe_content="already set")
+        app._maybe_read_piped_stdin(
+            app,
+            stdin_is_tty=False,
+            read_stdin=lambda: read_called.append(True) or "new content",
+        )
+        assert app._pipe_content == "already set"
+        assert not read_called, "stdin must not be read again when --pipe was given"
+
+    def test_skipped_when_files_given(self):
         """File paths suppress auto-detect — opening a file is not pipe mode."""
         path = _make_tempfile()
         read_called = []
         try:
-            pipe, files, _, _ = parse_args(
-                ["calamus", path],
+            app = _make_app_stub(initial_files=[path])
+            app._maybe_read_piped_stdin(
+                app,
                 stdin_is_tty=False,
-                read_stdin=lambda: (read_called.append(True) or "should not read"),
+                read_stdin=lambda: read_called.append(True) or "should not read",
             )
-            assert pipe is None
-            assert files == [path]
+            assert app._pipe_content is None
             assert not read_called
         finally:
             os.unlink(path)
 
-    def test_non_tty_stdin_not_read_when_pipe_flag_given(self):
-        """Explicit --pipe already set pipe_content; auto-detect must not double-read."""
-        reads: list[str] = []
 
-        def counting_read():
-            reads.append("read")
-            return "from --pipe"
+# ---------------------------------------------------------------------------
+# _handle_options — --preview flag
+# ---------------------------------------------------------------------------
 
-        pipe, _, _, _ = parse_args(
-            ["calamus", "--pipe"],
-            stdin_is_tty=False,
-            read_stdin=counting_read,
+
+class TestHandleOptionsPreviewFlag:
+    def test_preview_flag_sets_preview_mode(self):
+        app = _make_app_stub()
+        result = app._handle_options(app, preview=True, argv=["calamus"])
+        assert app._preview_mode is True
+        assert result == -1
+
+    def test_no_flags_preview_mode_is_false(self):
+        app = _make_app_stub()
+        app._handle_options(app, preview=False, argv=["calamus"])
+        assert app._preview_mode is False
+
+    def test_preview_with_existing_file(self):
+        path = _make_tempfile()
+        try:
+            app = _make_app_stub()
+            result = app._handle_options(app, preview=True, argv=["calamus", path])
+            assert app._preview_mode is True
+            assert result == -1
+        finally:
+            os.unlink(path)
+
+    def test_preview_with_nonexistent_file_returns_1(self):
+        app = _make_app_stub()
+        result = app._handle_options(
+            app, preview=True, argv=["calamus", "/no/such/file.md"]
         )
-        assert pipe == "from --pipe"
-        assert len(reads) == 1, "stdin should be read exactly once"
+        assert result == 1
 
 
 # ---------------------------------------------------------------------------
@@ -422,37 +398,8 @@ class TestPipeModeClose:
 # ---------------------------------------------------------------------------
 
 
-class TestParseArgsPreviewFlag:
-    def test_preview_flag_sets_preview_mode(self):
-        _, _, _, preview = parse_args(["calamus", "--preview"], stdin_is_tty=True)
-        assert preview is True
-
-    def test_no_flags_preview_mode_is_false(self):
-        _, _, _, preview = parse_args(["calamus"], stdin_is_tty=True)
-        assert preview is False
-
-    def test_preview_flag_stripped_from_gtk_argv(self):
-        _, _, gtk, _ = parse_args(["calamus", "--preview"], stdin_is_tty=True)
-        assert "--preview" not in gtk
-
-    def test_preview_with_file(self):
-        path = _make_tempfile()
-        try:
-            _, files, _, preview = parse_args(
-                ["calamus", "--preview", path], stdin_is_tty=True
-            )
-            assert preview is True
-            assert files == [path]
-        finally:
-            os.unlink(path)
-
-    def test_preview_with_other_gtk_flags(self):
-        _, _, gtk, preview = parse_args(
-            ["calamus", "--preview", "--display=:1"], stdin_is_tty=True
-        )
-        assert preview is True
-        assert "--preview" not in gtk
-        assert "--display=:1" in gtk
+# TestParseArgsPreviewFlag has been replaced by TestHandleOptionsPreviewFlag
+# above, which tests the same behaviour via CalamusApplication._handle_options.
 
 
 # ---------------------------------------------------------------------------
