@@ -4,7 +4,7 @@ Release:        1%{?dist}
 Summary:        A GTK4 Markdown editor for GNOME
 
 License:        GPL-3.0-or-later
-URL:            https://github.com/OWNER/calamus
+URL:            https://github.com/mray271/calamus
 Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 
 BuildArch:      noarch

@@ -22,7 +22,7 @@ from calamus.recentfiles import ConfigFileRecentFilesProvider
 from calamus.tabs import AdwTabManager
 from calamus.theme import ThemeManager
 
-GITHUB_RELEASES_URL = "https://github.com/OWNER/calamus/releases"
+GITHUB_RELEASES_URL = "https://github.com/mray271/calamus/releases"
 
 # Extensions Calamus treats as openable text/Markdown files.
 _TEXT_EXTENSIONS: frozenset[str] = frozenset(
@@ -93,7 +93,7 @@ def _is_openable(path: str) -> bool:
         return False
 
 
-GITHUB_ISSUES_URL = "https://github.com/OWNER/calamus/issues"
+GITHUB_ISSUES_URL = "https://github.com/mray271/calamus/issues"
 MERMAID_DOCS_URL = "https://mermaid.js.org"
 
 

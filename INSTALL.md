@@ -63,7 +63,7 @@ sudo zypper install \
 ### 2. Clone the repository
 
 ```bash
-git clone https://github.com/OWNER/calamus.git
+git clone https://github.com/mray271/calamus.git
 cd calamus
 ```
 
@@ -144,7 +144,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### 3. Clone and set up the virtualenv
 
 ```bash
-git clone https://github.com/OWNER/calamus.git
+git clone https://github.com/mray271/calamus.git
 cd calamus
 uv sync --extra dev
 ```

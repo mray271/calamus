@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "calamus"
-version = "0.1.1"
+version = "0.1.2"
 description = "A GTK4 Markdown editor for GNOME"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
@@ -41,9 +41,9 @@ dev = [
 calamus = "calamus.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/OWNER/calamus"
-Issues = "https://github.com/OWNER/calamus/issues"
-Changelog = "https://github.com/OWNER/calamus/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/mray271/calamus"
+Issues = "https://github.com/mray271/calamus/issues"
+Changelog = "https://github.com/mray271/calamus/blob/main/CHANGELOG.md"
 
 [tool.isort]
 profile = "black"

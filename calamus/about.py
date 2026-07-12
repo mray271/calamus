@@ -23,8 +23,8 @@ def show_about_dialog(parent) -> None:
         f"A GTK4 Markdown editor for GNOME.\n\nPowered by Mermaid.js {MERMAID_VERSION}"
     )
     dialog.set_debug_info(f"Mermaid.js: {MERMAID_VERSION}")
-    dialog.set_website("https://github.com/OWNER/calamus")
-    dialog.set_issue_url("https://github.com/OWNER/calamus/issues")
+    dialog.set_website("https://github.com/mray271/calamus")
+    dialog.set_issue_url("https://github.com/mray271/calamus/issues")
     dialog.set_copyright("© 2024 Calamus Contributors")
     dialog.set_transient_for(parent)
     dialog.present()

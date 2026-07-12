@@ -108,7 +108,7 @@ docker run --rm -v $(pwd):/app debian:trixie bash -c "
 
 
 ```bash
-git clone https://github.com/OWNER/calamus.git
+git clone https://github.com/mray271/calamus.git
 cd calamus
 uv sync --extra dev
 ```
