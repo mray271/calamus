@@ -120,6 +120,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         self._printer = GtkPrinter()
         self._pipe_content = pipe_content
         self._pipe_mode = pipe_content is not None
+        self._pipe_saved_content: str | None = None
         self._build_ui()
         self._build_actions()
         self.connect("close-request", self._on_close_request)
@@ -227,7 +228,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         # Banner sits between the tab bar and the editor/preview panes.
         banner = Adw.Banner()
         banner.set_title(
-            "Editing piped input — close the window when done to emit to stdout"
+            "Editing piped input — Ctrl+S to commit changes, close to emit saved text (or original if unsaved)"
         )
         banner.set_revealed(True)
         self._content_box.insert_child_after(banner, self._tab_bar)
@@ -235,7 +236,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         # Disable actions that don't make sense in a single-use pipe session.
         app = self.get_application()
         if app is not None:
-            for name in ("new", "open"):
+            for name in ("new", "open", "save-as"):
                 action = app.lookup_action(name)
                 if action is not None:
                     action.set_enabled(False)
@@ -337,12 +338,14 @@ class CalamusWindow(Adw.ApplicationWindow):
         if tab is None:
             self.set_title("Calamus")
             return
-        name = os.path.basename(tab.file_path) if tab.file_path else "Untitled"
         prefix = "\u25cf " if tab.modified else ""
-        if tab.file_path:
+        if self._pipe_mode:
+            self.set_title(f"{prefix}Calamus \u2014 Pipe Mode")
+        elif tab.file_path:
+            name = os.path.basename(tab.file_path)
             self.set_title(f"{prefix}{name} \u2014 {tab.file_path}")
         else:
-            self.set_title(f"{prefix}{name}")
+            self.set_title(f"{prefix}Untitled")
 
     def _on_new(self, _action: Gio.SimpleAction, _param: object) -> None:
         self.tab_manager.new_tab()
@@ -395,7 +398,13 @@ class CalamusWindow(Adw.ApplicationWindow):
         self.dir_pane.load_directory(os.path.dirname(path) or os.path.expanduser("~"))
 
     def _on_save(self, _action: Gio.SimpleAction, _param: object) -> None:
-        self.tab_manager.save_current()
+        if self._pipe_mode:
+            editor = self.tab_manager.get_current_editor()
+            if editor is not None:
+                self._pipe_saved_content = editor.get_text()
+            self.tab_manager.mark_current_saved()
+        else:
+            self.tab_manager.save_current()
 
     def _on_save_as(self, _action: Gio.SimpleAction, _param: object) -> None:
         self.tab_manager.save_as_current(self)
@@ -421,14 +430,17 @@ class CalamusWindow(Adw.ApplicationWindow):
         if self._confirmed_quit:
             return False  # Already confirmed — allow close
 
-        # Pipe mode: emit current editor text to stdout then close immediately.
-        # No confirmation dialog — the user closing the window IS the signal
-        # that editing is done (same contract as `gedit --wait`).
+        # Pipe mode: emit saved text (or original input if no save occurred) to stdout.
+        # Closing without saving reverts to the original input — same contract as Meld
+        # used as a git mergetool.
         if self._pipe_mode:
-            editor = self.tab_manager.get_current_editor()
-            if editor is not None:
-                sys.stdout.write(editor.get_text())
-                sys.stdout.flush()
+            output = (
+                self._pipe_saved_content
+                if self._pipe_saved_content is not None
+                else self._pipe_content or ""
+            )
+            sys.stdout.write(output)
+            sys.stdout.flush()
             return False
 
         tab_count = self.tab_manager.get_tab_count()

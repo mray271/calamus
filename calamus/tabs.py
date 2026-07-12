@@ -65,6 +65,10 @@ class AbstractTab(ABC):
         """Save the tab contents."""
 
     @abstractmethod
+    def mark_saved(self) -> None:
+        """Mark the tab as unmodified without writing to disk."""
+
+    @abstractmethod
     def reload(self) -> None:
         """Reload the tab contents from disk."""
 
@@ -128,6 +132,10 @@ class EditorTab(Gtk.Box):
             return False
         self._modified = False
         return True
+
+    def mark_saved(self) -> None:
+        """Clear the modified flag without writing to disk."""
+        self._modified = False
 
     def reload(self) -> None:
         if self._file_path is not None:
@@ -368,6 +376,13 @@ class AdwTabManager(AbstractTabManager):
             self.save_as_current(self._window)
         else:
             tab.save()
+            self._notify_title_changed()
+
+    def mark_current_saved(self) -> None:
+        """Mark the current tab as unmodified (used for pipe-mode internal saves)."""
+        tab = self.get_current_tab()
+        if tab is not None:
+            tab.mark_saved()
             self._notify_title_changed()
 
     def save_as_current(self, parent: Gtk.Window) -> None:
