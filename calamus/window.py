@@ -105,6 +105,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         theme_manager: ThemeManager | None = None,
         pipe_content: str | None = None,
         initial_files: list[str] | None = None,
+        preview_mode: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -121,10 +122,21 @@ class CalamusWindow(Adw.ApplicationWindow):
         self._pipe_content = pipe_content
         self._pipe_mode = pipe_content is not None
         self._pipe_saved_content: str | None = None
+        self._preview_mode = preview_mode
         self._build_ui()
         self._build_actions()
         self.connect("close-request", self._on_close_request)
-        if self._pipe_mode:
+        if self._preview_mode:
+            if self._pipe_content is not None:
+                tab = self.tab_manager.get_current_tab()
+                if tab is not None:
+                    tab.load_content(self._pipe_content)
+            elif initial_files:
+                for path in initial_files:
+                    self.tab_manager.open_file(path)
+                    self._recent_files.add(path)
+            self._enter_preview_mode()
+        elif self._pipe_mode:
             self._enter_pipe_mode()
         elif initial_files:
             for path in initial_files:
@@ -241,6 +253,30 @@ class CalamusWindow(Adw.ApplicationWindow):
                 if action is not None:
                     action.set_enabled(False)
 
+    def _enter_preview_mode(self) -> None:
+        """Configure the window for read-only preview of content."""
+        # Show only the preview pane.
+        self._editor_pane_visible = False
+        self.tab_manager.set_editor_pane_visible(False)
+        self._dir_pane_visible = False
+        self.dir_pane.set_visible(False)
+
+        self.tab_manager.set_all_editors_editable(False)
+
+        self.set_title("Calamus \u2014 Preview Mode")
+
+        banner = Adw.Banner()
+        banner.set_title("Preview mode \u2014 read-only")
+        banner.set_revealed(True)
+        self._content_box.insert_child_after(banner, self._tab_bar)
+
+        app = self.get_application()
+        if app is not None:
+            for name in ("new", "open", "save", "save-as", "undo", "redo"):
+                action = app.lookup_action(name)
+                if action is not None:
+                    action.set_enabled(False)
+
     def _build_actions(self) -> None:
         app = self.get_application()
         if app is None:
@@ -338,6 +374,9 @@ class CalamusWindow(Adw.ApplicationWindow):
         if tab is None:
             self.set_title("Calamus")
             return
+        if self._preview_mode:
+            self.set_title("Calamus \u2014 Preview Mode")
+            return
         prefix = "\u25cf " if tab.modified else ""
         if self._pipe_mode:
             self.set_title(f"{prefix}Calamus \u2014 Pipe Mode")
@@ -429,6 +468,10 @@ class CalamusWindow(Adw.ApplicationWindow):
     def _on_close_request(self, _window: Gtk.Window) -> bool:
         if self._confirmed_quit:
             return False  # Already confirmed — allow close
+
+        # Preview mode: read-only viewer — just close with no output.
+        if self._preview_mode:
+            return False
 
         # Pipe mode: emit saved text (or original input if no save occurred) to stdout.
         # Closing without saving reverts to the original input — same contract as Meld

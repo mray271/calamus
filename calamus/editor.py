@@ -67,6 +67,10 @@ class AbstractEditor(ABC):
     def get_widget(self) -> Gtk.Widget:
         """Return the underlying GTK widget."""
 
+    @abstractmethod
+    def set_editable(self, editable: bool) -> None:
+        """Set whether the editor is editable."""
+
 
 class MarkdownEditor(AbstractEditor):
     """Concrete GtkSource-based Markdown editor."""
@@ -143,6 +147,10 @@ class MarkdownEditor(AbstractEditor):
 
     def get_widget(self) -> GtkSource.View:
         return self._view
+
+    def set_editable(self, editable: bool) -> None:
+        self._view.set_editable(editable)
+        self._view.set_cursor_visible(editable)
 
     def get_buffer(self) -> GtkSource.Buffer:
         return self._view.get_buffer()

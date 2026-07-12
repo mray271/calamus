@@ -35,7 +35,7 @@ def _make_tempfile(suffix: str = ".md", content: str = "# Hello") -> str:
 
 class TestParseArgsNormal:
     def test_no_args_returns_empty(self):
-        pipe, files, gtk = parse_args(["calamus"], stdin_is_tty=True)
+        pipe, files, gtk, _ = parse_args(["calamus"], stdin_is_tty=True)
         assert pipe is None
         assert files == []
         assert gtk == ["calamus"]
@@ -43,7 +43,7 @@ class TestParseArgsNormal:
     def test_single_file_arg(self):
         path = _make_tempfile()
         try:
-            pipe, files, gtk = parse_args(["calamus", path], stdin_is_tty=True)
+            pipe, files, gtk, _ = parse_args(["calamus", path], stdin_is_tty=True)
             assert pipe is None
             assert files == [path]
             assert gtk == ["calamus"]
@@ -54,7 +54,7 @@ class TestParseArgsNormal:
         p1 = _make_tempfile()
         p2 = _make_tempfile()
         try:
-            pipe, files, gtk = parse_args(["calamus", p1, p2], stdin_is_tty=True)
+            pipe, files, gtk, _ = parse_args(["calamus", p1, p2], stdin_is_tty=True)
             assert files == [p1, p2]
         finally:
             os.unlink(p1)
@@ -63,7 +63,7 @@ class TestParseArgsNormal:
     def test_file_arg_made_absolute(self):
         path = _make_tempfile()
         try:
-            _, files, _ = parse_args(["calamus", path], stdin_is_tty=True)
+            _, files, _, _ = parse_args(["calamus", path], stdin_is_tty=True)
             assert os.path.isabs(files[0])
         finally:
             os.unlink(path)
@@ -74,7 +74,7 @@ class TestParseArgsNormal:
         assert exc_info.value.code == 1
 
     def test_gtk_flags_passed_through(self):
-        _, _, gtk = parse_args(["calamus", "--display=:1"], stdin_is_tty=True)
+        _, _, gtk, _ = parse_args(["calamus", "--display=:1"], stdin_is_tty=True)
         assert "--display=:1" in gtk
 
     def test_tty_stdin_with_no_args_does_not_read_stdin(self):
@@ -95,7 +95,7 @@ class TestParseArgsNormal:
 
 class TestParseArgsPipeFlag:
     def test_pipe_flag_reads_stdin(self):
-        pipe, files, gtk = parse_args(
+        pipe, files, gtk, _ = parse_args(
             ["calamus", "--pipe"],
             stdin_is_tty=True,
             read_stdin=lambda: "# piped content",
@@ -104,7 +104,7 @@ class TestParseArgsPipeFlag:
         assert files == []
 
     def test_pipe_flag_stripped_from_gtk_argv(self):
-        _, _, gtk = parse_args(
+        _, _, gtk, _ = parse_args(
             ["calamus", "--pipe"],
             stdin_is_tty=True,
             read_stdin=lambda: "",
@@ -112,7 +112,7 @@ class TestParseArgsPipeFlag:
         assert "--pipe" not in gtk
 
     def test_pipe_flag_with_other_gtk_flags(self):
-        _, _, gtk = parse_args(
+        _, _, gtk, _ = parse_args(
             ["calamus", "--pipe", "--display=:1"],
             stdin_is_tty=True,
             read_stdin=lambda: "",
@@ -126,7 +126,7 @@ class TestParseArgsPipeFlag:
         try:
             # File arg comes AFTER --pipe — it still gets parsed as a file.
             # The point is --pipe itself triggers pipe_content regardless.
-            pipe, _, _ = parse_args(
+            pipe, _, _, _ = parse_args(
                 ["calamus", "--pipe"],
                 stdin_is_tty=True,
                 read_stdin=lambda: "piped",
@@ -143,7 +143,7 @@ class TestParseArgsPipeFlag:
 
 class TestParseArgsAutoDetect:
     def test_non_tty_stdin_reads_automatically(self):
-        pipe, _, _ = parse_args(
+        pipe, _, _, _ = parse_args(
             ["calamus"],
             stdin_is_tty=False,
             read_stdin=lambda: "auto piped",
@@ -152,7 +152,7 @@ class TestParseArgsAutoDetect:
 
     def test_non_tty_empty_stdin_does_not_trigger_pipe_mode(self):
         """Docker/non-TTY with empty stdin (e.g. /dev/null) must not enter pipe mode."""
-        pipe, _, _ = parse_args(
+        pipe, _, _, _ = parse_args(
             ["calamus"],
             stdin_is_tty=False,
             read_stdin=lambda: "",
@@ -164,7 +164,7 @@ class TestParseArgsAutoDetect:
         path = _make_tempfile()
         read_called = []
         try:
-            pipe, files, _ = parse_args(
+            pipe, files, _, _ = parse_args(
                 ["calamus", path],
                 stdin_is_tty=False,
                 read_stdin=lambda: (read_called.append(True) or "should not read"),
@@ -183,7 +183,7 @@ class TestParseArgsAutoDetect:
             reads.append("read")
             return "from --pipe"
 
-        pipe, _, _ = parse_args(
+        pipe, _, _, _ = parse_args(
             ["calamus", "--pipe"],
             stdin_is_tty=False,
             read_stdin=counting_read,
@@ -326,6 +326,7 @@ class TestPipeModeClose:
         mock_tab_manager = MagicMock()
         stub = types.SimpleNamespace(
             _confirmed_quit=False,
+            _preview_mode=False,
             _pipe_mode=pipe_mode,
             _pipe_content=pipe_content,
             _pipe_saved_content=pipe_saved_content,
@@ -405,6 +406,7 @@ class TestPipeModeClose:
         mock_tab_manager.get_unsaved_tabs.return_value = []
         stub = types.SimpleNamespace(
             _confirmed_quit=False,
+            _preview_mode=False,
             _pipe_mode=False,
             tab_manager=mock_tab_manager,
         )
@@ -413,3 +415,99 @@ class TestPipeModeClose:
             CalamusWindow._on_close_request(stub, MagicMock())
 
         assert captured.getvalue() == ""
+
+
+# ---------------------------------------------------------------------------
+# parse_args — --preview flag
+# ---------------------------------------------------------------------------
+
+
+class TestParseArgsPreviewFlag:
+    def test_preview_flag_sets_preview_mode(self):
+        _, _, _, preview = parse_args(["calamus", "--preview"], stdin_is_tty=True)
+        assert preview is True
+
+    def test_no_flags_preview_mode_is_false(self):
+        _, _, _, preview = parse_args(["calamus"], stdin_is_tty=True)
+        assert preview is False
+
+    def test_preview_flag_stripped_from_gtk_argv(self):
+        _, _, gtk, _ = parse_args(["calamus", "--preview"], stdin_is_tty=True)
+        assert "--preview" not in gtk
+
+    def test_preview_with_file(self):
+        path = _make_tempfile()
+        try:
+            _, files, _, preview = parse_args(
+                ["calamus", "--preview", path], stdin_is_tty=True
+            )
+            assert preview is True
+            assert files == [path]
+        finally:
+            os.unlink(path)
+
+    def test_preview_with_other_gtk_flags(self):
+        _, _, gtk, preview = parse_args(
+            ["calamus", "--preview", "--display=:1"], stdin_is_tty=True
+        )
+        assert preview is True
+        assert "--preview" not in gtk
+        assert "--display=:1" in gtk
+
+
+# ---------------------------------------------------------------------------
+# Preview mode close — no stdout output, just closes
+# ---------------------------------------------------------------------------
+
+
+class TestPreviewModeClose:
+    """Closing in preview mode must never emit anything to stdout."""
+
+    def _make_close_stub(self, preview_mode: bool = True, pipe_mode: bool = False):
+        import types
+
+        mock_tab_manager = MagicMock()
+        mock_tab_manager.get_tab_count.return_value = 1
+        mock_tab_manager.get_unsaved_tabs.return_value = []
+        return types.SimpleNamespace(
+            _confirmed_quit=False,
+            _preview_mode=preview_mode,
+            _pipe_mode=pipe_mode,
+            _pipe_content="# Original\n",
+            _pipe_saved_content=None,
+            tab_manager=mock_tab_manager,
+        )
+
+    def test_close_does_not_emit_to_stdout(self):
+        import io
+
+        from calamus.window import CalamusWindow
+
+        stub = self._make_close_stub()
+        captured = io.StringIO()
+        with patch("calamus.window.sys.stdout", captured):
+            CalamusWindow._on_close_request(stub, MagicMock())
+
+        assert captured.getvalue() == "", "Preview mode close must not write to stdout"
+
+    def test_close_returns_false_to_allow_window_close(self):
+        from calamus.window import CalamusWindow
+
+        stub = self._make_close_stub()
+        result = CalamusWindow._on_close_request(stub, MagicMock())
+        assert result is False
+
+    def test_preview_mode_takes_precedence_over_pipe_mode(self):
+        """When both _preview_mode and _pipe_mode are True, no output emitted."""
+        import io
+
+        from calamus.window import CalamusWindow
+
+        stub = self._make_close_stub(preview_mode=True, pipe_mode=True)
+        captured = io.StringIO()
+        with patch("calamus.window.sys.stdout", captured):
+            CalamusWindow._on_close_request(stub, MagicMock())
+
+        assert (
+            captured.getvalue() == ""
+        ), "Preview mode must suppress pipe output on close"
