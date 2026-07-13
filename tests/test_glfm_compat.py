@@ -397,10 +397,10 @@ class TestAlerts:
 
 
 # ===========================================================================
-# 10. Color chips (`#RRGGBB` and other hex forms)
+# 10. Color chips (`#RRGGBB`, `rgb()`, `rgba()`, `hsl()`, `hsla()`)
 # ===========================================================================
 # GLFM renders a small color swatch next to color codes in backticks.
-# Calamus supports inline hex literals as color chips with code fallback.
+# Calamus supports inline hex and functional color literals as color chips.
 # Case 2 — Supported.
 
 
@@ -427,20 +427,38 @@ class TestColorChips:
         assert 'aria-label="Color swatch #FF0000"' in html
 
     @pytest.mark.parametrize(
-        "non_hex_color_code",
+        "color_code",
         [
             "RGB(255, 0, 0)",
             "RGBA(255, 0, 0, 0.5)",
             "HSL(0, 100%, 50%)",
             "HSLA(0, 100%, 50%, 0.3)",
+            "RGB(0%,100%,0%)",
+            "HSL(540,70%,50%)",
         ],
     )
-    def test_non_hex_color_code_keeps_plain_code_fallback(
-        self, non_hex_color_code: str
+    def test_color_function_code_renders_color_chip(self, color_code: str):
+        """CSS color function code in backticks renders a swatch and code text."""
+        html = render(f"Color: `{color_code}`")
+        assert 'class="glfm-color-chip"' in html
+        assert "glfm-color-chip-swatch" in html
+        assert f"<code>{color_code}</code>" in html
+
+    @pytest.mark.parametrize(
+        "invalid_color_code",
+        [
+            "RGB(300, 0, 0)",
+            "RGBA(255, 0, 0, 2)",
+            "HSL(0, 120%, 50%)",
+            "HSLA(0, 100%, 50%, 1.5)",
+        ],
+    )
+    def test_invalid_color_function_code_keeps_plain_code_fallback(
+        self, invalid_color_code: str
     ):
-        """Non-hex color syntax remains plain inline code as graceful fallback."""
-        html = render(f"Color: `{non_hex_color_code}`")
-        assert f"<code>{non_hex_color_code}</code>" in html
+        """Invalid color function syntax remains plain inline code fallback."""
+        html = render(f"Color: `{invalid_color_code}`")
+        assert f"<code>{invalid_color_code}</code>" in html
         assert 'class="glfm-color-chip"' not in html
 
 
