@@ -46,6 +46,7 @@ jobs:
       - name: Run tests
         run: xvfb-run -a uv run pytest
       - name: Build package
+        if: vars.PUBLISH_RELEASE_ASSETS == 'true' || vars.PUBLISH_TO_PYPI == 'true'
         run: uv build
       - name: Extract release notes
         id: release_notes
@@ -54,11 +55,17 @@ jobs:
           # Extract section for this version from CHANGELOG.md
           awk "/^## \[$VERSION\]/{found=1; next} found && /^## /{exit} found{print}" CHANGELOG.md > release_body.txt
           cat release_body.txt
-      - name: Create GitHub Release
+      - name: Create GitHub Release (notes only)
+        if: vars.PUBLISH_RELEASE_ASSETS != 'true'
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_body.txt
-          files: dist/*
+      - name: Create GitHub Release (with source artifact)
+        if: vars.PUBLISH_RELEASE_ASSETS == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_body.txt
+          files: dist/calamus-*.tar.gz
           fail_on_unmatched_files: true
       - name: Publish to PyPI
         if: vars.PUBLISH_TO_PYPI == 'true'
