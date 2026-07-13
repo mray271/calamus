@@ -100,5 +100,8 @@ install_data(
   install_dir: datadir / 'fish' / 'vendor_completions.d',
 )
 
+# ── Man page ──────────────────────────────────────────────────────────────────
+install_man('docs/calamus.1')
+
 # ── Post-install: refresh desktop and icon caches ────────────────────────────
 meson.add_install_script(python.full_path(), files('build-aux/meson_post_install.py'))

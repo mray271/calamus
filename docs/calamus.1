@@ -1,0 +1,110 @@
+.TH CALAMUS 1 "2026-07-12" "Calamus 0.1.0" "User Commands"
+.SH NAME
+calamus \- GTK4 Markdown editor for GNOME
+.SH SYNOPSIS
+.B calamus
+[\fIOPTION\fR]...
+[\fIFILE\fR]...
+.br
+\fIcommand\fR | \fBcalamus\fR [\fB\-\-pipe\-base\-path\fR \fIPATH\fR]
+.SH DESCRIPTION
+.B Calamus
+is a GTK4 Markdown editor for GNOME with tabbed editing, a live preview pane,
+a directory-tree sidebar, and export to HTML, PDF, and ODT.
+.PP
+One or more \fIFILE\fR arguments (Markdown files) may be supplied on the
+command line; each is opened in its own tab.
+Calamus also accepts Markdown content on standard input when stdin is not a
+terminal (pipe mode).
+.SH OPTIONS
+.TP
+\fB\-p\fR, \fB\-\-preview\fR
+Open in read-only preview mode.
+The editor toolbar and editing controls are hidden; the document is displayed
+as a rendered HTML preview only.
+.TP
+\fB\-\-pipe\-base\-path\fR=\fIPATH\fR
+Set the base path used to resolve relative links (images, includes) when
+content is read from standard input.
+\fIPATH\fR may be a directory or a file; relative paths are resolved against
+the current working directory.
+This option has no effect when files are opened directly from the command line.
+.TP
+\fB\-\-help\fR
+Show a summary of application options and exit.
+.TP
+\fB\-\-help\-all\fR
+Show all help options, including GTK and GApplication options, and exit.
+.TP
+\fB\-\-help\-gapplication\fR
+Show GApplication-specific options (e.g.\& \fB\-\-gapplication\-service\fR)
+and exit.
+.SH OPERANDS
+.TP
+\fIFILE\fR
+Path to a Markdown file to open.
+Multiple files may be specified; each is opened in a separate editor tab.
+If a given path does not exist, Calamus prints an error to stderr and exits
+with status 1.
+.SH STDIN
+When stdin is not a terminal (i.e.\& a pipe or a redirect), Calamus reads the
+content and opens it in a new tab.
+Use \fB\-\-pipe\-base\-path\fR to control relative-link resolution in this
+mode.
+.SH EXIT STATUS
+.TP
+.B 0
+Successful completion.
+.TP
+.B 1
+A command-line argument was invalid (e.g.\& a file was not found or
+\fB\-\-pipe\-base\-path\fR pointed to a nonexistent location).
+.SH EXAMPLES
+Open a single file:
+.PP
+.RS 4
+.EX
+calamus README.md
+.EE
+.RE
+.PP
+Open multiple files in separate tabs:
+.PP
+.RS 4
+.EX
+calamus notes.md TODO.md
+.EE
+.RE
+.PP
+Open a file in preview-only mode:
+.PP
+.RS 4
+.EX
+calamus \-\-preview notes.md
+.EE
+.RE
+.PP
+Pipe content into Calamus, resolving relative links relative to the project
+root:
+.PP
+.RS 4
+.EX
+cat docs/guide.md | calamus \-\-pipe\-base\-path /home/user/project
+.EE
+.RE
+.SH FILES
+.TP
+.I ~/.config/Calamus/Calamus.conf
+User preferences (theme, font, and other settings managed through the
+in-app Preferences dialog).
+.SH SEE ALSO
+.BR xdg-open (1),
+.BR gtk4-demo (1)
+.SH BUGS
+Report bugs at <https://github.com/mray271/calamus/issues>.
+.SH AUTHORS
+Calamus contributors.
+See the project repository for a full list.
+.SH LICENSE
+GNU General Public License version\~3 or later.
+See <https://www.gnu.org/licenses/gpl-3.0.html>.

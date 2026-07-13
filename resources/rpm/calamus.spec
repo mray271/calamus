@@ -47,6 +47,8 @@ install -Dpm 0644 resources/desktop/calamus_128x128.png \
     %{buildroot}%{_datadir}/icons/hicolor/128x128/apps/calamus.png
 install -Dpm 0644 resources/desktop/calamus_256x256.png \
     %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/calamus.png
+install -Dpm 0644 docs/calamus.1 \
+    %{buildroot}%{_mandir}/man1/calamus.1
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/calamus.desktop
@@ -60,6 +62,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/calamus.desktop
 %{_datadir}/icons/hicolor/48x48/apps/calamus.png
 %{_datadir}/icons/hicolor/128x128/apps/calamus.png
 %{_datadir}/icons/hicolor/256x256/apps/calamus.png
+%{_mandir}/man1/calamus.1*
 
 %changelog
 * Sat Jul 05 2026 Daniel P. Dougherty <mray271@gmail.com> - 0.1.0-1
