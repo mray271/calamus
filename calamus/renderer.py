@@ -56,6 +56,10 @@ _GLFM_TOC_MARKER_RE = re.compile(
 )
 _EMOJI_SHORTCODE_RE = re.compile(r":([a-z0-9+\-][a-z0-9_+\-]*):", re.IGNORECASE)
 _EMOJI_EXCLUDED_TAGS = {"code", "pre", "script", "style"}
+# Curated local subset of GitLab/Tanuki emoji shortcodes.
+# To add support for a new request, append shortcode -> Unicode entries here
+# (include common aliases when relevant), keep unknown shortcodes as literals,
+# and update tests in tests/test_glfm_compat.py and tests/test_renderer.py.
 _GLFM_EMOJI_SHORTCODES = {
     "+1": "👍",
     "-1": "👎",
