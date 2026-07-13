@@ -57,6 +57,24 @@ _GLFM_TOC_MARKER_RE = re.compile(
 _GLFM_COLOR_HEX_RE = re.compile(
     r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
 )
+_RGB_CHANNEL_RE = (
+    r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d|" r"(?:100(?:\.0+)?|[1-9]?\d(?:\.\d+)?)%)"
+)
+_HSL_PERCENT_RE = r"(?:100(?:\.0+)?|[1-9]?\d(?:\.\d+)?)%"
+_HUE_RE = r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)"
+_ALPHA_RE = r"(?:0(?:\.\d+)?|1(?:\.0+)?|\.\d+)"
+_GLFM_COLOR_FUNCTION_RE = re.compile(
+    r"^(?:"
+    rf"rgb\(\s*{_RGB_CHANNEL_RE}\s*,\s*{_RGB_CHANNEL_RE}\s*,\s*{_RGB_CHANNEL_RE}\s*\)"
+    r"|"
+    rf"rgba\(\s*{_RGB_CHANNEL_RE}\s*,\s*{_RGB_CHANNEL_RE}\s*,\s*{_RGB_CHANNEL_RE}\s*,\s*{_ALPHA_RE}\s*\)"
+    r"|"
+    rf"hsl\(\s*{_HUE_RE}\s*,\s*{_HSL_PERCENT_RE}\s*,\s*{_HSL_PERCENT_RE}\s*\)"
+    r"|"
+    rf"hsla\(\s*{_HUE_RE}\s*,\s*{_HSL_PERCENT_RE}\s*,\s*{_HSL_PERCENT_RE}\s*,\s*{_ALPHA_RE}\s*\)"
+    r")$",
+    re.IGNORECASE,
+)
 _EMOJI_SHORTCODE_RE = re.compile(r":([a-z0-9+\-][a-z0-9_+\-]*):", re.IGNORECASE)
 _EMOJI_EXCLUDED_TAGS = {"code", "pre", "script", "style"}
 # Curated local subset of GitLab/Tanuki emoji shortcodes.
@@ -275,7 +293,7 @@ def _render_glfm_toc(html_text: str) -> str:
 
 
 def _render_glfm_color_chips(html_text: str) -> str:
-    """Render GLFM inline hex color literals in <code> as visual color chips."""
+    """Render GLFM inline color literals in <code> as visual color chips."""
     if not isinstance(html_text, str):
         return html_text
 
@@ -288,7 +306,9 @@ def _render_glfm_color_chips(html_text: str) -> str:
         if pending_code_open_tag is not None:
             if token.startswith("</code"):
                 raw_literal = html.unescape("".join(pending_code_tokens))
-                if _GLFM_COLOR_HEX_RE.fullmatch(raw_literal):
+                if _GLFM_COLOR_HEX_RE.fullmatch(
+                    raw_literal
+                ) or _GLFM_COLOR_FUNCTION_RE.fullmatch(raw_literal):
                     safe_literal = html.escape(raw_literal)
                     safe_color = html.escape(raw_literal.lower(), quote=True)
                     safe_label = html.escape(f"Color swatch {raw_literal}", quote=True)

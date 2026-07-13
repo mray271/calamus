@@ -225,11 +225,21 @@ def test_render_glfm_color_chips_replaces_inline_hex_code():
     assert "<code>#FF0000</code>" in result
 
 
-def test_render_glfm_color_chips_leaves_non_hex_code_unchanged():
+def test_render_glfm_color_chips_replaces_inline_color_function_code():
     from calamus.renderer import _render_glfm_color_chips
 
     result = _render_glfm_color_chips("<p>See <code>RGB(255, 0, 0)</code>.</p>")
+    assert 'class="glfm-color-chip"' in result
+    assert "glfm-color-chip-swatch" in result
+    assert "background-color: rgb(255, 0, 0)" in result
     assert "<code>RGB(255, 0, 0)</code>" in result
+
+
+def test_render_glfm_color_chips_leaves_invalid_color_function_code_unchanged():
+    from calamus.renderer import _render_glfm_color_chips
+
+    result = _render_glfm_color_chips("<p>See <code>RGBA(255, 0, 0, 2)</code>.</p>")
+    assert "<code>RGBA(255, 0, 0, 2)</code>" in result
     assert 'class="glfm-color-chip"' not in result
 
 
