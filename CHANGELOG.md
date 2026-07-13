@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `--pipe-base-path PATH` lets piped Markdown resolve relative links from an assumed file or directory path instead of `/`
 
+## [0.4.0] - 2026-07-12
+
+### Added
+- GLFM compatibility taxonomy in `README.md` now clearly classifies extensions as **Supported**, **Graceful fail-over**, **Not planned**, or **Available**
+- GLFM table of contents token (`[[_TOC_]]`) now renders as a linked TOC built from document headings
+- GLFM alerts (`> [!note]`, `> [!warning]`, etc.) now render as semantic/styled alert blockquotes
+- GLFM emoji shortcodes (known Tanuki set, e.g. `:smile:`) now render as Unicode emoji
+- GLFM color chips now support inline CSS functional color literals (`rgb()`, `rgba()`, `hsl()`, `hsla()`) in addition to hex literals
+
 ## [0.3.0] - 2026-07-12
 
 ### Added
