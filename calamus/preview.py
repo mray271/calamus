@@ -57,14 +57,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     font-family: "NotoSymbols2";
     src: local("Noto Sans Symbols 2"), local("NotoSansSymbols2"),
          local("Unifont Upper"), local("Unifont CSUR");
-    unicode-range: U+1F700-U+1F77F, U+1F780-U+1F7FF, U+1F800-U+1F8FF,
-                   U+2300-U+23FF, U+2600-U+26FF, U+2700-U+27BF;
+    unicode-range: U+1F700-U+1F77F, U+1F780-U+1F7FF, U+1F800-U+1F8FF;
   }}
   @font-face {{
     font-family: "NotoSymbols";
     src: local("Noto Sans Symbols"), local("NotoSansSymbols");
-    unicode-range: U+2100-U+214F, U+2190-U+21FF, U+2200-U+22FF,
-                   U+2300-U+23FF, U+25A0-U+25FF, U+2600-U+26FF;
+    unicode-range: U+2100-U+214F, U+2190-U+21FF, U+2200-U+22FF, U+2300-U+23FF;
   }}
   :root {{
     --bg: #ffffff;
@@ -96,7 +94,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       --alert-bg: rgba(255, 255, 255, 0.06);
     }}
   }}
-  body {{ font-family: "Noto Sans", "DejaVu Sans", "NotoSymbols2", "NotoSymbols", sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
+  body {{ font-family: "Noto Sans", "DejaVu Sans", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Emoji", "NotoSymbols2", "NotoSymbols", sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
   a {{ color: var(--link-color); }}
   code {{ background: var(--code-bg); padding: 2px 4px; border-radius: 3px; font-family: monospace; }}
   pre {{ background: var(--code-bg); padding: 1em; border-radius: 4px; overflow-x: auto; }}

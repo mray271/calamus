@@ -36,7 +36,7 @@ RUN dnf update -y && dnf install -y \
     chromium \
     google-noto-sans-fonts \
     google-noto-sans-symbols2-fonts \
-    google-noto-emoji-fonts \
+    google-noto-color-emoji-fonts \
     unifont-fonts \
     && dnf clean all
 

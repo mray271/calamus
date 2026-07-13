@@ -13,6 +13,7 @@ BUILDDIR ?= builddir
 # Dependencies required on the host before installing:
 #   Fedora:  sudo dnf install python3-gobject gtk4 libadwaita gtksourceview5 \
 #                             python3-mistune python3-weasyprint python3-odfpy \
+#                             google-noto-color-emoji-fonts \
 #                             meson ninja-build
 #   Ubuntu:  sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
 #                             gir1.2-adw-1 gir1.2-gtksource-5 \
