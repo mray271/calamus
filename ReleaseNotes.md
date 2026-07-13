@@ -1,8 +1,9 @@
 # Release Notes
 
-## Unreleased — Next Release
+## v0.4.0 — Private pre-public release (draft)
 
-This is the initial release of Calamus, a GTK4 Markdown editor for GNOME.
+This is the first private release milestone of Calamus, focused on GLFM support
+quality and predictable fallback behavior ahead of public launch.
 
 ### Highlights
 
@@ -11,6 +12,14 @@ This is the initial release of Calamus, a GTK4 Markdown editor for GNOME.
 - **Full formatting menu** — apply Markdown syntax to selections without remembering syntax
 - **Export** — save your documents as HTML, PDF, or ODT
 - **Cross-distro** — works on Fedora, Ubuntu, Debian, Mint, and openSUSE
+- **GLFM maturity updates** — TOC, alerts, emoji shortcodes, and functional color chips (`rgb`/`rgba`/`hsl`/`hsla`) now render as supported features
+
+### Known limitations (pre-public)
+
+- GitLab references/placeholders remain intentionally out of scope without live
+  GitLab project/server context.
+- Include directives remain intentionally disabled for local safety.
+- Features still marked as graceful fail-over are readable but not fully rendered.
 
 ---
 
