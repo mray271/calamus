@@ -23,6 +23,19 @@ def _slugify(text: str) -> str:
 
 
 _HEADING_RE = re.compile(r"(<h([1-6])>)(.*?)(</h[1-6]>)", re.DOTALL)
+_BLOCKQUOTE_RE = re.compile(r"<blockquote>\s*(.*?)\s*</blockquote>", re.DOTALL)
+_FIRST_PARAGRAPH_RE = re.compile(r"\s*<p>(.*?)</p>", re.DOTALL)
+_ALERT_MARKER_RE = re.compile(
+    r"^\[!(note|tip|important|caution|warning)\](?:[ \t]+(.+))?$",
+    re.IGNORECASE,
+)
+_ALERT_DEFAULT_TITLES = {
+    "note": "Note",
+    "tip": "Tip",
+    "important": "Important",
+    "caution": "Caution",
+    "warning": "Warning",
+}
 
 
 def _add_heading_ids(html_text: str) -> str:
@@ -44,6 +57,61 @@ def _add_heading_ids(html_text: str) -> str:
         return m.group(0)
 
     return _HEADING_RE.sub(_repl, html_text)
+
+
+def _strip_tags(text: str) -> str:
+    return re.sub(r"<[^>]+>", "", text)
+
+
+def _render_glfm_alerts(html_text: str) -> str:
+    """Convert GLFM alert blockquotes to semantic alert HTML."""
+    if not isinstance(html_text, str):
+        return html_text
+
+    def _repl(match: re.Match[str]) -> str:
+        inner = match.group(1)
+        first_paragraph = _FIRST_PARAGRAPH_RE.match(inner)
+        if not first_paragraph:
+            return match.group(0)
+
+        first_paragraph_html = first_paragraph.group(1)
+        first_line_html, _, body_from_first_paragraph = first_paragraph_html.partition(
+            "\n"
+        )
+        first_line_text = html.unescape(_strip_tags(first_line_html)).strip()
+        marker = _ALERT_MARKER_RE.match(first_line_text)
+        if not marker:
+            return match.group(0)
+
+        alert_type = marker.group(1).lower()
+        custom_title = (marker.group(2) or "").strip()
+        title = html.escape(custom_title or _ALERT_DEFAULT_TITLES[alert_type])
+
+        body_from_first_paragraph = re.sub(
+            r"^(<br\s*/?>\s*)+",
+            "",
+            body_from_first_paragraph.lstrip(),
+            flags=re.IGNORECASE,
+        )
+        rest = inner[first_paragraph.end() :].strip()
+        body_parts: list[str] = []
+        if body_from_first_paragraph.strip():
+            body_parts.append(f"<p>{body_from_first_paragraph}</p>")
+        if rest:
+            body_parts.append(rest)
+        joined_body = "\n".join(body_parts)
+        body = f"\n{joined_body}\n" if joined_body else "\n"
+
+        return (
+            f'<blockquote class="glfm-alert glfm-alert-{alert_type}">\n'
+            f'<p class="glfm-alert-title">{title}</p>{body}</blockquote>'
+        )
+
+    return _BLOCKQUOTE_RE.sub(_repl, html_text)
+
+
+def _postprocess_rendered_html(html_text: str) -> str:
+    return _add_heading_ids(_render_glfm_alerts(html_text))
 
 
 class AbstractMarkdownRenderer(ABC):
@@ -81,7 +149,7 @@ class MistuneRenderer(AbstractMarkdownRenderer):
 
     def render_preprocessed(self, text: str) -> str:
         """Run mistune on *text* without any Mermaid preprocessing."""
-        return _add_heading_ids(self._renderer(text))
+        return _postprocess_rendered_html(self._renderer(text))
 
     def render(self, text: str) -> str:
         from calamus.mermaid_support import (
@@ -91,10 +159,10 @@ class MistuneRenderer(AbstractMarkdownRenderer):
 
         if SubprocessMermaidRenderer().is_available():
             text = preprocess_markdown_for_static_export(text)
-            return _add_heading_ids(self._renderer(text))
+            return _postprocess_rendered_html(self._renderer(text))
 
         prepared = self._prepare_mermaid_blocks(text)
-        return _add_heading_ids(self._renderer(prepared))
+        return _postprocess_rendered_html(self._renderer(prepared))
 
     def get_version(self) -> str:
         return getattr(mistune, "__version__", "unknown")

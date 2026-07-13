@@ -73,6 +73,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     --blockquote-color: #666666;
     --blockquote-border: #cccccc;
     --link-color: #0066cc;
+    --alert-note-border: #3b82f6;
+    --alert-tip-border: #10b981;
+    --alert-important-border: #8b5cf6;
+    --alert-caution-border: #f59e0b;
+    --alert-warning-border: #ef4444;
+    --alert-bg: rgba(127, 127, 127, 0.08);
   }}
   @media (prefers-color-scheme: dark) {{
     :root {{
@@ -82,6 +88,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       --blockquote-color: #aaaaaa;
       --blockquote-border: #555555;
       --link-color: #6699cc;
+      --alert-note-border: #60a5fa;
+      --alert-tip-border: #34d399;
+      --alert-important-border: #a78bfa;
+      --alert-caution-border: #fbbf24;
+      --alert-warning-border: #f87171;
+      --alert-bg: rgba(255, 255, 255, 0.06);
     }}
   }}
   body {{ font-family: "Noto Sans", "DejaVu Sans", "NotoSymbols2", "NotoSymbols", sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
@@ -90,6 +102,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   pre {{ background: var(--code-bg); padding: 1em; border-radius: 4px; overflow-x: auto; }}
   pre.mermaid {{ background: transparent; padding: 0; }}
   blockquote {{ border-left: 4px solid var(--blockquote-border); margin: 0; padding-left: 1em; color: var(--blockquote-color); }}
+  .glfm-alert {{ margin: 0; padding: 0.5em 0 0.5em 1em; color: var(--fg); background: var(--alert-bg); border-radius: 0 4px 4px 0; }}
+  .glfm-alert-title {{ margin: 0 0 0.35em; font-weight: 700; color: var(--fg); }}
+  .glfm-alert-note {{ border-left-color: var(--alert-note-border); }}
+  .glfm-alert-tip {{ border-left-color: var(--alert-tip-border); }}
+  .glfm-alert-important {{ border-left-color: var(--alert-important-border); }}
+  .glfm-alert-caution {{ border-left-color: var(--alert-caution-border); }}
+  .glfm-alert-warning {{ border-left-color: var(--alert-warning-border); }}
   img {{ max-width: 100%; }}
   /* Explicit sub/sup sizing — WebKit's UA default (font-size: smaller ≈ 83%)
      is not visually distinct enough, especially for symbol glyphs.

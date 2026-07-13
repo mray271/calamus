@@ -348,8 +348,7 @@ class TestTableOfContents:
 # 9. Alerts (> [!note], > [!warning], etc.)
 # ===========================================================================
 # GLFM renders styled alert boxes for blockquotes starting with [!TYPE].
-# Calamus should render these as plain blockquotes at minimum.
-# Case 1 — Graceful fail-over (renders as <blockquote> with content).
+# Case 2 — Supported.
 
 
 class TestAlerts:
@@ -360,6 +359,8 @@ class TestAlerts:
         f"""Alert type '[!{alert_type}]' must not crash."""
         md = f"> [!{alert_type}]\n> Alert body text.\n"
         html = assert_no_crash(md)
+        assert f"glfm-alert-{alert_type}" in html
+        assert "[!" not in html
 
     def test_alert_body_text_is_visible(self):
         """The alert body text must be present in the rendered output."""
@@ -367,23 +368,26 @@ class TestAlerts:
         html = render(md)
         assert "This is a note" in html
 
-    def test_alert_renders_as_blockquote_at_minimum(self):
-        """Alert should render inside a <blockquote> tag."""
+    def test_alert_renders_as_styled_blockquote(self):
+        """Alert should render as a semantic GLFM alert blockquote."""
         md = "> [!warning]\n> Be careful.\n"
         html = render(md)
-        assert "<blockquote>" in html
+        assert '<blockquote class="glfm-alert glfm-alert-warning">' in html
+        assert '<p class="glfm-alert-title">Warning</p>' in html
 
-    def test_alert_with_custom_title_does_not_crash(self):
-        """> [!warning] Custom Title must not crash."""
+    def test_alert_with_custom_title_renders_title(self):
+        """> [!warning] Custom Title should become the alert title."""
         md = "> [!warning] Data deletion\n> This is dangerous.\n"
-        html = assert_no_crash(md)
+        html = render(md)
+        assert '<p class="glfm-alert-title">Data deletion</p>' in html
         assert "This is dangerous" in html
 
     def test_multiline_alert_content_visible(self):
         """Multi-line alert body text must appear in output."""
         md = "> [!note]\n> Line one.\n> Line two.\n"
-        html = assert_no_crash(md)
+        html = render(md)
         assert "Line one" in html
+        assert "Line two" in html
 
 
 # ===========================================================================
