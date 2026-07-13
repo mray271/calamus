@@ -79,7 +79,7 @@ documents every GLFM-only feature:
 | **Math** (`$...$`, `$$...$$`, `` ```math `` ) | 🔧 Available | Add `"math"` plugin if available; currently graceful fail-over (LaTeX source visible) |
 | **Table of contents** (`[[_TOC_]]`) | ✅ Supported | Generates a linked TOC from document headings |
 | **Alerts** (`> [!note]`, `> [!warning]`, …) | ✅ Supported | Rendered as semantic/styled alert blockquotes |
-| **Color chips** (`` `#FF0000` ``) | ⚠️ Graceful fail-over | Renders as `<code>` without color swatch |
+| **Color chips** (`` `#FF0000` ``) | ✅ Supported | Inline hex color literals render with a visual swatch plus code text |
 | **Emoji shortcodes** (`:smile:`) | ✅ Supported | Known Tanuki shortcodes render as Unicode emoji (color depends on installed system fonts); unknown shortcodes remain literal |
 | **YAML / TOML / JSON front matter** | ⚠️ Graceful fail-over | Document body renders correctly |
 | **Include directives** (`::include{file=…}`) | ⚠️ Graceful fail-over | No file embedding (intentional) |

@@ -392,43 +392,51 @@ class TestAlerts:
 
 
 # ===========================================================================
-# 10. Color chips (`#RRGGBB`, `RGB(...)`, `HSL(...)`)
+# 10. Color chips (`#RRGGBB` and other hex forms)
 # ===========================================================================
 # GLFM renders a small color swatch next to color codes in backticks.
-# Calamus renders them as plain inline code — that is acceptable.
-# Case 1 — Graceful fail-over (render as <code>).
+# Calamus supports inline hex literals as color chips with code fallback.
+# Case 2 — Supported.
 
 
 class TestColorChips:
     @pytest.mark.parametrize(
-        "color_code",
+        "hex_code",
         [
             "#FF0000",
             "#F00",
+            "#0F08",
             "#FF0000AA",
+        ],
+    )
+    def test_hex_color_code_renders_color_chip(self, hex_code: str):
+        """Hex color code in backticks renders a swatch and code text."""
+        html = render(f"Color: `{hex_code}`")
+        assert 'class="glfm-color-chip"' in html
+        assert "glfm-color-chip-swatch" in html
+        assert f"<code>{hex_code}</code>" in html
+
+    def test_hex_color_chip_has_accessible_label(self):
+        """Rendered color chip should include an accessible aria-label."""
+        html = render("See `#FF0000`.")
+        assert 'aria-label="Color swatch #FF0000"' in html
+
+    @pytest.mark.parametrize(
+        "non_hex_color_code",
+        [
             "RGB(255, 0, 0)",
             "RGBA(255, 0, 0, 0.5)",
             "HSL(0, 100%, 50%)",
             "HSLA(0, 100%, 50%, 0.3)",
         ],
     )
-    def test_color_code_in_backticks_does_not_crash(self, color_code: str):
-        """Color codes in backticks must not crash."""
-        html = assert_no_crash(f"Color: `{color_code}`")
-
-    def test_color_code_rendered_as_inline_code(self):
-        """Color code in backticks must produce at least a <code> element."""
-        html = render("See `#FF0000`.")
-        assert "<code>" in html
-        assert "FF0000" in html
-
-    def test_color_code_no_chip_element(self):
-        """Without GLFM support, no dedicated color chip span is expected."""
-        html = render("See `#00FF00`.")
-        # Should be just a <code> — no complex color chip markup
-        assert "<code>" in html
-        # Verify no crash and content present
-        assert "00FF00" in html
+    def test_non_hex_color_code_keeps_plain_code_fallback(
+        self, non_hex_color_code: str
+    ):
+        """Non-hex color syntax remains plain inline code as graceful fallback."""
+        html = render(f"Color: `{non_hex_color_code}`")
+        assert f"<code>{non_hex_color_code}</code>" in html
+        assert 'class="glfm-color-chip"' not in html
 
 
 # ===========================================================================
