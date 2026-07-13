@@ -208,6 +208,39 @@ def test_render_glfm_emoji_shortcodes_non_string_passthrough():
     assert result == 42
 
 
+def test_render_glfm_color_chips_non_string_passthrough():
+    from calamus.renderer import _render_glfm_color_chips
+
+    result = _render_glfm_color_chips(42)
+    assert result == 42
+
+
+def test_render_glfm_color_chips_replaces_inline_hex_code():
+    from calamus.renderer import _render_glfm_color_chips
+
+    result = _render_glfm_color_chips("<p>See <code>#FF0000</code>.</p>")
+    assert 'class="glfm-color-chip"' in result
+    assert "glfm-color-chip-swatch" in result
+    assert "background-color: #ff0000" in result
+    assert "<code>#FF0000</code>" in result
+
+
+def test_render_glfm_color_chips_leaves_non_hex_code_unchanged():
+    from calamus.renderer import _render_glfm_color_chips
+
+    result = _render_glfm_color_chips("<p>See <code>RGB(255, 0, 0)</code>.</p>")
+    assert "<code>RGB(255, 0, 0)</code>" in result
+    assert 'class="glfm-color-chip"' not in result
+
+
+def test_render_glfm_color_chips_skips_fenced_code_blocks():
+    from calamus.renderer import _render_glfm_color_chips
+
+    result = _render_glfm_color_chips("<pre><code>#00FF00</code></pre>")
+    assert "<pre><code>#00FF00</code></pre>" in result
+    assert 'class="glfm-color-chip"' not in result
+
+
 def test_render_glfm_emoji_shortcodes_replaces_known_shortcode():
     from calamus.renderer import _render_glfm_emoji_shortcodes
 

@@ -107,6 +107,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .glfm-alert-important {{ border-left-color: var(--alert-important-border); }}
   .glfm-alert-caution {{ border-left-color: var(--alert-caution-border); }}
   .glfm-alert-warning {{ border-left-color: var(--alert-warning-border); }}
+  .glfm-color-chip {{ display: inline-flex; align-items: center; gap: 0.35em; }}
+  .glfm-color-chip-swatch {{
+    width: 0.85em;
+    height: 0.85em;
+    border-radius: 2px;
+    border: 1px solid var(--blockquote-border);
+    flex: 0 0 auto;
+  }}
   img {{ max-width: 100%; }}
   /* Explicit sub/sup sizing — WebKit's UA default (font-size: smaller ≈ 83%)
      is not visually distinct enough, especially for symbol glyphs.

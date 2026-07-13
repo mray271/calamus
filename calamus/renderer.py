@@ -54,6 +54,9 @@ _GLFM_TOC_MARKER_RE = re.compile(
     r"<p>\s*\[\[\s*<em>\s*toc\s*</em>\s*\]\]\s*</p>",
     re.IGNORECASE,
 )
+_GLFM_COLOR_HEX_RE = re.compile(
+    r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+)
 _EMOJI_SHORTCODE_RE = re.compile(r":([a-z0-9+\-][a-z0-9_+\-]*):", re.IGNORECASE)
 _EMOJI_EXCLUDED_TAGS = {"code", "pre", "script", "style"}
 # Curated local subset of GitLab/Tanuki emoji shortcodes.
@@ -271,6 +274,76 @@ def _render_glfm_toc(html_text: str) -> str:
     return _GLFM_TOC_MARKER_RE.sub(toc_html, html_text)
 
 
+def _render_glfm_color_chips(html_text: str) -> str:
+    """Render GLFM inline hex color literals in <code> as visual color chips."""
+    if not isinstance(html_text, str):
+        return html_text
+
+    chunks: list[str] = []
+    pre_depth = 0
+    pending_code_open_tag: str | None = None
+    pending_code_tokens: list[str] = []
+
+    for token in _TEXT_OR_TAG_RE.findall(html_text):
+        if pending_code_open_tag is not None:
+            if token.startswith("</code"):
+                raw_literal = html.unescape("".join(pending_code_tokens))
+                if _GLFM_COLOR_HEX_RE.fullmatch(raw_literal):
+                    safe_literal = html.escape(raw_literal)
+                    safe_color = html.escape(raw_literal.lower(), quote=True)
+                    safe_label = html.escape(f"Color swatch {raw_literal}", quote=True)
+                    chunks.append(
+                        '<span class="glfm-color-chip" role="img" '
+                        f'aria-label="{safe_label}">'
+                        '<span class="glfm-color-chip-swatch" '
+                        f'style="background-color: {safe_color};"></span>'
+                        f"<code>{safe_literal}</code>"
+                        "</span>"
+                    )
+                else:
+                    chunks.append(pending_code_open_tag)
+                    chunks.extend(pending_code_tokens)
+                    chunks.append(token)
+
+                pending_code_open_tag = None
+                pending_code_tokens = []
+            else:
+                pending_code_tokens.append(token)
+            continue
+
+        if token.startswith("<"):
+            tag_match = _TAG_NAME_RE.match(token)
+            if tag_match:
+                tag_name = tag_match.group(1).lower()
+                is_closing = token.startswith("</")
+                is_self_closing = token.rstrip().endswith("/>")
+                if tag_name == "pre":
+                    if is_closing:
+                        pre_depth = max(0, pre_depth - 1)
+                    elif not is_self_closing:
+                        pre_depth += 1
+                elif (
+                    tag_name == "code"
+                    and pre_depth == 0
+                    and not is_closing
+                    and not is_self_closing
+                ):
+                    pending_code_open_tag = token
+                    pending_code_tokens = []
+                    continue
+
+            chunks.append(token)
+            continue
+
+        chunks.append(token)
+
+    if pending_code_open_tag is not None:
+        chunks.append(pending_code_open_tag)
+        chunks.extend(pending_code_tokens)
+
+    return "".join(chunks)
+
+
 def _render_glfm_emoji_shortcodes(html_text: str) -> str:
     """Replace known GLFM emoji shortcodes with Unicode emoji."""
     if not isinstance(html_text, str):
@@ -311,9 +384,11 @@ def _render_glfm_emoji_shortcodes(html_text: str) -> str:
 
 def _postprocess_rendered_html(html_text: str) -> str:
     return _render_glfm_emoji_shortcodes(
-        _render_glfm_toc(
-            _add_heading_ids(
-                _render_glfm_alerts(_linkify_extended_autolinks(html_text))
+        _render_glfm_color_chips(
+            _render_glfm_toc(
+                _add_heading_ids(
+                    _render_glfm_alerts(_linkify_extended_autolinks(html_text))
+                )
             )
         )
     )
