@@ -36,6 +36,16 @@ _ALERT_DEFAULT_TITLES = {
     "caution": "Caution",
     "warning": "Warning",
 }
+_TEXT_OR_TAG_RE = re.compile(r"(<[^>]+>|[^<]+)")
+_TAG_NAME_RE = re.compile(r"^</?\s*([a-zA-Z0-9]+)")
+_WWW_URL_RE = re.compile(
+    r"(?<![\w@])" r"(www\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:/[^\s<]*)?)"
+)
+_EMAIL_RE = re.compile(
+    r"(?<![\w.+-])" r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})" r"(?![\w@])"
+)
+_LINKIFY_EXCLUDED_TAGS = {"a", "code", "pre", "script", "style"}
+_TRAILING_PUNCTUATION = ".,:;!?)"
 
 
 def _add_heading_ids(html_text: str) -> str:
@@ -61,6 +71,67 @@ def _add_heading_ids(html_text: str) -> str:
 
 def _strip_tags(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text)
+
+
+def _split_trailing_punctuation(text: str) -> tuple[str, str]:
+    trimmed = text
+    trailing = ""
+    while trimmed and trimmed[-1] in _TRAILING_PUNCTUATION:
+        trailing = trimmed[-1] + trailing
+        trimmed = trimmed[:-1]
+    return trimmed, trailing
+
+
+def _linkify_plain_text_segment(text: str) -> str:
+    def _www_repl(match: re.Match[str]) -> str:
+        raw = match.group(1)
+        url_text, trailing = _split_trailing_punctuation(raw)
+        if not url_text:
+            return raw
+        href = html.escape(f"https://{html.unescape(url_text)}", quote=True)
+        return f'<a href="{href}">{url_text}</a>{trailing}'
+
+    def _email_repl(match: re.Match[str]) -> str:
+        raw = match.group(1)
+        email_text, trailing = _split_trailing_punctuation(raw)
+        if not email_text:
+            return raw
+        href = html.escape(f"mailto:{html.unescape(email_text)}", quote=True)
+        return f'<a href="{href}">{email_text}</a>{trailing}'
+
+    text = _WWW_URL_RE.sub(_www_repl, text)
+    return _EMAIL_RE.sub(_email_repl, text)
+
+
+def _linkify_extended_autolinks(html_text: str) -> str:
+    """Linkify GFM extended autolinks (www. URLs and bare emails)."""
+    if not isinstance(html_text, str):
+        return html_text
+
+    open_counts = {tag: 0 for tag in _LINKIFY_EXCLUDED_TAGS}
+    chunks: list[str] = []
+
+    for token in _TEXT_OR_TAG_RE.findall(html_text):
+        if token.startswith("<"):
+            tag_match = _TAG_NAME_RE.match(token)
+            if tag_match:
+                tag_name = tag_match.group(1).lower()
+                if tag_name in open_counts:
+                    is_closing = token.startswith("</")
+                    is_self_closing = token.rstrip().endswith("/>")
+                    if is_closing:
+                        open_counts[tag_name] = max(0, open_counts[tag_name] - 1)
+                    elif not is_self_closing:
+                        open_counts[tag_name] += 1
+            chunks.append(token)
+            continue
+
+        if any(count > 0 for count in open_counts.values()):
+            chunks.append(token)
+        else:
+            chunks.append(_linkify_plain_text_segment(token))
+
+    return "".join(chunks)
 
 
 def _render_glfm_alerts(html_text: str) -> str:
@@ -111,7 +182,7 @@ def _render_glfm_alerts(html_text: str) -> str:
 
 
 def _postprocess_rendered_html(html_text: str) -> str:
-    return _add_heading_ids(_render_glfm_alerts(html_text))
+    return _add_heading_ids(_render_glfm_alerts(_linkify_extended_autolinks(html_text)))
 
 
 class AbstractMarkdownRenderer(ABC):

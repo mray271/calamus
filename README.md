@@ -52,7 +52,7 @@ GFM defines exactly five extensions over CommonMark
 | **Tables** (pipe syntax) | ✅ Supported | Via mistune `table` plugin |
 | **Strikethrough** (`~~text~~`) | ✅ Supported | Via mistune `strikethrough` plugin |
 | **Extended autolinks** (bare `https://`, `http://`) | ✅ Supported | Via mistune `url` plugin |
-| **Extended autolinks** (`www.` URLs, bare emails) | ⚠️ Graceful fail-over | Text visible; no broken HTML |
+| **Extended autolinks** (`www.` URLs, bare emails) | ✅ Supported | Linkified as `https://www...` and `mailto:` |
 | **Task list items** (`- [x]`, `- [ ]`) | 🔧 Available | Add `"task_lists"` plugin |
 | **Disallowed raw HTML** (`<script>`, `<iframe>`, …) | ⚠️ Known divergence | Calamus renders local author content; HTML passes through unfiltered (no sanitisation needed for a desktop editor) |
 
