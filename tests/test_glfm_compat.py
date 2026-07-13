@@ -317,8 +317,7 @@ class TestMathEquations:
 # 8. Table of contents ([[_TOC_]])
 # ===========================================================================
 # GLFM generates an auto-linked TOC when [[_TOC_]] appears on its own line.
-# Calamus does not implement this feature.
-# Case 1 — Graceful fail-over: [[_TOC_]] appears as text or a link, no crash.
+# Case 2 — Supported.
 
 
 class TestTableOfContents:
@@ -326,15 +325,16 @@ class TestTableOfContents:
         """[[_TOC_]] on its own line must not crash."""
         md = "# Heading\n\n[[_TOC_]]\n\n## Section\n"
         html = assert_no_crash(md)
+        assert '<nav class="table-of-contents glfm-toc">' in html
 
-    def test_toc_tag_does_not_generate_actual_toc(self):
-        """With no TOC support, no <nav> or multi-link TOC list is expected."""
+    def test_toc_tag_generates_linked_toc(self):
+        """[[_TOC_]] should generate a TOC nav with links to headings."""
         md = "# H1\n\n[[_TOC_]]\n\n## Section A\n\n## Section B\n"
         html = render(md)
-        # The document must not produce a structured TOC element
-        # We verify the headings aren't duplicated into a TOC list
-        assert html.count("Section A") == 1
-        assert html.count("Section B") == 1
+        assert '<nav class="table-of-contents glfm-toc">' in html
+        assert '<a href="#h1">H1</a>' in html
+        assert '<a href="#section-a">Section A</a>' in html
+        assert '<a href="#section-b">Section B</a>' in html
 
     def test_toc_tag_content_around_it_renders(self):
         """Headings and paragraphs around [[_TOC_]] must still render."""
@@ -342,6 +342,7 @@ class TestTableOfContents:
         html = assert_no_crash(md)
         assert "MARKER" in html
         assert "Some paragraph" in html
+        assert "[[<em>TOC</em>]]" not in html
 
 
 # ===========================================================================
