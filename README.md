@@ -78,7 +78,7 @@ documents every GLFM-only feature:
 | **JSON tables** (`` ```json:table ``` ``) | ⚠️ Graceful fail-over | Rendered as plain code block |
 | **Math** (`$...$`, `$$...$$`, `` ```math `` ) | 🔧 Available | Add `"math"` plugin if available; currently graceful fail-over (LaTeX source visible) |
 | **Table of contents** (`[[_TOC_]]`) | ⚠️ Graceful fail-over | No TOC generated; text passes through |
-| **Alerts** (`> [!note]`, `> [!warning]`, …) | ⚠️ Graceful fail-over | Renders as standard `<blockquote>` |
+| **Alerts** (`> [!note]`, `> [!warning]`, …) | ✅ Supported | Rendered as semantic/styled alert blockquotes |
 | **Color chips** (`` `#FF0000` ``) | ⚠️ Graceful fail-over | Renders as `<code>` without color swatch |
 | **Emoji shortcodes** (`:smile:`) | ⚠️ Graceful fail-over | Rendered as plain text |
 | **YAML / TOML / JSON front matter** | ⚠️ Graceful fail-over | Document body renders correctly |
