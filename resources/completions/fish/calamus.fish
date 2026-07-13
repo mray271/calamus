@@ -2,6 +2,7 @@
 # Install to: /usr/share/fish/vendor_completions.d/calamus.fish
 
 complete -c calamus -s p -l preview -d 'Open in read-only preview mode'
+complete -c calamus -l pipe-base-path -d 'Base path for resolving relative links in piped input'
 complete -c calamus -l help              -d 'Show help options'
 complete -c calamus -l help-all          -d 'Show all help options'
 complete -c calamus -l help-gapplication -d 'Show GApplication options'

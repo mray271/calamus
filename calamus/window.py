@@ -104,6 +104,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         self,
         theme_manager: ThemeManager | None = None,
         pipe_content: str | None = None,
+        pipe_base_path: str | None = None,
         initial_files: list[str] | None = None,
         preview_mode: bool = False,
         **kwargs,
@@ -122,6 +123,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         self._pipe_content = pipe_content
         self._pipe_mode = pipe_content is not None
         self._pipe_saved_content: str | None = None
+        self._pipe_base_path = pipe_base_path
         self._preview_mode = preview_mode
         self._build_ui()
         self._build_actions()
@@ -130,7 +132,9 @@ class CalamusWindow(Adw.ApplicationWindow):
             if self._pipe_content is not None:
                 tab = self.tab_manager.get_current_tab()
                 if tab is not None:
-                    tab.load_content(self._pipe_content)
+                    tab.load_content(
+                        self._pipe_content, preview_base_path=self._pipe_base_path
+                    )
             elif initial_files:
                 for path in initial_files:
                     self.tab_manager.open_file(path)
@@ -233,7 +237,9 @@ class CalamusWindow(Adw.ApplicationWindow):
         """Load piped content and configure the window for stdin→stdout editing."""
         tab = self.tab_manager.get_current_tab()
         if tab is not None:
-            tab.load_content(self._pipe_content or "")
+            tab.load_content(
+                self._pipe_content or "", preview_base_path=self._pipe_base_path
+            )
 
         self.set_title("Calamus — Pipe Mode")
 

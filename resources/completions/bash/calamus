@@ -8,7 +8,7 @@ _calamus() {
     case "$cur" in
         -*)
             COMPREPLY=($(compgen -W \
-                "-p --preview --help --help-all --help-gapplication" \
+                "-p --preview --pipe-base-path --help --help-all --help-gapplication" \
                 -- "$cur"))
             return
             ;;
