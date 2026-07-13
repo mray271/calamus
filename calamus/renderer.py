@@ -23,6 +23,10 @@ def _slugify(text: str) -> str:
 
 
 _HEADING_RE = re.compile(r"(<h([1-6])>)(.*?)(</h[1-6]>)", re.DOTALL)
+_HEADING_WITH_ID_RE = re.compile(
+    r"<h([1-6])[^>]*\sid=\"([^\"]+)\"[^>]*>(.*?)</h\1>",
+    re.DOTALL,
+)
 _BLOCKQUOTE_RE = re.compile(r"<blockquote>\s*(.*?)\s*</blockquote>", re.DOTALL)
 _FIRST_PARAGRAPH_RE = re.compile(r"\s*<p>(.*?)</p>", re.DOTALL)
 _ALERT_MARKER_RE = re.compile(
@@ -46,6 +50,10 @@ _EMAIL_RE = re.compile(
 )
 _LINKIFY_EXCLUDED_TAGS = {"a", "code", "pre", "script", "style"}
 _TRAILING_PUNCTUATION = ".,:;!?)"
+_GLFM_TOC_MARKER_RE = re.compile(
+    r"<p>\s*\[\[\s*<em>\s*toc\s*</em>\s*\]\]\s*</p>",
+    re.IGNORECASE,
+)
 
 
 def _add_heading_ids(html_text: str) -> str:
@@ -181,8 +189,38 @@ def _render_glfm_alerts(html_text: str) -> str:
     return _BLOCKQUOTE_RE.sub(_repl, html_text)
 
 
+def _render_glfm_toc(html_text: str) -> str:
+    """Replace GLFM [[_TOC_]] marker paragraphs with a generated TOC nav."""
+    if not isinstance(html_text, str):
+        return html_text
+
+    headings: list[tuple[int, str, str]] = []
+    for match in _HEADING_WITH_ID_RE.finditer(html_text):
+        level = int(match.group(1))
+        heading_id = match.group(2)
+        heading_text = html.unescape(_strip_tags(match.group(3))).strip()
+        if not heading_text:
+            continue
+        headings.append((level, heading_id, heading_text))
+
+    if not headings:
+        return _GLFM_TOC_MARKER_RE.sub("", html_text)
+
+    items = "\n".join(
+        (
+            f'<li class="toc-level-{level}"><a href="#{html.escape(heading_id, quote=True)}">'
+            f"{html.escape(heading_text)}</a></li>"
+        )
+        for level, heading_id, heading_text in headings
+    )
+    toc_html = f'<nav class="table-of-contents glfm-toc">\n<ul>\n{items}\n</ul>\n</nav>'
+    return _GLFM_TOC_MARKER_RE.sub(toc_html, html_text)
+
+
 def _postprocess_rendered_html(html_text: str) -> str:
-    return _add_heading_ids(_render_glfm_alerts(_linkify_extended_autolinks(html_text)))
+    return _render_glfm_toc(
+        _add_heading_ids(_render_glfm_alerts(_linkify_extended_autolinks(html_text)))
+    )
 
 
 class AbstractMarkdownRenderer(ABC):

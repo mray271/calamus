@@ -77,7 +77,7 @@ documents every GLFM-only feature:
 | **Multiline blockquote** (`>>>`) | ⚠️ Graceful fail-over | Content visible as plain text |
 | **JSON tables** (`` ```json:table ``` ``) | ⚠️ Graceful fail-over | Rendered as plain code block |
 | **Math** (`$...$`, `$$...$$`, `` ```math `` ) | 🔧 Available | Add `"math"` plugin if available; currently graceful fail-over (LaTeX source visible) |
-| **Table of contents** (`[[_TOC_]]`) | ⚠️ Graceful fail-over | No TOC generated; text passes through |
+| **Table of contents** (`[[_TOC_]]`) | ✅ Supported | Generates a linked TOC from document headings |
 | **Alerts** (`> [!note]`, `> [!warning]`, …) | ✅ Supported | Rendered as semantic/styled alert blockquotes |
 | **Color chips** (`` `#FF0000` ``) | ⚠️ Graceful fail-over | Renders as `<code>` without color swatch |
 | **Emoji shortcodes** (`:smile:`) | ⚠️ Graceful fail-over | Rendered as plain text |

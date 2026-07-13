@@ -184,6 +184,23 @@ def test_add_heading_ids_empty_slug_preserves_original():
     assert result == html
 
 
+def test_render_glfm_toc_non_string_passthrough():
+    from calamus.renderer import _render_glfm_toc
+
+    result = _render_glfm_toc(42)
+    assert result == 42
+
+
+def test_render_glfm_toc_replaces_marker_with_nav():
+    from calamus.renderer import _render_glfm_toc
+
+    html = '<h1 id="heading">Heading</h1>\n<p>[[<em>TOC</em>]]</p>\n'
+    result = _render_glfm_toc(html)
+    assert '<nav class="table-of-contents glfm-toc">' in result
+    assert '<a href="#heading">Heading</a>' in result
+    assert "[[<em>TOC</em>]]" not in result
+
+
 def test_renderer_render_fallback_path_when_mmdc_unavailable(monkeypatch):
     from calamus.mermaid_support import SubprocessMermaidRenderer
     from calamus.renderer import MistuneRenderer
