@@ -201,6 +201,37 @@ def test_render_glfm_toc_replaces_marker_with_nav():
     assert "[[<em>TOC</em>]]" not in result
 
 
+def test_render_glfm_emoji_shortcodes_non_string_passthrough():
+    from calamus.renderer import _render_glfm_emoji_shortcodes
+
+    result = _render_glfm_emoji_shortcodes(42)
+    assert result == 42
+
+
+def test_render_glfm_emoji_shortcodes_replaces_known_shortcode():
+    from calamus.renderer import _render_glfm_emoji_shortcodes
+
+    result = _render_glfm_emoji_shortcodes("<p>Hello :smile: and :+1:</p>")
+    assert "😄" in result
+    assert "👍" in result
+    assert ":smile:" not in result
+
+
+def test_render_glfm_emoji_shortcodes_preserves_unknown_shortcode():
+    from calamus.renderer import _render_glfm_emoji_shortcodes
+
+    result = _render_glfm_emoji_shortcodes("<p>Hello :not_real_emoji:</p>")
+    assert ":not_real_emoji:" in result
+
+
+def test_render_glfm_emoji_shortcodes_skips_code_and_pre():
+    from calamus.renderer import _render_glfm_emoji_shortcodes
+
+    result = _render_glfm_emoji_shortcodes("<code>:smile:</code><pre>:rocket:</pre>")
+    assert "<code>:smile:</code>" in result
+    assert "<pre>:rocket:</pre>" in result
+
+
 def test_renderer_render_fallback_path_when_mmdc_unavailable(monkeypatch):
     from calamus.mermaid_support import SubprocessMermaidRenderer
     from calamus.renderer import MistuneRenderer

@@ -25,6 +25,7 @@ pip.  Install the build tools (`meson`, `ninja-build`) the same way.
 sudo dnf install \
     python3-gobject gtk4 libadwaita gtksourceview5 \
     python3-mistune python3-weasyprint python3-odfpy \
+    google-noto-color-emoji-fonts \
     meson ninja-build
 ```
 

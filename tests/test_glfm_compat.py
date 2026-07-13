@@ -435,33 +435,42 @@ class TestColorChips:
 # 11. Emoji shortcodes (:smile:, :+1:, etc.)
 # ===========================================================================
 # GLFM converts :emoji_name: shortcodes to emoji images or Unicode codepoints.
-# Calamus does not implement this; shortcodes appear as plain text.
-# Case 1 — Graceful fail-over.
+# Calamus resolves a curated local Tanuki shortcode map to Unicode emoji.
+# Unknown shortcodes remain as literal text.
+# Case 2 — Supported.
 
 
 class TestEmojiShortcodes:
-    def test_basic_emoji_shortcode_does_not_crash(self):
-        """:smile: shortcode must not crash."""
-        html = assert_no_crash("I am :smile: today.")
+    def test_basic_emoji_shortcode_renders_unicode(self):
+        """:smile: resolves to Unicode emoji."""
+        html = render("I am :smile: today.")
+        assert "😄" in html
+        assert ":smile:" not in html
 
-    def test_emoji_shortcode_text_preserved(self):
-        """The emoji shortcode text must appear somewhere in the output."""
+    def test_multiple_supported_shortcodes_render(self):
+        """Known shortcodes convert to Unicode emoji."""
         html = render("React with :+1: or :heart:.")
-        # Without emoji support the colons and name will be in the output
-        assert "+1" in html or "heart" in html or "React with" in html
+        assert "👍" in html
+        assert "❤️" in html
 
-    def test_emoji_does_not_produce_broken_html(self):
-        """:emoji: must not produce a broken <img> tag pointing nowhere."""
-        html = render("Here :rocket: goes.")
-        # If no emoji support, we should NOT have an <img> with empty src
-        assert '<img src=""' not in html
-        assert "<img src=''" not in html
+    def test_unknown_shortcode_is_preserved(self):
+        """Unknown shortcodes remain literal text as graceful fallback."""
+        html = render("This remains :not_a_real_emoji:.")
+        assert ":not_a_real_emoji:" in html
 
-    def test_multiple_emoji_shortcodes_do_not_crash(self):
-        """Multiple emoji in one paragraph must not crash."""
+    def test_multiple_emoji_shortcodes_render(self):
+        """Multiple known shortcodes in one paragraph resolve to emoji."""
         md = ":tada: :bug: :heart: :100:"
-        html = assert_no_crash(md)
-        assert isinstance(html, str)
+        html = render(md)
+        assert "🎉" in html
+        assert "🐛" in html
+        assert "❤️" in html
+        assert "💯" in html
+
+    def test_emoji_shortcodes_not_converted_inside_code_spans(self):
+        """Inline code should preserve literal shortcode text."""
+        html = render("Use `:smile:` in docs.")
+        assert "<code>:smile:</code>" in html
 
 
 # ===========================================================================

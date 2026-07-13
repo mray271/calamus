@@ -54,6 +54,60 @@ _GLFM_TOC_MARKER_RE = re.compile(
     r"<p>\s*\[\[\s*<em>\s*toc\s*</em>\s*\]\]\s*</p>",
     re.IGNORECASE,
 )
+_EMOJI_SHORTCODE_RE = re.compile(r":([a-z0-9+\-][a-z0-9_+\-]*):", re.IGNORECASE)
+_EMOJI_EXCLUDED_TAGS = {"code", "pre", "script", "style"}
+# Curated local subset of GitLab/Tanuki emoji shortcodes.
+# To add support for a new request, append shortcode -> Unicode entries here
+# (include common aliases when relevant), keep unknown shortcodes as literals,
+# and update tests in tests/test_glfm_compat.py and tests/test_renderer.py.
+_GLFM_EMOJI_SHORTCODES = {
+    "+1": "👍",
+    "-1": "👎",
+    "100": "💯",
+    "angry": "😠",
+    "blush": "😊",
+    "bug": "🐛",
+    "calendar": "📆",
+    "checkered_flag": "🏁",
+    "clap": "👏",
+    "confused": "😕",
+    "cry": "😢",
+    "eyes": "👀",
+    "fire": "🔥",
+    "grin": "😁",
+    "grinning": "😀",
+    "heart": "❤️",
+    "heart_eyes": "😍",
+    "heavy_check_mark": "✔️",
+    "hourglass": "⌛",
+    "joy": "😂",
+    "laughing": "😆",
+    "link": "🔗",
+    "mag": "🔍",
+    "memo": "📝",
+    "minus1": "👎",
+    "no_entry_sign": "🚫",
+    "ok_hand": "👌",
+    "open_file_folder": "📂",
+    "pencil2": "✏️",
+    "point_up": "☝️",
+    "question": "❓",
+    "rocket": "🚀",
+    "see_no_evil": "🙈",
+    "smile": "😄",
+    "sparkles": "✨",
+    "star": "⭐",
+    "sunglasses": "😎",
+    "tada": "🎉",
+    "thinking": "🤔",
+    "thumbsup": "👍",
+    "thumbsdown": "👎",
+    "triangular_flag_on_post": "🚩",
+    "warning": "⚠️",
+    "wave": "👋",
+    "white_check_mark": "✅",
+    "x": "❌",
+}
 
 
 def _add_heading_ids(html_text: str) -> str:
@@ -217,9 +271,51 @@ def _render_glfm_toc(html_text: str) -> str:
     return _GLFM_TOC_MARKER_RE.sub(toc_html, html_text)
 
 
+def _render_glfm_emoji_shortcodes(html_text: str) -> str:
+    """Replace known GLFM emoji shortcodes with Unicode emoji."""
+    if not isinstance(html_text, str):
+        return html_text
+
+    open_counts = {tag: 0 for tag in _EMOJI_EXCLUDED_TAGS}
+    chunks: list[str] = []
+
+    def _replace_shortcodes(text: str) -> str:
+        def _repl(match: re.Match[str]) -> str:
+            shortcode = match.group(1).lower()
+            return _GLFM_EMOJI_SHORTCODES.get(shortcode, match.group(0))
+
+        return _EMOJI_SHORTCODE_RE.sub(_repl, text)
+
+    for token in _TEXT_OR_TAG_RE.findall(html_text):
+        if token.startswith("<"):
+            tag_match = _TAG_NAME_RE.match(token)
+            if tag_match:
+                tag_name = tag_match.group(1).lower()
+                if tag_name in open_counts:
+                    is_closing = token.startswith("</")
+                    is_self_closing = token.rstrip().endswith("/>")
+                    if is_closing:
+                        open_counts[tag_name] = max(0, open_counts[tag_name] - 1)
+                    elif not is_self_closing:
+                        open_counts[tag_name] += 1
+            chunks.append(token)
+            continue
+
+        if any(count > 0 for count in open_counts.values()):
+            chunks.append(token)
+        else:
+            chunks.append(_replace_shortcodes(token))
+
+    return "".join(chunks)
+
+
 def _postprocess_rendered_html(html_text: str) -> str:
-    return _render_glfm_toc(
-        _add_heading_ids(_render_glfm_alerts(_linkify_extended_autolinks(html_text)))
+    return _render_glfm_emoji_shortcodes(
+        _render_glfm_toc(
+            _add_heading_ids(
+                _render_glfm_alerts(_linkify_extended_autolinks(html_text))
+            )
+        )
     )
 
 
