@@ -344,11 +344,10 @@ class TestStrikethroughExtension:
 # CommonMark already supports <URL> angle-bracket autolinks.
 # GFM adds the *extended* form: bare https/http URLs, www., and emails.
 #
-# Calamus has the mistune 'url' plugin which handles bare https/http URLs.
-# www. and email autolinks may or may not be supported.
+# Calamus has the mistune 'url' plugin for bare https/http URLs and extends
+# post-processing to support www. URLs and bare email autolinks.
 #
-# Case 2 — Supported for https/http bare URLs (via 'url' plugin).
-# Case 1 — Graceful fail-over for www. and email autolinks.
+# Case 2 — Supported.
 
 
 class TestAutolinksExtension:
@@ -401,34 +400,28 @@ class TestAutolinksExtension:
 
     # ---- GFM extended: www. URLs ----
 
-    def test_bare_www_url_does_not_crash(self):
-        """A bare www. URL must not crash."""
-        html = assert_no_crash("Visit www.example.com today.")
-        assert isinstance(html, str)
+    def test_bare_www_url_becomes_link(self):
+        """A bare www. URL must be auto-linked."""
+        html = render("Visit www.example.com today.")
+        assert '<a href="https://www.example.com">' in html
+        assert ">www.example.com</a>" in html
 
-    def test_bare_www_url_content_visible(self):
-        """www.example.com must appear in the output in some form."""
-        html = render("Go to www.example.com now.")
-        assert "example.com" in html
+    def test_bare_www_url_with_trailing_period(self):
+        """Trailing punctuation must not be included in www. autolink href."""
+        html = render("Go to www.example.com.")
+        assert '<a href="https://www.example.com">www.example.com</a>.' in html
 
     # ---- GFM extended: email autolinks ----
 
-    def test_bare_email_does_not_crash(self):
-        """A bare email address must not crash."""
-        html = assert_no_crash("Contact me at user@example.com anytime.")
-        assert isinstance(html, str)
-
-    def test_bare_email_content_visible(self):
-        """A bare email address text must be visible in the output."""
+    def test_bare_email_becomes_link(self):
+        """A bare email address must be auto-linked."""
         html = render("Write to admin@example.org.")
-        assert "example.org" in html or "admin" in html
+        assert '<a href="mailto:admin@example.org">admin@example.org</a>' in html
 
-    def test_bare_email_not_linked_without_angle_brackets_is_acceptable(self):
-        """If bare emails aren't linked, that is acceptable graceful fail-over."""
-        html = render("Email someone@example.com directly.")
-        # Either a link or plain text is acceptable — must not produce broken HTML
-        assert "someone" in html or "example.com" in html
-        assert '<a href=""' not in html  # no broken empty links
+    def test_bare_email_with_trailing_parenthesis(self):
+        """Trailing punctuation must not be included in email autolink href."""
+        html = render("Email (someone@example.com).")
+        assert '<a href="mailto:someone@example.com">someone@example.com</a>).'
 
     # ---- Multiple URLs in same paragraph ----
 
@@ -443,9 +436,10 @@ class TestAutolinksExtension:
 
     def test_explicit_link_still_works_alongside_autolinks(self):
         """[text](url) explicit links must still work with the url plugin."""
-        html = render("[Example](https://example.com)")
+        html = render("[Example](https://example.com) and www.example.com")
         assert "<a" in html
         assert "https://example.com" in html
+        assert "https://www.example.com" in html
 
 
 # ===========================================================================
