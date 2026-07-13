@@ -20,13 +20,16 @@ A GTK4 Markdown editor for GNOME — clean, fast, and compatible with Fedora, Ub
 
 Calamus renders Markdown using [mistune 3](https://github.com/lepture/mistune)
 (a CommonMark-based parser).  The table below shows which extensions from
-popular Markdown flavours are supported and which gracefully fail over.
+popular Markdown flavours are supported, gracefully fail over, or are
+intentionally not planned.
 
 **Key:**
 - ✅ **Supported** — renders as the spec intends
 - ⚠️ **Graceful fail-over** — no crash; text content visible; surrounding
   document renders correctly (GLFM/GFM/ExtraMark-specific markup may appear
   as plain text)
+- 🚫 **Not planned** — intentionally out of scope for a local editor (requires
+  GitLab server/project context or would need unsafe local behavior)
 - 🔧 **Available** — the underlying mistune 3 plugin exists; enable by adding
   the plugin name to `MistuneRenderer.__init__()` in `calamus/renderer.py`
 
@@ -70,7 +73,7 @@ documents every GLFM-only feature:
 | **Pipe tables** | ✅ Supported | Same as GFM |
 | **Strikethrough** | ✅ Supported | Same as GFM |
 | **URL autolinks** | ✅ Supported | Same as GFM |
-| **GitLab references** (`#123`, `@user`, `!123`, `~label`, `%milestone`) | ⚠️ Graceful fail-over | Rendered as plain text; no GitLab context in editor |
+| **GitLab references** (`#123`, `@user`, `!123`, `~label`, `%milestone`) | 🚫 Not planned | Requires live GitLab project/server context to resolve |
 | **Inline diff** (`{+ addition +}`, `{- deletion -}`) | ⚠️ Graceful fail-over | Text visible |
 | **Description lists** | 🔧 Available | Add `"def_list"` plugin |
 | **Task list inapplicable** (`- [~]`) | ⚠️ Graceful fail-over | `[~]` text visible (standard `[x]`/`[ ]` also 🔧 Available) |
@@ -82,9 +85,12 @@ documents every GLFM-only feature:
 | **Color chips** (`` `#FF0000` ``) | ✅ Supported | Inline hex color literals render with a visual swatch plus code text |
 | **Emoji shortcodes** (`:smile:`) | ✅ Supported | Known Tanuki shortcodes render as Unicode emoji (color depends on installed system fonts); unknown shortcodes remain literal |
 | **YAML / TOML / JSON front matter** | ⚠️ Graceful fail-over | Document body renders correctly |
-| **Include directives** (`::include{file=…}`) | ⚠️ Graceful fail-over | No file embedding (intentional) |
-| **Placeholders** (`%{project_name}`, …) | ⚠️ Graceful fail-over | Not resolved (no GitLab context) |
+| **Include directives** (`::include{file=…}`) | 🚫 Not planned | Local file embedding is intentionally disabled for safety |
+| **Placeholders** (`%{project_name}`, …) | 🚫 Not planned | Requires live GitLab project/server context to resolve |
 | **Mermaid diagrams** (`` ```mermaid `` ) | ✅ Supported | See [Mermaid Support](#mermaid-diagram-support) below |
+
+For table readability, 🚫 rows use short wording in the Status column.
+Feature-specific rationale is kept in the Notes column and section prose.
 
 ---
 
