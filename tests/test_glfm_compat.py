@@ -2,14 +2,19 @@
 
 GitLab Flavored Markdown (GLFM) extends CommonMark with features not found in
 standard Markdown. For each such feature, this suite verifies that Calamus
-falls into one of two categories:
+falls into one of three categories:
 
   Case 1 — Graceful fail-over:
     The renderer does not crash, produces valid (non-broken) HTML, and the
     rest of the document still renders correctly.  The GLFM-specific syntax
     may appear as plain text or inside a <code> block — that is acceptable.
 
-  Case 2 — Supported:
+  Case 2 — Not planned:
+    The feature is intentionally out of scope for a local editor because it
+    requires live GitLab server/project context or unsafe local behavior.
+    Expected behavior is still graceful pass-through without crashes.
+
+  Case 3 — Supported:
     The rendered HTML approximates what GitLab would produce for the feature.
 
 Reference:
@@ -54,7 +59,7 @@ def assert_surrounding_content_intact(html: str, marker: str = "MARKER") -> None
 # ===========================================================================
 # GLFM turns #123, @user, !123, ~label, %milestone etc. into links.
 # Calamus has no GitLab context, so these should pass through as plain text.
-# Case 1 — Graceful fail-over.
+# Case 2 — Not planned.
 
 
 class TestGitLabReferences:
@@ -526,7 +531,7 @@ class TestFrontMatter:
 # ===========================================================================
 # GLFM supports embedding other documents via ::include directives.
 # Calamus does not implement this; the directive should appear as text.
-# Case 1 — Graceful fail-over.
+# Case 2 — Not planned.
 
 
 class TestIncludes:
@@ -555,7 +560,7 @@ class TestIncludes:
 # ===========================================================================
 # GLFM fills in placeholders at render time from project context.
 # Calamus has no GitLab context; placeholders should appear as literal text.
-# Case 1 — Graceful fail-over.
+# Case 2 — Not planned.
 
 
 class TestPlaceholders:
