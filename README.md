@@ -92,7 +92,7 @@ documents every GLFM-only feature:
 For table readability, 🚫 rows use short wording in the Status column.
 Feature-specific rationale is kept in the Notes column and section prose.
 
-### Known limitations (v0.4.0 private release)
+### Known limitations (v0.4.0)
 
 - GitLab references and placeholders (`#123`, `@user`, `%{project_name}`, etc.) are intentionally **not planned** because they require live GitLab server/project context.
 - GitLab include directives are intentionally **not planned** for local rendering safety.
@@ -535,6 +535,7 @@ docs/              Documentation and screenshots
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Please also review [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## License
 

@@ -65,7 +65,9 @@ Formatting is enforced by CI — unformatted PRs will fail.
 ## Branch Naming
 
 - `feature/short-description` — new features
-- `fix/short-description` — bug fixes
+- `bugfix/short-description` — bug fixes
+- `hotfix/short-description` — urgent production fixes
+- `release/version-or-milestone` — release preparation work
 - `chore/short-description` — maintenance tasks
 - `docs/short-description` — documentation only
 
