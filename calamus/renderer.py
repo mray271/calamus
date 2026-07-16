@@ -80,10 +80,9 @@ _EMOJI_EXCLUDED_TAGS = {"code", "pre", "script", "style"}
 _ADJACENT_FOOTNOTE_SUP_RE = re.compile(
     r"(</a>)\s*(</sup>)\s*(?=<sup class=\"footnote-ref\")"
 )
-_FOOTNOTE_SUPERSCRIPT_RUN_BEFORE_PUNCTUATION_RE = re.compile(
-    r'((?:<sup class="footnote-ref"[^>]*>.*?</sup>\s*)+)([.,;:!?])',
-    re.DOTALL,
-)
+_FOOTNOTE_SUP_OPEN = '<sup class="footnote-ref"'
+_FOOTNOTE_SUP_CLOSE = "</sup>"
+_PUNCTUATION_AFTER_FOOTNOTES = ".,;:!?"
 # Curated local subset of GitLab/Tanuki emoji shortcodes.
 # To add support for a new request, append shortcode -> Unicode entries here
 # (include common aliases when relevant), keep unknown shortcodes as literals,
@@ -420,7 +419,43 @@ def _place_footnote_superscripts_after_punctuation(html_text: str) -> str:
     """Move trailing punctuation ahead of adjacent footnote superscripts."""
     if not isinstance(html_text, str):
         return html_text
-    return _FOOTNOTE_SUPERSCRIPT_RUN_BEFORE_PUNCTUATION_RE.sub(r"\2\1", html_text)
+    chunks: list[str] = []
+    cursor = 0
+    text_length = len(html_text)
+
+    while cursor < text_length:
+        start = html_text.find(_FOOTNOTE_SUP_OPEN, cursor)
+        if start == -1:
+            chunks.append(html_text[cursor:])
+            break
+
+        chunks.append(html_text[cursor:start])
+        run_cursor = start
+        run_parts: list[str] = []
+
+        while html_text.startswith(_FOOTNOTE_SUP_OPEN, run_cursor):
+            close_index = html_text.find(_FOOTNOTE_SUP_CLOSE, run_cursor)
+            if close_index == -1:
+                chunks.append(html_text[start:])
+                return "".join(chunks)
+
+            close_end = close_index + len(_FOOTNOTE_SUP_CLOSE)
+            run_parts.append(html_text[run_cursor:close_end])
+            run_cursor = close_end
+
+        if (
+            run_cursor < text_length
+            and html_text[run_cursor] in _PUNCTUATION_AFTER_FOOTNOTES
+        ):
+            chunks.append(html_text[run_cursor])
+            chunks.append("".join(run_parts))
+            cursor = run_cursor + 1
+            continue
+
+        chunks.append("".join(run_parts))
+        cursor = run_cursor
+
+    return "".join(chunks)
 
 
 def _postprocess_rendered_html(html_text: str) -> str:
