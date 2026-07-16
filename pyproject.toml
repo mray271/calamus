@@ -23,7 +23,7 @@ classifiers = [
     # GTK 4.22.4+ required (Fedora 44+, Ubuntu 25.04+, Debian 13+, openSUSE Tumbleweed)
 ]
 dependencies = [
-    "mistune>=3.0",
+    "mistune>=3.3.3",
     "weasyprint>=61.0",
     "odfpy>=1.4",
     "pygobject>=3.56.3",
