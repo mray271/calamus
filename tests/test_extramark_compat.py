@@ -258,33 +258,40 @@ class TestHeadingAnchors:
 #   :   Second definition
 #
 # Renders as <dl><dt>Term</dt><dd>First definition</dd><dd>…</dd></dl>
-# mistune has a 'def_list' plugin but it is NOT enabled in Calamus.
-# Case 1 — Graceful fail-over: text content visible, no crash.
+# Calamus enables this via the mistune 'def_list' plugin.
+# Case 2 — Supported.
 
 
 class TestDefinitionLists:
     def test_simple_definition_does_not_crash(self):
         """A basic term + definition must not crash."""
-        html = assert_no_crash("Python\n:   A programming language\n")
+        html = render("Python\n:   A programming language\n")
+        assert "<dl>" in html
+        assert "<dt>Python</dt>" in html
+        assert "<dd>A programming language</dd>" in html
         assert "Python" in html
 
     def test_definition_text_visible(self):
         """The definition text must appear in the output."""
         html = render("HTML\n:   HyperText Markup Language\n")
-        assert "HyperText" in html or "HTML" in html
+        assert "<dl>" in html
+        assert "<dd>HyperText Markup Language</dd>" in html
 
     def test_multiple_definitions_per_term(self):
         """Multiple definitions under one term must not crash."""
         md = "Cat\n:   A small feline\n:   A domesticated animal\n"
-        html = assert_no_crash(md)
-        assert "Cat" in html
+        html = render(md)
+        assert "<dl>" in html
+        assert html.count("<dd>") == 2
+        assert "<dt>Cat</dt>" in html
 
     def test_multiple_terms_do_not_crash(self):
         """Multiple term/definition blocks must not crash."""
         md = "Apple\n:   A fruit\n\nBanana\n:   Another fruit\n"
-        html = assert_no_crash(md)
-        assert "Apple" in html
-        assert "Banana" in html
+        html = render(md)
+        assert "<dl>" in html
+        assert "<dt>Apple</dt>" in html
+        assert "<dt>Banana</dt>" in html
 
     def test_definition_list_does_not_break_following_heading(self):
         """A heading after a definition list must still render."""

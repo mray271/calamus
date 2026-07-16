@@ -6,7 +6,7 @@ import os
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 import gi
 
@@ -77,6 +77,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     --alert-caution-border: #f59e0b;
     --alert-warning-border: #ef4444;
     --alert-bg: rgba(127, 127, 127, 0.08);
+    --mark-bg: #fcf8e3;
   }}
   @media (prefers-color-scheme: dark) {{
     :root {{
@@ -92,6 +93,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       --alert-caution-border: #fbbf24;
       --alert-warning-border: #f87171;
       --alert-bg: rgba(255, 255, 255, 0.06);
+      --mark-bg: #6a6233;
     }}
   }}
   body {{ font-family: "Noto Sans", "DejaVu Sans", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Emoji", "NotoSymbols2", "NotoSymbols", sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
@@ -108,12 +110,29 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .glfm-alert-caution {{ border-left-color: var(--alert-caution-border); }}
   .glfm-alert-warning {{ border-left-color: var(--alert-warning-border); }}
   .glfm-color-chip {{ display: inline-flex; align-items: center; gap: 0.35em; }}
+  mark {{
+    background: var(--mark-bg);
+    color: inherit;
+  }}
   .glfm-color-chip-swatch {{
     width: 0.85em;
     height: 0.85em;
     border-radius: 2px;
     border: 1px solid var(--blockquote-border);
     flex: 0 0 auto;
+  }}
+  li.task-list-item {{
+    list-style: none;
+  }}
+  li.task-list-item::marker {{
+    content: "";
+  }}
+  li.task-list-item > .task-list-item-checkbox {{
+    margin-right: 0.45em;
+    vertical-align: middle;
+  }}
+  dt {{
+    font-weight: 700;
   }}
   img {{ max-width: 100%; }}
   /* Explicit sub/sup sizing — WebKit's UA default (font-size: smaller ≈ 83%)
@@ -144,6 +163,22 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
+
+
+def _is_same_document_file_anchor(path: str, base_uri: str) -> bool:
+    """Return True when a file:// URL path points at the current preview document."""
+    if path in ("", "/"):
+        return True
+    if not base_uri.startswith("file://"):
+        return False
+
+    base_path = unquote(urlparse(base_uri).path)
+    if not base_path:
+        return False
+
+    normalized_path = os.path.normpath(path)
+    normalized_base = os.path.normpath(base_path)
+    return normalized_path == normalized_base
 
 
 class AbstractPreview(ABC):
@@ -232,26 +267,29 @@ class WebKitPreview(AbstractPreview):
         if decision_type != _WebKitModule.PolicyDecisionType.NAVIGATION_ACTION:
             decision.use()
             return
+
         nav_action = decision.get_navigation_action()
+        uri = nav_action.get_request().get_uri()
+        if uri.startswith("file://"):
+            raw_path = unquote(uri[len("file://") :])
+            path, _, fragment = raw_path.partition("#")
+            # Same-document anchor links must be handled manually because
+            # load_bytes pages do not reliably scroll by URL fragment alone.
+            if fragment and _is_same_document_file_anchor(path, self._base_uri):
+                decision.ignore()
+                self._scroll_to_anchor(fragment)
+                return
+
         if (
             nav_action.get_navigation_type()
             != _WebKitModule.NavigationType.LINK_CLICKED
         ):
             decision.use()
             return
-        uri = nav_action.get_request().get_uri()
 
         if uri.startswith("file://"):
             raw_path = unquote(uri[len("file://") :])
             path, _, fragment = raw_path.partition("#")
-            # Pure anchor link — path resolves to the current directory.
-            # WebKit can't scroll within load_bytes pages by URL fragment, so
-            # we do it explicitly with JavaScript.
-            if not path or os.path.isdir(path):
-                decision.ignore()
-                if fragment:
-                    self._scroll_to_anchor(fragment)
-                return
             decision.ignore()
             if self._on_open_path is not None:
                 self._on_open_path(path)

@@ -56,7 +56,7 @@ GFM defines exactly five extensions over CommonMark
 | **Strikethrough** (`~~text~~`) | ✅ Supported | Via mistune `strikethrough` plugin |
 | **Extended autolinks** (bare `https://`, `http://`) | ✅ Supported | Via mistune `url` plugin |
 | **Extended autolinks** (`www.` URLs, bare emails) | ✅ Supported | Linkified as `https://www...` and `mailto:` |
-| **Task list items** (`- [x]`, `- [ ]`) | 🔧 Available | Add `"task_lists"` plugin |
+| **Task list items** (`- [x]`, `- [ ]`) | ✅ Supported | Via mistune `task_lists` plugin |
 | **Disallowed raw HTML** (`<script>`, `<iframe>`, …) | ⚠️ Known divergence | Calamus renders local author content; HTML passes through unfiltered (no sanitisation needed for a desktop editor) |
 
 ---
@@ -75,8 +75,8 @@ documents every GLFM-only feature:
 | **URL autolinks** | ✅ Supported | Same as GFM |
 | **GitLab references** (`#123`, `@user`, `!123`, `~label`, `%milestone`) | 🚫 Not planned | Requires live GitLab project/server context to resolve |
 | **Inline diff** (`{+ addition +}`, `{- deletion -}`) | ⚠️ Graceful fail-over | Text visible |
-| **Description lists** | 🔧 Available | Add `"def_list"` plugin |
-| **Task list inapplicable** (`- [~]`) | ⚠️ Graceful fail-over | `[~]` text visible (standard `[x]`/`[ ]` also 🔧 Available) |
+| **Description lists** | ✅ Supported | Via mistune `def_list` plugin |
+| **Task list inapplicable** (`- [~]`) | ⚠️ Graceful fail-over | `[~]` remains plain text; standard `[x]`/`[ ]` task lists are supported |
 | **Multiline blockquote** (`>>>`) | ⚠️ Graceful fail-over | Content visible as plain text |
 | **JSON tables** (`` ```json:table ``` ``) | ⚠️ Graceful fail-over | Rendered as plain code block |
 | **Math** (`$...$`, `$$...$$`, `` ```math `` ) | 🔧 Available | Add `"math"` plugin if available; currently graceful fail-over (LaTeX source visible) |
@@ -110,16 +110,23 @@ portable extension standard
 |---|---|---|
 | **Tables** | ✅ Supported | Same GFM pipe-table syntax |
 | **Typographic replacements** (`---`, `...`, `(c)`, `(tm)`) | ⚠️ Graceful fail-over | ASCII forms preserved; no typographer pass |
-| **Heading anchors** (id= + self-link for h1–h3) | ⚠️ Graceful fail-over | Headings render without `id=` attribute |
-| **Definition lists** | 🔧 Available | Add `"def_list"` plugin |
+| **Heading anchors** (id= + self-link for h1–h3) | ⚠️ Partial support | Calamus adds heading `id` attributes (including `{#custom-id}`), but does not render self-link anchor wrappers |
+| **Definition lists** | ✅ Supported | Via mistune `def_list` plugin |
 | **Superscript** (`x^2^`) | 🔧 Available | Add `"superscript"` plugin |
 | **Subscript** (`H~2~O`) | 🔧 Available | Add `"subscript"` plugin; single `~` does NOT trigger `~~` strikethrough |
 | **Abbreviations** (`*[HTML]: expansion`) | 🔧 Available | Add `"abbr"` plugin |
 | **Footnotes** (`[^1]`) | 🔧 Available | Add `"footnotes"` plugin |
 | **Critic Markup** (`{++ ++}`, `{-- --}`, `{~~ ~> ~~}`, `{== ==}`, `{>> <<}`) | ⚠️ Graceful fail-over | No mistune plugin; text content visible |
 
-> **Enabling 🔧 Available plugins:** All six plugins (`task_lists`, `def_list`,
-> `footnotes`, `abbr`, `superscript`, `subscript`) ship with mistune 3 and
+### Markdown Guide extras
+
+| Extension | Status | Notes |
+|---|---|---|
+| **Heading IDs** (`### Heading {#custom-id}`) | ✅ Supported | Explicit heading IDs are parsed; headings without explicit IDs still receive deterministic slug IDs |
+| **Highlight** (`==text==`) | ✅ Supported | Via mistune `mark` plugin (`<mark>...</mark>`) |
+
+> **Enabling 🔧 Available plugins:** Remaining optional plugins (`footnotes`,
+> `abbr`, `superscript`, `subscript`) ship with mistune 3 and
 > require no extra dependencies.  Add the plugin name string to the `plugins`
 > list in `MistuneRenderer.__init__()` in `calamus/renderer.py`.  The
 > corresponding compatibility tests in `tests/test_gfm_compat.py` and

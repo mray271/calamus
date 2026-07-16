@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Directory tree traversal now follows valid symlinked directories while safely preventing symlink cycles and pathological recursion budgets from crashing the app
 - Footnote references now render as separate clickable superscripts with superscript commas, and sentence punctuation is placed before the footnote superscript run
 - Resolved CodeQL findings by hardening workflow token permissions and replacing URL substring assertions with structured URL/host checks in tests
+- Extended-syntax support now includes task lists, definition lists, Markdown Guide heading IDs (`{#custom-id}`), and `==highlight==` mark rendering
+- Preview now hides list bullets for task-list checkboxes, renders definition-list terms in bold, supports same-document heading anchor scrolling, and uses a softer desaturated yellow highlight color
 
 ## [0.4.0] - 2026-07-12
 

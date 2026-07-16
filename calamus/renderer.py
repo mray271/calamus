@@ -23,6 +23,7 @@ def _slugify(text: str) -> str:
 
 
 _HEADING_RE = re.compile(r"(<h([1-6])>)(.*?)(</h[1-6]>)", re.DOTALL)
+_CUSTOM_HEADING_ID_RE = re.compile(r"\s*\{#([A-Za-z][A-Za-z0-9_.:-]*)\}\s*$")
 _HEADING_WITH_ID_RE = re.compile(
     r"<h([1-6])[^>]*\sid=\"([^\"]+)\"[^>]*>(.*?)</h\1>",
     re.DOTALL,
@@ -143,16 +144,17 @@ def _add_heading_ids(html_text: str) -> str:
         return html_text
 
     def _repl(m: re.Match) -> str:
-        open_tag, level, inner, close_tag = (
-            m.group(1),
-            m.group(2),
-            m.group(3),
-            m.group(4),
-        )
-        plain = re.sub(r"<[^>]+>", "", inner)
-        slug = _slugify(plain)
-        if slug:
-            return f'<h{level} id="{slug}">{inner}{close_tag}'
+        level, inner, close_tag = m.group(2), m.group(3), m.group(4)
+        id_match = _CUSTOM_HEADING_ID_RE.search(inner)
+        if id_match:
+            heading_id = id_match.group(1)
+            inner = _CUSTOM_HEADING_ID_RE.sub("", inner)
+        else:
+            plain = re.sub(r"<[^>]+>", "", inner)
+            heading_id = _slugify(plain)
+        if heading_id:
+            safe_heading_id = html.escape(heading_id, quote=True)
+            return f'<h{level} id="{safe_heading_id}">{inner}{close_tag}'
         return m.group(0)
 
     return _HEADING_RE.sub(_repl, html_text)
@@ -495,22 +497,24 @@ class MistuneRenderer(AbstractMarkdownRenderer):
         # TODO: Enable additional mistune 3 plugins for full ExtraMark support.
         # The following plugins ship with mistune 3 and only need to be added
         # to the list below — no extra dependencies required:
-        #   "task_lists"  – GFM task-list checkboxes  (- [x] / - [ ])
-        #   "def_list"    – ExtraMark definition lists (Term\n:   Definition)
         #   "abbr"        – ExtraMark abbreviations   (*[HTML]: expansion)
         # See: tests/test_extramark_compat.py and tests/test_gfm_compat.py
         # "superscript" and "subscript" are already enabled (x^2^, H~2~O,
         # and scientific notation such as M~🜨~ for Earth mass).
         # "footnotes" is enabled for [^label] reference/definition support.
+        # "mark" enables Markdown Guide-style highlight syntax ==text==.
         self._renderer = mistune.create_markdown(
             renderer=mistune.HTMLRenderer(escape=False),
             plugins=[
                 "strikethrough",
                 "table",
                 "url",
+                "task_lists",
+                "def_list",
                 "subscript",
                 "superscript",
                 "footnotes",
+                "mark",
             ],
         )
 
