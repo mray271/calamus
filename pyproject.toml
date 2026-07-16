@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "calamus"
-version = "0.4.3"
+version = "0.4.4"
 description = "A GTK4 Markdown editor for GNOME"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
