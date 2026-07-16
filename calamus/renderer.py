@@ -77,6 +77,13 @@ _GLFM_COLOR_FUNCTION_RE = re.compile(
 )
 _EMOJI_SHORTCODE_RE = re.compile(r":([a-z0-9+\-][a-z0-9_+\-]*):", re.IGNORECASE)
 _EMOJI_EXCLUDED_TAGS = {"code", "pre", "script", "style"}
+_ADJACENT_FOOTNOTE_SUP_RE = re.compile(
+    r"(</a>)\s*(</sup>)\s*(?=<sup class=\"footnote-ref\")"
+)
+_FOOTNOTE_SUPERSCRIPT_RUN_BEFORE_PUNCTUATION_RE = re.compile(
+    r'((?:<sup class="footnote-ref"[^>]*>.*?</sup>\s*)+)([.,;:!?])',
+    re.DOTALL,
+)
 # Curated local subset of GitLab/Tanuki emoji shortcodes.
 # To add support for a new request, append shortcode -> Unicode entries here
 # (include common aliases when relevant), keep unknown shortcodes as literals,
@@ -402,12 +409,30 @@ def _render_glfm_emoji_shortcodes(html_text: str) -> str:
     return "".join(chunks)
 
 
+def _separate_adjacent_footnote_superscripts(html_text: str) -> str:
+    """Insert superscript commas between adjacent footnote references."""
+    if not isinstance(html_text, str):
+        return html_text
+    return _ADJACENT_FOOTNOTE_SUP_RE.sub(r"\1,\2", html_text)
+
+
+def _place_footnote_superscripts_after_punctuation(html_text: str) -> str:
+    """Move trailing punctuation ahead of adjacent footnote superscripts."""
+    if not isinstance(html_text, str):
+        return html_text
+    return _FOOTNOTE_SUPERSCRIPT_RUN_BEFORE_PUNCTUATION_RE.sub(r"\2\1", html_text)
+
+
 def _postprocess_rendered_html(html_text: str) -> str:
-    return _render_glfm_emoji_shortcodes(
-        _render_glfm_color_chips(
-            _render_glfm_toc(
-                _add_heading_ids(
-                    _render_glfm_alerts(_linkify_extended_autolinks(html_text))
+    return _place_footnote_superscripts_after_punctuation(
+        _separate_adjacent_footnote_superscripts(
+            _render_glfm_emoji_shortcodes(
+                _render_glfm_color_chips(
+                    _render_glfm_toc(
+                        _add_heading_ids(
+                            _render_glfm_alerts(_linkify_extended_autolinks(html_text))
+                        )
+                    )
                 )
             )
         )
@@ -437,14 +462,21 @@ class MistuneRenderer(AbstractMarkdownRenderer):
         # to the list below — no extra dependencies required:
         #   "task_lists"  – GFM task-list checkboxes  (- [x] / - [ ])
         #   "def_list"    – ExtraMark definition lists (Term\n:   Definition)
-        #   "footnotes"   – ExtraMark/GFM footnotes   ([^1] / [^1]: text)
         #   "abbr"        – ExtraMark abbreviations   (*[HTML]: expansion)
         # See: tests/test_extramark_compat.py and tests/test_gfm_compat.py
         # "superscript" and "subscript" are already enabled (x^2^, H~2~O,
         # and scientific notation such as M~🜨~ for Earth mass).
+        # "footnotes" is enabled for [^label] reference/definition support.
         self._renderer = mistune.create_markdown(
             renderer=mistune.HTMLRenderer(escape=False),
-            plugins=["strikethrough", "table", "url", "subscript", "superscript"],
+            plugins=[
+                "strikethrough",
+                "table",
+                "url",
+                "subscript",
+                "superscript",
+                "footnotes",
+            ],
         )
 
     def render_preprocessed(self, text: str) -> str:
