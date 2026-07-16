@@ -296,6 +296,72 @@ def test_html_template_has_explicit_sub_font_size():
     )
 
 
+def test_html_template_task_list_css_hides_bullets():
+    """Task-list checkboxes should render without list bullets in preview CSS."""
+    from calamus.preview import _HTML_TEMPLATE
+
+    page = _HTML_TEMPLATE.format(
+        body="x",
+        mermaid_script="",
+        color_scheme="light",
+        mermaid_theme="default",
+        highlight_css="",
+        highlight_script="",
+    )
+    assert "li.task-list-item" in page
+    assert "list-style: none" in page
+    assert "li.task-list-item::marker" in page
+
+
+def test_html_template_definition_term_css_is_bold():
+    """Definition-list terms should have explicit bold styling."""
+    from calamus.preview import _HTML_TEMPLATE
+
+    page = _HTML_TEMPLATE.format(
+        body="x",
+        mermaid_script="",
+        color_scheme="light",
+        mermaid_theme="default",
+        highlight_css="",
+        highlight_script="",
+    )
+    assert "dt {" in page
+    assert "font-weight: 700" in page
+
+
+def test_html_template_mark_uses_desaturated_theme_color():
+    """Markdown ==highlight== should use themed, desaturated mark colors."""
+    from calamus.preview import _HTML_TEMPLATE
+
+    page = _HTML_TEMPLATE.format(
+        body="x",
+        mermaid_script="",
+        color_scheme="light",
+        mermaid_theme="default",
+        highlight_css="",
+        highlight_script="",
+    )
+    assert "--mark-bg: #fcf8e3;" in page
+    assert "mark {" in page
+    assert "background: var(--mark-bg);" in page
+
+
+def test_same_document_anchor_detection_accepts_empty_or_root_path():
+    from calamus.preview import _is_same_document_file_anchor
+
+    assert _is_same_document_file_anchor("", "file:///tmp/project/")
+    assert _is_same_document_file_anchor("/", "file:///tmp/project/")
+
+
+def test_same_document_anchor_detection_matches_base_directory_path():
+    from calamus.preview import _is_same_document_file_anchor
+
+    assert _is_same_document_file_anchor("/tmp/project", "file:///tmp/project/")
+    assert not _is_same_document_file_anchor(
+        "/tmp/other-project", "file:///tmp/project/"
+    )
+
+
 def test_no_load_html_call_in_preview():
     """
     Regression guard: preview.py must not call load_html().

@@ -190,6 +190,23 @@ def test_mistune_renderer_adjacent_footnotes_render_as_two_superscripts():
     assert "This is footnote 2." in html
 
 
+def test_mistune_renderer_respects_explicit_heading_id_syntax():
+    from calamus.renderer import MistuneRenderer
+
+    r = MistuneRenderer()
+    html = r.render("### My Great Heading {#custom-id}")
+    assert '<h3 id="custom-id">My Great Heading</h3>' in html
+    assert "{#custom-id}" not in html
+
+
+def test_mistune_renderer_highlight_syntax_renders_mark():
+    from calamus.renderer import MistuneRenderer
+
+    r = MistuneRenderer()
+    html = r.render("I need ==very important words== highlighted.")
+    assert "<mark>very important words</mark>" in html
+
+
 def test_add_heading_ids_non_string_passthrough():
     from calamus.renderer import _add_heading_ids
 

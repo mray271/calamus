@@ -191,9 +191,8 @@ class TestTablesExtension:
 # GFM Extension 2: Task list items (§ 5.3)
 # ===========================================================================
 # GFM turns list items beginning with [ ] or [x] into checkboxes.
-# The mistune 'task_lists' plugin supports this but is NOT included in
-# Calamus's renderer by default.
-# Case 1 — Graceful fail-over: list items render, checkbox text visible.
+# Calamus enables this via the mistune 'task_lists' plugin.
+# Case 2 — Supported.
 #
 # GFM spec examples:
 #   - [x] foo
@@ -205,15 +204,20 @@ class TestTablesExtension:
 class TestTaskListItemsExtension:
     def test_checked_item_does_not_crash(self):
         """- [x] item must not crash."""
-        html = assert_no_crash("- [x] Finished task\n")
+        html = render("- [x] Finished task\n")
+        assert 'class="task-list-item-checkbox"' in html
+        assert "checked" in html
 
     def test_unchecked_item_does_not_crash(self):
         """- [ ] item must not crash."""
-        html = assert_no_crash("- [ ] Pending task\n")
+        html = render("- [ ] Pending task\n")
+        assert 'class="task-list-item-checkbox"' in html
 
     def test_uppercase_x_checked_item_does_not_crash(self):
         """- [X] item (uppercase X) must not crash."""
-        html = assert_no_crash("- [X] Also done\n")
+        html = render("- [X] Also done\n")
+        assert 'class="task-list-item-checkbox"' in html
+        assert "checked" in html
 
     def test_task_item_text_is_visible(self):
         """The text label of a task item must appear in the output."""
@@ -229,7 +233,8 @@ class TestTaskListItemsExtension:
         """Task items must render inside a <ul> or as visible list content."""
         md = "- [x] Done\n- [ ] Not done\n"
         html = render(md)
-        assert "<ul>" in html or "Done" in html
+        assert "<ul>" in html
+        assert html.count('class="task-list-item-checkbox"') == 2
 
     def test_mixed_task_and_regular_items_do_not_crash(self):
         """A list mixing task and regular items must not crash."""
