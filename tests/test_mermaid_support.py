@@ -1,6 +1,14 @@
 """Tests for mermaid_support module."""
 
+import re
 import shutil
+from urllib.parse import urlparse
+
+
+def script_src_hosts(html: str) -> set[str]:
+    """Extract hostnames from script src attributes."""
+    sources = re.findall(r'<script[^>]*\ssrc="([^"]+)"', html)
+    return {urlparse(source).netloc for source in sources}
 
 
 def test_extract_mermaid_blocks_finds_blocks():
@@ -146,7 +154,7 @@ def test_get_mermaid_script_tag_local_missing_falls_back_to_cdn(tmp_path, monkey
         ms, "MERMAID_SYSTEM_PATH", str(tmp_path / "nonexistent_system.js")
     )
     tag = ms.get_mermaid_script_tag(local_first=True)
-    assert "cdn.jsdelivr.net" in tag
+    assert "cdn.jsdelivr.net" in script_src_hosts(tag)
 
 
 def test_get_mermaid_script_tag_local_file_preferred(tmp_path, monkeypatch):

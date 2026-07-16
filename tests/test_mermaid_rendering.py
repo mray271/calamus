@@ -26,9 +26,11 @@ Two distinct Mermaid configuration syntaxes are tested:
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 import pytest
 
@@ -39,6 +41,13 @@ DIRECTIVE_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "mermaid_directive
 DIRECTIVE_FIXTURE_MD = DIRECTIVE_FIXTURE_PATH.read_text(encoding="utf-8")
 
 MMDC_AVAILABLE = shutil.which("mmdc") is not None
+
+
+def script_src_hosts(html: str) -> set[str]:
+    """Extract hostnames from script src attributes."""
+    sources = re.findall(r'<script[^>]*\ssrc="([^"]+)"', html)
+    return {urlparse(source).netloc for source in sources}
+
 
 # ── 1. Renderer output shape ──────────────────────────────────────────────────
 
@@ -185,7 +194,7 @@ def test_script_tag_falls_back_to_cdn_when_no_local(monkeypatch):
     monkeypatch.setattr(ms, "MERMAID_SYSTEM_PATH", "/nonexistent/b.js")
 
     tag = ms.get_mermaid_script_tag()
-    assert "cdn.jsdelivr.net" in tag
+    assert "cdn.jsdelivr.net" in script_src_hosts(tag)
 
 
 # ── 5. Full HTML output ───────────────────────────────────────────────────────

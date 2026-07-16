@@ -1,5 +1,7 @@
 """Unit tests for calamus.renderer — MistuneRenderer."""
 
+import re
+
 import pytest
 
 
@@ -103,7 +105,8 @@ def test_mistune_renderer_link():
     r = MistuneRenderer()
     html = r.render("[GitHub](https://github.com)")
     assert "<a" in html
-    assert "https://github.com" in html
+    hrefs = re.findall(r'href="([^"]+)"', html)
+    assert "https://github.com" in hrefs
 
 
 def test_mistune_renderer_image():
