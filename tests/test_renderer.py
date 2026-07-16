@@ -168,6 +168,25 @@ def test_mistune_renderer_mixed_content():
     assert "<ul>" in html
 
 
+def test_mistune_renderer_adjacent_footnotes_render_as_two_superscripts():
+    from calamus.renderer import MistuneRenderer
+
+    r = MistuneRenderer()
+    md = (
+        "This is some text with footnotes[^1][^2].\n\n"
+        "[^1]: This is footnote 1.\n"
+        "[^2]: This is footnote 2.\n"
+    )
+    html = r.render(md)
+    assert html.count('class="footnote-ref"') == 2
+    assert 'footnotes.<sup class="footnote-ref"' in html
+    assert '</a>,</sup><sup class="footnote-ref"' in html
+    assert "</sup>." not in html
+    assert '<section class="footnotes">' in html
+    assert "This is footnote 1." in html
+    assert "This is footnote 2." in html
+
+
 def test_add_heading_ids_non_string_passthrough():
     from calamus.renderer import _add_heading_ids
 
