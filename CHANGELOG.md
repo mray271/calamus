@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Directory tree traversal now follows valid symlinked directories while safely preventing symlink cycles and pathological recursion budgets from crashing the app
 - Footnote references now render as separate clickable superscripts with superscript commas, and sentence punctuation is placed before the footnote superscript run
+- Resolved CodeQL findings by hardening workflow token permissions and replacing URL substring assertions with structured URL/host checks in tests
 
 ## [0.4.0] - 2026-07-12
 

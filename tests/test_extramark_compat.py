@@ -31,6 +31,8 @@ Reference: https://github.com/vimtaai/extramark#features
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -58,6 +60,16 @@ def assert_surrounding_content_intact(html: str, marker: str = "MARKER") -> None
     assert (
         marker in html
     ), f"Surrounding content '{marker}' missing from rendered output"
+
+
+def extract_hrefs(html: str) -> list[str]:
+    """Extract all link targets from anchor tags."""
+    return re.findall(r'href="([^"]+)"', html)
+
+
+def has_href(html: str, expected_url: str) -> bool:
+    """Return True when the HTML contains an exact href match."""
+    return any(href == expected_url for href in extract_hrefs(html))
 
 
 # ===========================================================================
@@ -688,7 +700,7 @@ Visit https://extramark.example.com for more.
     def test_mixed_document_url_linked(self):
         """Bare https:// URL in mixed document must be auto-linked."""
         html = render(self._MIXED)
-        assert "extramark.example.com" in html
+        assert has_href(html, "https://extramark.example.com")
 
     def test_mixed_document_abbreviation_text_visible(self):
         """Abbreviation body text must appear (even without <abbr> wrapping)."""

@@ -54,6 +54,16 @@ def assert_surrounding_content_intact(html: str, marker: str = "MARKER") -> None
     ), f"Surrounding paragraph content '{marker}' missing from rendered output"
 
 
+def extract_hrefs(html: str) -> list[str]:
+    """Extract all link targets from anchor tags."""
+    return re.findall(r'href="([^"]+)"', html)
+
+
+def has_href(html: str, expected_url: str) -> bool:
+    """Return True when the HTML contains an exact href match."""
+    return any(href == expected_url for href in extract_hrefs(html))
+
+
 # ===========================================================================
 # 1. GitLab-specific references
 # ===========================================================================
@@ -785,7 +795,7 @@ class TestUrlAutoLinking:
         """A bare https:// URL must be auto-linked."""
         html = render("Visit https://www.example.com for info.")
         assert "<a" in html
-        assert "https://www.example.com" in html
+        assert has_href(html, "https://www.example.com")
 
     def test_bare_http_url_becomes_link(self):
         """A bare http:// URL must be auto-linked."""
@@ -796,4 +806,4 @@ class TestUrlAutoLinking:
         """Explicit [text](url) link must still work alongside auto-linking."""
         html = render("[Example](https://example.com)")
         assert "<a" in html
-        assert "https://example.com" in html
+        assert has_href(html, "https://example.com")
