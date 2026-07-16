@@ -523,6 +523,55 @@ docker compose run --rm app bash
 docker compose build --no-cache
 ```
 
+#### Updating Python packages with `uv` (inside Docker)
+
+Use the `test` service for dependency management so lockfile/package changes are
+made in the same containerized environment used by CI and local tests.
+
+**Upgrade an existing package to the latest compatible version:**
+
+```bash
+docker compose run --rm test uv sync --upgrade-package mistune
+```
+
+**Pin/add a package to a specific version:**
+
+```bash
+docker compose run --rm test uv add "mistune==3.3.3"
+```
+
+**General form:**
+
+```bash
+docker compose run --rm test uv add "package==new_version"
+```
+
+**Remove a package:**
+
+```bash
+docker compose run --rm test uv remove package_name
+```
+
+**Change a version range constraint (updates `pyproject.toml`):**
+
+```bash
+docker compose run --rm test uv add "mistune>=3.3,<3.4"
+```
+
+**If you edit `pyproject.toml` constraints manually, refresh the lock file:**
+
+```bash
+docker compose run --rm test uv lock
+docker compose run --rm test uv sync
+```
+
+After updating dependencies, run tests and formatting checks:
+
+```bash
+docker compose run --rm test
+docker compose run --rm format-check
+```
+
 ## Project Structure
 
 ```
