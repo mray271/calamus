@@ -194,7 +194,8 @@ def test_script_tag_falls_back_to_cdn_when_no_local(monkeypatch):
     monkeypatch.setattr(ms, "MERMAID_SYSTEM_PATH", "/nonexistent/b.js")
 
     tag = ms.get_mermaid_script_tag()
-    assert "cdn.jsdelivr.net" in script_src_hosts(tag)
+    hosts = script_src_hosts(tag)
+    assert any(host == "cdn.jsdelivr.net" for host in hosts)
 
 
 # ── 5. Full HTML output ───────────────────────────────────────────────────────

@@ -61,6 +61,11 @@ def extract_hrefs(html: str) -> list[str]:
     return re.findall(r'href="([^"]+)"', html)
 
 
+def has_href(html: str, expected_url: str) -> bool:
+    """Return True when the HTML contains an exact href match."""
+    return any(href == expected_url for href in extract_hrefs(html))
+
+
 # ===========================================================================
 # GFM Extension 1: Tables (§ 4.10)
 # ===========================================================================
@@ -141,7 +146,7 @@ class TestTablesExtension:
         md = "| Header |\n|--------|\n| [link](https://example.com) |\n"
         html = render(md)
         assert "<a" in html
-        assert "https://example.com" in extract_hrefs(html)
+        assert has_href(html, "https://example.com")
 
     def test_table_inline_code_in_cell(self):
         """`code` inside a table cell must render as <code>."""
@@ -364,7 +369,7 @@ class TestAutolinksExtension:
         """<https://example.com> must always become an <a> link."""
         html = render("See <https://example.com> for details.")
         assert "<a" in html
-        assert "https://example.com" in extract_hrefs(html)
+        assert has_href(html, "https://example.com")
 
     def test_angle_bracket_email_becomes_link(self):
         """<user@example.com> angle-bracket autolink must become a link."""
@@ -377,13 +382,13 @@ class TestAutolinksExtension:
         """A bare https:// URL must be auto-linked (via 'url' plugin)."""
         html = render("Visit https://www.example.com for info.")
         assert "<a" in html
-        assert "https://www.example.com" in extract_hrefs(html)
+        assert has_href(html, "https://www.example.com")
 
     def test_bare_http_url_becomes_link(self):
         """A bare http:// URL must be auto-linked."""
         html = render("See http://example.org please.")
         assert "<a" in html
-        assert "http://example.org" in extract_hrefs(html)
+        assert has_href(html, "http://example.org")
 
     def test_bare_url_with_path(self):
         """A bare URL with path components must be auto-linked."""
@@ -436,9 +441,8 @@ class TestAutolinksExtension:
         """Multiple bare URLs in one paragraph must not crash."""
         md = "See https://example.com and https://other.org for more.\n"
         html = assert_no_crash(md)
-        hrefs = set(extract_hrefs(html))
-        assert "https://example.com" in hrefs
-        assert "https://other.org" in hrefs
+        assert has_href(html, "https://example.com")
+        assert has_href(html, "https://other.org")
 
     # ---- Explicit Markdown links override autolinks ----
 
@@ -446,9 +450,8 @@ class TestAutolinksExtension:
         """[text](url) explicit links must still work with the url plugin."""
         html = render("[Example](https://example.com) and www.example.com")
         assert "<a" in html
-        hrefs = set(extract_hrefs(html))
-        assert "https://example.com" in hrefs
-        assert "https://www.example.com" in hrefs
+        assert has_href(html, "https://example.com")
+        assert has_href(html, "https://www.example.com")
 
 
 # ===========================================================================
@@ -597,7 +600,7 @@ End of document.
     def test_mixed_document_url_becomes_link(self):
         """Bare URL in mixed document must be auto-linked."""
         html = render(self._MIXED)
-        assert "https://github.com/gfm" in extract_hrefs(html)
+        assert has_href(html, "https://github.com/gfm")
 
     def test_mixed_document_end_content_renders(self):
         """The final paragraph of the mixed document must render."""

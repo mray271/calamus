@@ -106,7 +106,7 @@ def test_mistune_renderer_link():
     html = r.render("[GitHub](https://github.com)")
     assert "<a" in html
     hrefs = re.findall(r'href="([^"]+)"', html)
-    assert "https://github.com" in hrefs
+    assert any(href == "https://github.com" for href in hrefs)
 
 
 def test_mistune_renderer_image():

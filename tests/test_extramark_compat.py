@@ -67,6 +67,11 @@ def extract_hrefs(html: str) -> list[str]:
     return re.findall(r'href="([^"]+)"', html)
 
 
+def has_href(html: str, expected_url: str) -> bool:
+    """Return True when the HTML contains an exact href match."""
+    return any(href == expected_url for href in extract_hrefs(html))
+
+
 # ===========================================================================
 # ExtraMark Extension 1: Automatic typographic replacements
 # ===========================================================================
@@ -695,7 +700,7 @@ Visit https://extramark.example.com for more.
     def test_mixed_document_url_linked(self):
         """Bare https:// URL in mixed document must be auto-linked."""
         html = render(self._MIXED)
-        assert "https://extramark.example.com" in extract_hrefs(html)
+        assert has_href(html, "https://extramark.example.com")
 
     def test_mixed_document_abbreviation_text_visible(self):
         """Abbreviation body text must appear (even without <abbr> wrapping)."""
