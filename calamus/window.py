@@ -310,6 +310,9 @@ class CalamusWindow(Adw.ApplicationWindow):
             ("get-help-online", self._on_get_help_online, None),
             ("show-mermaid-version", self._on_show_mermaid_version, None),
             ("about", self._on_about, None),
+            ("zoom-in", self._on_zoom_in, "<primary>equal"),
+            ("zoom-out", self._on_zoom_out, "<control>minus"),
+            ("zoom-reset", self._on_zoom_reset, "<control>0"),
         ]:
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", callback)
@@ -584,7 +587,20 @@ class CalamusWindow(Adw.ApplicationWindow):
             theme_manager=self._theme_manager,
             transient_for=self,
         ).present()
-
+    
+    def _on_zoom_in(self, _action: Gio.SimpleAction, _param: object) -> None:
+        editor = self.tab_manager.get_current_editor()
+        editor.set_zoom(1.0/0.9)
+    
+    def _on_zoom_out(self, _action: Gio.SimpleAction, _param: object) -> None:
+        editor = self.tab_manager.get_current_editor() 
+        editor.set_zoom(0.9)
+    
+    def _on_zoom_reset(self, _action: Gio.SimpleAction, _param: object) -> None:
+        editor = self.tab_manager.get_current_editor() 
+        editor.reset_zoom()
+        
+    
     def _on_export_html(self, _action: Gio.SimpleAction, _param: object) -> None:
         HtmlExporter().run_export_dialog(self, self._get_current_text())
 
@@ -711,6 +727,17 @@ MENU_XML = """
           <attribute name="label">Dark</attribute>
           <attribute name="action">app.color-scheme</attribute>
           <attribute name="target">dark</attribute>
+        </item>
+      </section>
+      <section>
+        <attribute name="label">Zoom</attribute>
+        <item>
+          <attribute name="label">Zoom In</attribute>
+          <attribute name="action">app.zoom-in</attribute>
+        </item>
+        <item>
+          <attribute name="label">Zoom Out</attribute>
+          <attribute name="action">app.zoom-out</attribute>
         </item>
       </section>
     </submenu>
