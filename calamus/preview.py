@@ -96,7 +96,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       --mark-bg: #6a6233;
     }}
   }}
-  body {{ font-family: "Noto Sans", "DejaVu Sans", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Emoji", "NotoSymbols2", "NotoSymbols", sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
+  body {{ font-family: "Noto Sans", "DejaVu Sans", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Emoji", "NotoSymbols2", "NotoSymbols", sans-serif; font-size: __PREVIEW_FONT_SCALE__em; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
   a {{ color: var(--link-color); }}
   code {{ background: var(--code-bg); padding: 2px 4px; border-radius: 3px; font-family: monospace; }}
   pre {{ background: var(--code-bg); padding: 1em; border-radius: 4px; overflow-x: auto; }}
@@ -200,9 +200,21 @@ class AbstractPreview(ABC):
     def set_base_path(self, path: str | None) -> None:
         """Override the preview base path for resolving relative links."""
 
+    @abstractmethod
+    def zoom_by(self, factor: float) -> None:
+        """Scale preview text by a factor."""
+
+    @abstractmethod
+    def reset_zoom(self) -> None:
+        """Reset preview zoom to its default."""
+
 
 class WebKitPreview(AbstractPreview):
     """Preview implementation backed by WebKit (6.0) or WebKit2 (4.1)."""
+
+    _MIN_ZOOM = 0.5
+    _MAX_ZOOM = 3.0
+    _DEFAULT_ZOOM = 1.0
 
     def __init__(
         self,
@@ -222,6 +234,7 @@ class WebKitPreview(AbstractPreview):
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
         self._last_markdown: str = ""
+        self._zoom_level = self._DEFAULT_ZOOM
         self._style_manager = Adw.StyleManager.get_default()
         self._style_manager.connect("notify::dark", self._on_dark_changed)
         # Layer 2 & 3: async rendering + SVG cache
@@ -388,6 +401,9 @@ class WebKitPreview(AbstractPreview):
             highlight_css=get_highlight_css_tag(dark=dark),
             highlight_script=get_highlight_script_tag(),
         )
+        html_text = html_text.replace(
+            "__PREVIEW_FONT_SCALE__", f"{self._zoom_level:.3f}"
+        )
         # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
         # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
         raw = GLib.Bytes.new(html_text.encode("utf-8"))
@@ -411,6 +427,24 @@ class WebKitPreview(AbstractPreview):
     def get_widget(self) -> Gtk.Widget:
         return self._view
 
+    def zoom_by(self, factor: float) -> None:
+        if factor <= 0:
+            return
+        next_level = max(
+            self._MIN_ZOOM,
+            min(self._MAX_ZOOM, round(self._zoom_level * factor, 3)),
+        )
+        if next_level == self._zoom_level:
+            return
+        self._zoom_level = next_level
+        self.update(self._last_markdown)
+
+    def reset_zoom(self) -> None:
+        if self._zoom_level == self._DEFAULT_ZOOM:
+            return
+        self._zoom_level = self._DEFAULT_ZOOM
+        self.update(self._last_markdown)
+
 
 class TextViewPreview(AbstractPreview):
     """Fallback preview that shows raw Markdown text."""
@@ -421,6 +455,11 @@ class TextViewPreview(AbstractPreview):
         self._view.set_wrap_mode(Gtk.WrapMode.WORD)
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
+        self._css_provider = Gtk.CssProvider()
+        self._font_size_pt = 11.0
+        self._default_font_size_pt = self._font_size_pt
+        self._view.add_css_class("calamus-preview-fallback")
+        self._apply_font_size(self._font_size_pt)
 
     def update(self, markdown_text: str) -> None:
         self._view.get_buffer().set_text(markdown_text)
@@ -433,6 +472,26 @@ class TextViewPreview(AbstractPreview):
 
     def get_widget(self) -> Gtk.Widget:
         return self._view
+
+    def zoom_by(self, factor: float) -> None:
+        if factor <= 0:
+            return
+        size = max(8.0, min(48.0, round(self._font_size_pt * factor, 1)))
+        self._apply_font_size(size)
+
+    def reset_zoom(self) -> None:
+        self._apply_font_size(self._default_font_size_pt)
+
+    def _apply_font_size(self, size_pt: float) -> None:
+        self._font_size_pt = size_pt
+        self._css_provider.load_from_string(
+            f"textview.calamus-preview-fallback {{ font-size: {self._font_size_pt}pt; }}"
+        )
+        Gtk.StyleContext.add_provider_for_display(
+            self._view.get_display(),
+            self._css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
 
 
 def create_preview(

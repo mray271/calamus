@@ -10,7 +10,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from calamus.about import show_about_dialog
 from calamus.directorytree import GtkDirectoryPane
@@ -229,6 +229,14 @@ class CalamusWindow(Adw.ApplicationWindow):
 
         self.paned.set_end_child(tab_view)
 
+        # Fallback key handling for pane-specific zoom shortcuts.
+        # Some environments/layouts do not reliably trigger app accelerators
+        # for Ctrl+Alt/Shift punctuation combinations.
+        key_controller = Gtk.EventControllerKey.new()
+        key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        key_controller.connect("key-pressed", self._on_key_pressed)
+        self.add_controller(key_controller)
+
     def _build_menu(self) -> Gio.MenuModel:
         builder = Gtk.Builder.new_from_string(MENU_XML, -1)
         return builder.get_object("menubar")
@@ -311,8 +319,29 @@ class CalamusWindow(Adw.ApplicationWindow):
             ("show-mermaid-version", self._on_show_mermaid_version, None),
             ("about", self._on_about, None),
             ("zoom-in", self._on_zoom_in, "<primary>equal"),
-            ("zoom-out", self._on_zoom_out, "<control>minus"),
-            ("zoom-reset", self._on_zoom_reset, "<control>0"),
+            ("zoom-out", self._on_zoom_out, "<primary>minus"),
+            ("zoom-reset", self._on_zoom_reset, "<primary>0"),
+            ("zoom-editor-in", self._on_zoom_editor_in, "<primary><alt>equal"),
+            ("zoom-editor-out", self._on_zoom_editor_out, "<primary><alt>minus"),
+            ("zoom-editor-reset", self._on_zoom_editor_reset, "<primary><alt>0"),
+            ("zoom-preview-in", self._on_zoom_preview_in, "<primary><shift>equal"),
+            ("zoom-preview-out", self._on_zoom_preview_out, "<primary><shift>minus"),
+            ("zoom-preview-reset", self._on_zoom_preview_reset, "<primary><shift>0"),
+            (
+                "zoom-directory-in",
+                self._on_zoom_directory_in,
+                "<primary><shift><alt>equal",
+            ),
+            (
+                "zoom-directory-out",
+                self._on_zoom_directory_out,
+                "<primary><shift><alt>minus",
+            ),
+            (
+                "zoom-directory-reset",
+                self._on_zoom_directory_reset,
+                "<primary><shift><alt>0",
+            ),
         ]:
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", callback)
@@ -587,20 +616,156 @@ class CalamusWindow(Adw.ApplicationWindow):
             theme_manager=self._theme_manager,
             transient_for=self,
         ).present()
-    
+
     def _on_zoom_in(self, _action: Gio.SimpleAction, _param: object) -> None:
-        editor = self.tab_manager.get_current_editor()
-        editor.set_zoom(1.0/0.9)
-    
+        self._zoom_focused_pane(1.0 / 0.9)
+
     def _on_zoom_out(self, _action: Gio.SimpleAction, _param: object) -> None:
-        editor = self.tab_manager.get_current_editor() 
-        editor.set_zoom(0.9)
-    
+        self._zoom_focused_pane(0.9)
+
     def _on_zoom_reset(self, _action: Gio.SimpleAction, _param: object) -> None:
-        editor = self.tab_manager.get_current_editor() 
-        editor.reset_zoom()
-        
-    
+        self._reset_focused_pane()
+
+    def _on_zoom_editor_in(self, _action: Gio.SimpleAction, _param: object) -> None:
+        editor = self.tab_manager.get_current_editor()
+        if editor is not None:
+            editor.zoom_by(1.0 / 0.9)
+
+    def _on_zoom_editor_out(self, _action: Gio.SimpleAction, _param: object) -> None:
+        editor = self.tab_manager.get_current_editor()
+        if editor is not None:
+            editor.zoom_by(0.9)
+
+    def _on_zoom_editor_reset(self, _action: Gio.SimpleAction, _param: object) -> None:
+        editor = self.tab_manager.get_current_editor()
+        if editor is not None:
+            editor.reset_zoom()
+
+    def _on_zoom_preview_in(self, _action: Gio.SimpleAction, _param: object) -> None:
+        preview = self.tab_manager.get_current_preview()
+        if preview is not None:
+            preview.zoom_by(1.0 / 0.9)
+
+    def _on_zoom_preview_out(self, _action: Gio.SimpleAction, _param: object) -> None:
+        preview = self.tab_manager.get_current_preview()
+        if preview is not None:
+            preview.zoom_by(0.9)
+
+    def _on_zoom_preview_reset(self, _action: Gio.SimpleAction, _param: object) -> None:
+        preview = self.tab_manager.get_current_preview()
+        if preview is not None:
+            preview.reset_zoom()
+
+    def _on_zoom_directory_in(self, _action: Gio.SimpleAction, _param: object) -> None:
+        self.dir_pane.zoom_by(1.0 / 0.9)
+
+    def _on_zoom_directory_out(self, _action: Gio.SimpleAction, _param: object) -> None:
+        self.dir_pane.zoom_by(0.9)
+
+    def _on_zoom_directory_reset(
+        self, _action: Gio.SimpleAction, _param: object
+    ) -> None:
+        self.dir_pane.reset_zoom()
+
+    def _zoom_focused_pane(self, factor: float) -> None:
+        focus = self.get_focus()
+        if self._is_focus_in_widget(focus, self.dir_pane):
+            self.dir_pane.zoom_by(factor)
+            return
+        if self._is_focus_in_current_preview(focus):
+            preview = self.tab_manager.get_current_preview()
+            if preview is not None:
+                preview.zoom_by(factor)
+            return
+        editor = self.tab_manager.get_current_editor()
+        if editor is not None:
+            editor.zoom_by(factor)
+
+    def _reset_focused_pane(self) -> None:
+        focus = self.get_focus()
+        if self._is_focus_in_widget(focus, self.dir_pane):
+            self.dir_pane.reset_zoom()
+            return
+        if self._is_focus_in_current_preview(focus):
+            preview = self.tab_manager.get_current_preview()
+            if preview is not None:
+                preview.reset_zoom()
+            return
+        editor = self.tab_manager.get_current_editor()
+        if editor is not None:
+            editor.reset_zoom()
+
+    def _is_focus_in_current_preview(self, focus: Gtk.Widget | None) -> bool:
+        preview = self.tab_manager.get_current_preview()
+        if preview is None:
+            return False
+        return self._is_focus_in_widget(focus, preview.get_widget())
+
+    def _is_focus_in_widget(
+        self, focus: Gtk.Widget | None, widget: Gtk.Widget | None
+    ) -> bool:
+        current = focus
+        while current is not None:
+            if current == widget:
+                return True
+            current = current.get_parent()
+        return False
+
+    def _on_key_pressed(
+        self,
+        _controller: Gtk.EventControllerKey,
+        keyval: int,
+        _keycode: int,
+        state: Gdk.ModifierType,
+    ) -> bool:
+        has_ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
+        has_alt = bool(state & Gdk.ModifierType.ALT_MASK)
+        has_shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
+        if not has_ctrl:
+            return False
+        # Only intercept pane-specific combinations. Let plain Ctrl shortcuts
+        # continue through the normal app-accelerator path.
+        if not (has_alt or has_shift):
+            return False
+
+        if keyval in (Gdk.KEY_minus, Gdk.KEY_underscore, Gdk.KEY_KP_Subtract):
+            if has_alt and has_shift:
+                self._on_zoom_directory_out(None, None)
+                return True
+            if has_shift:
+                self._on_zoom_preview_out(None, None)
+                return True
+            if has_alt:
+                self._on_zoom_editor_out(None, None)
+                return True
+            return False
+
+        if keyval in (Gdk.KEY_equal, Gdk.KEY_plus, Gdk.KEY_KP_Add):
+            if has_alt and has_shift:
+                self._on_zoom_directory_in(None, None)
+                return True
+            if has_shift:
+                self._on_zoom_preview_in(None, None)
+                return True
+            if has_alt:
+                self._on_zoom_editor_in(None, None)
+                return True
+            return False
+
+        if keyval in (Gdk.KEY_0, Gdk.KEY_parenright, Gdk.KEY_KP_0):
+            if has_alt and has_shift:
+                self._on_zoom_directory_reset(None, None)
+                return True
+            if has_shift:
+                self._on_zoom_preview_reset(None, None)
+                return True
+            if has_alt:
+                self._on_zoom_editor_reset(None, None)
+                return True
+            return False
+
+        return False
+
     def _on_export_html(self, _action: Gio.SimpleAction, _param: object) -> None:
         HtmlExporter().run_export_dialog(self, self._get_current_text())
 
@@ -732,12 +897,61 @@ MENU_XML = """
       <section>
         <attribute name="label">Zoom</attribute>
         <item>
-          <attribute name="label">Zoom In</attribute>
+          <attribute name="label">Zoom In (Focused Pane)</attribute>
           <attribute name="action">app.zoom-in</attribute>
         </item>
         <item>
-          <attribute name="label">Zoom Out</attribute>
+          <attribute name="label">Zoom Out (Focused Pane)</attribute>
           <attribute name="action">app.zoom-out</attribute>
+        </item>
+        <item>
+          <attribute name="label">Reset Zoom (Focused Pane)</attribute>
+          <attribute name="action">app.zoom-reset</attribute>
+        </item>
+      </section>
+      <section>
+        <attribute name="label">Editor</attribute>
+        <item>
+          <attribute name="label">Editor Zoom In</attribute>
+          <attribute name="action">app.zoom-editor-in</attribute>
+        </item>
+        <item>
+          <attribute name="label">Editor Zoom Out</attribute>
+          <attribute name="action">app.zoom-editor-out</attribute>
+        </item>
+        <item>
+          <attribute name="label">Editor Reset Zoom</attribute>
+          <attribute name="action">app.zoom-editor-reset</attribute>
+        </item>
+      </section>
+      <section>
+        <attribute name="label">Preview</attribute>
+        <item>
+          <attribute name="label">Preview Zoom In</attribute>
+          <attribute name="action">app.zoom-preview-in</attribute>
+        </item>
+        <item>
+          <attribute name="label">Preview Zoom Out</attribute>
+          <attribute name="action">app.zoom-preview-out</attribute>
+        </item>
+        <item>
+          <attribute name="label">Preview Reset Zoom</attribute>
+          <attribute name="action">app.zoom-preview-reset</attribute>
+        </item>
+      </section>
+      <section>
+        <attribute name="label">Directory Tree</attribute>
+        <item>
+          <attribute name="label">Directory Zoom In</attribute>
+          <attribute name="action">app.zoom-directory-in</attribute>
+        </item>
+        <item>
+          <attribute name="label">Directory Zoom Out</attribute>
+          <attribute name="action">app.zoom-directory-out</attribute>
+        </item>
+        <item>
+          <attribute name="label">Directory Reset Zoom</attribute>
+          <attribute name="action">app.zoom-directory-reset</attribute>
         </item>
       </section>
     </submenu>

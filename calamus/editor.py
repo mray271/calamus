@@ -60,6 +60,14 @@ class AbstractEditor(ABC):
         """Toggle the find UI."""
 
     @abstractmethod
+    def zoom_by(self, factor: float) -> None:
+        """Scale editor font size by a factor."""
+
+    @abstractmethod
+    def reset_zoom(self) -> None:
+        """Reset editor zoom to its default."""
+
+    @abstractmethod
     def configure_from_prefs(self, config: configparser.ConfigParser) -> None:
         """Apply preferences to the editor widget."""
 
@@ -75,6 +83,9 @@ class AbstractEditor(ABC):
 class MarkdownEditor(AbstractEditor):
     """Concrete GtkSource-based Markdown editor."""
 
+    _MIN_FONT_SIZE_PT = 8.0
+    _MAX_FONT_SIZE_PT = 48.0
+
     def __init__(self) -> None:
         super().__init__()
         self._view = GtkSource.View()
@@ -86,8 +97,10 @@ class MarkdownEditor(AbstractEditor):
         self._style_manager = Adw.StyleManager.get_default()
         self._apply_style_scheme()
         self._style_manager.connect("notify::dark", self._on_dark_changed)
-        self.current_font_size = 11
+        self._font_family = "Monospace"
+        self.current_font_size = 11.0
         self.default_font_size = self.current_font_size
+        self.default_font_family = self._font_family
 
     def _setup_buffer(self) -> None:
         language_manager = GtkSource.LanguageManager.get_default()
@@ -136,8 +149,15 @@ class MarkdownEditor(AbstractEditor):
         self._apply_style_scheme()
 
     def _apply_font(self, font_description: Pango.FontDescription) -> None:
-        family = font_description.get_family() or "Monospace"
-        size_pt = max(1, font_description.get_size() / Pango.SCALE)
+        family = font_description.get_family() or self._font_family
+        size_pt = max(
+            self._MIN_FONT_SIZE_PT,
+            min(
+                self._MAX_FONT_SIZE_PT,
+                font_description.get_size() / Pango.SCALE,
+            ),
+        )
+        self._font_family = family
         self.current_font_size = size_pt
         css = f"textview.calamus-editor {{ font-family: {family}; font-size: {size_pt}pt; }}"
         self._css_provider.load_from_string(css)
@@ -227,31 +247,27 @@ class MarkdownEditor(AbstractEditor):
             self._find_revealer.set_reveal_child(
                 not self._find_revealer.get_reveal_child()
             )
-            
-    def set_zoom(self, zoom_level):
-    
-        font_family = "Monospace"
-        font_size = self.current_font_size
-        font_size *= zoom_level
-        font_size = round(font_size, 1)
+
+    def zoom_by(self, factor: float) -> None:
+        if factor <= 0:
+            return
+        font_size = round(self.current_font_size * factor, 1)
         font_description = Pango.FontDescription.from_string(
-            f"{font_family} {font_size}"
+            f"{self._font_family} {font_size}"
         )
         self._apply_font(font_description)
-        
-    def reset_zoom(self):
-    
-        font_family = "Monospace"
-        font_size = self.default_font_size
+
+    def reset_zoom(self) -> None:
         font_description = Pango.FontDescription.from_string(
-            f"{font_family} {font_size}"
+            f"{self.default_font_family} {self.default_font_size}"
         )
         self._apply_font(font_description)
-        
+
     def configure_from_prefs(self, config: configparser.ConfigParser) -> None:
         font_family = config.get("Editor", "font_family", fallback="Monospace")
-        font_size = config.getint("Editor", "font_size", fallback=11)
-        self.default_font_size = font_size 
+        font_size = float(config.getint("Editor", "font_size", fallback=11))
+        self.default_font_family = font_family
+        self.default_font_size = font_size
         font_description = Pango.FontDescription.from_string(
             f"{font_family} {font_size}"
         )

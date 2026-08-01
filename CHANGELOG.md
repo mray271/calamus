@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `--pipe-base-path PATH` lets piped Markdown resolve relative links from an assumed file or directory path instead of `/`
+- Independent zoom controls for editor, preview, and directory tree panes, including focused-pane shortcuts and pane-specific in/out/reset actions
 
 ### Fixed
 - Directory tree traversal now follows valid symlinked directories while safely preventing symlink cycles and pathological recursion budgets from crashing the app

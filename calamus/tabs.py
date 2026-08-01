@@ -61,6 +61,10 @@ class AbstractTab(ABC):
         """Return the tab's editor."""
 
     @abstractmethod
+    def get_preview(self) -> AbstractPreview:
+        """Return the tab's preview."""
+
+    @abstractmethod
     def save(self) -> bool:
         """Save the tab contents."""
 
@@ -121,6 +125,9 @@ class EditorTab(Gtk.Box):
 
     def get_editor(self) -> AbstractEditor:
         return self.editor
+
+    def get_preview(self) -> AbstractPreview:
+        return self.preview
 
     def save(self) -> bool:
         if self._file_path is None:
@@ -235,6 +242,10 @@ class AbstractTabManager(ABC):
     @abstractmethod
     def get_current_editor(self) -> AbstractEditor | None:
         """Return the active editor."""
+
+    @abstractmethod
+    def get_current_preview(self) -> AbstractPreview | None:
+        """Return the active preview."""
 
     @abstractmethod
     def save_current(self) -> None:
@@ -371,6 +382,10 @@ class AdwTabManager(AbstractTabManager):
     def get_current_editor(self) -> AbstractEditor | None:
         tab = self.get_current_tab()
         return tab.get_editor() if tab is not None else None
+
+    def get_current_preview(self) -> AbstractPreview | None:
+        tab = self.get_current_tab()
+        return tab.get_preview() if tab is not None else None
 
     def save_current(self) -> None:
         tab = self.get_current_tab()
