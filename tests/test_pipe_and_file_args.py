@@ -41,6 +41,7 @@ def _make_app_stub(
         _pipe_content=pipe_content,
         _pipe_base_path=pipe_base_path,
         _initial_files=initial_files or [],
+        _initial_dir=None,
         _preview_mode=preview_mode,
         _handle_options=CalamusApplication._handle_options,
         _maybe_read_piped_stdin=CalamusApplication._maybe_read_piped_stdin,
@@ -117,6 +118,78 @@ class TestHandleOptionsNormal:
             argv=["calamus"],
         )
         assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# _handle_options — directory arguments
+# ---------------------------------------------------------------------------
+
+
+class TestHandleOptionsDirectory:
+    def test_dot_directory_returns_minus_1(self):
+        app = _make_app_stub()
+        result = app._handle_options(
+            app, preview=False, pipe_base_path=None, argv=["calamus", "."]
+        )
+        assert result == -1
+
+    def test_dot_dot_directory_returns_minus_1(self):
+        app = _make_app_stub()
+        result = app._handle_options(
+            app, preview=False, pipe_base_path=None, argv=["calamus", ".."]
+        )
+        assert result == -1
+
+    def test_dot_sets_initial_dir_to_cwd(self):
+        app = _make_app_stub()
+        app._handle_options(
+            app, preview=False, pipe_base_path=None, argv=["calamus", "."]
+        )
+        assert app._initial_dir == os.path.abspath(".")
+
+    def test_directory_path_sets_initial_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _make_app_stub()
+            app._handle_options(
+                app, preview=False, pipe_base_path=None, argv=["calamus", tmpdir]
+            )
+            assert app._initial_dir == os.path.abspath(tmpdir)
+
+    def test_directory_does_not_add_to_initial_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _make_app_stub()
+            app._handle_options(
+                app, preview=False, pipe_base_path=None, argv=["calamus", tmpdir]
+            )
+            assert app._initial_files == []
+
+    def test_directory_alongside_file_both_accepted(self):
+        path = _make_tempfile()
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                app = _make_app_stub()
+                result = app._handle_options(
+                    app,
+                    preview=False,
+                    pipe_base_path=None,
+                    argv=["calamus", tmpdir, path],
+                )
+                assert result == -1
+                assert app._initial_dir == os.path.abspath(tmpdir)
+        finally:
+            os.unlink(path)
+
+    def test_pipe_base_path_equals_form_not_treated_as_directory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            app = _make_app_stub()
+            result = app._handle_options(
+                app,
+                preview=False,
+                pipe_base_path=tmpdir,
+                argv=["calamus", f"--pipe-base-path={tmpdir}"],
+            )
+            assert result == -1
+            assert app._initial_dir is None
 
 
 # ---------------------------------------------------------------------------

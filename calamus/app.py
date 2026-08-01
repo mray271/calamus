@@ -51,6 +51,7 @@ class CalamusApplication(Adw.Application):
         self._pipe_content: str | None = None
         self._pipe_base_path: str | None = None
         self._initial_files: list[str] = []
+        self._initial_dir: str | None = None
         self._preview_mode: bool = False
 
     # ------------------------------------------------------------------
@@ -89,6 +90,7 @@ class CalamusApplication(Adw.Application):
                 pipe_content=self._pipe_content,
                 pipe_base_path=self._pipe_base_path,
                 initial_files=self._initial_files,
+                initial_dir=self._initial_dir,
                 preview_mode=self._preview_mode,
             )
         window.present()
@@ -116,7 +118,9 @@ class CalamusApplication(Adw.Application):
                 continue
             if not arg.startswith("-"):
                 path = os.path.abspath(arg)
-                if not os.path.isfile(path):
+                if os.path.isdir(path):
+                    self._initial_dir = path
+                elif not os.path.isfile(path):
                     print(f"calamus: file not found: {arg}", file=sys.stderr)
                     return 1
             i += 1
