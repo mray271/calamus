@@ -462,3 +462,56 @@ def test_webkit_preview_non_svg_data_uri_written_to_temp_file(monkeypatch, tmp_p
     assert opened_path.endswith(".png"), "Temp file must have .png extension"
     with open(opened_path, "rb") as f:
         assert f.read() == b64.b64decode(png_b64)
+
+
+# ---------------------------------------------------------------------------
+# _uri_to_markdown_image — "Copy Markdown Image" context menu item
+# ---------------------------------------------------------------------------
+
+
+def test_uri_to_markdown_image_https():
+    """https:// URIs should be used verbatim."""
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    preview._base_uri = "file:///home/user/docs/"
+    result = preview_mod.WebKitPreview._uri_to_markdown_image(
+        preview, "https://example.com/diagram.png"
+    )
+    assert result == "![image](https://example.com/diagram.png)"
+
+
+def test_uri_to_markdown_image_file_relative():
+    """file:// URIs in the same directory should produce a bare filename."""
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    preview._base_uri = "file:///home/user/docs/"
+    result = preview_mod.WebKitPreview._uri_to_markdown_image(
+        preview, "file:///home/user/docs/photo.png"
+    )
+    assert result == "![image](photo.png)"
+
+
+def test_uri_to_markdown_image_file_subdirectory():
+    """file:// URIs in a subdirectory should produce a relative path."""
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    preview._base_uri = "file:///home/user/docs/"
+    result = preview_mod.WebKitPreview._uri_to_markdown_image(
+        preview, "file:///home/user/docs/assets/chart.svg"
+    )
+    assert result == "![image](assets/chart.svg)"
+
+
+def test_uri_to_markdown_image_file_parent_directory():
+    """file:// URIs above the document directory should use ../."""
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    preview._base_uri = "file:///home/user/docs/chapter1/"
+    result = preview_mod.WebKitPreview._uri_to_markdown_image(
+        preview, "file:///home/user/docs/shared/logo.png"
+    )
+    assert result == "![image](../shared/logo.png)"

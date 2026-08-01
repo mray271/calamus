@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import base64
 import os
+import shutil
 import tempfile
 import threading
+import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from urllib.parse import unquote, urlparse
@@ -15,7 +17,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
 from calamus.mermaid_support import (
@@ -254,6 +256,7 @@ class WebKitPreview(AbstractPreview):
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
         self._view.connect("create", self._on_create_web_view)
+        self._view.connect("context-menu", self._on_context_menu)
         self._view.connect("load-changed", self._on_load_changed)
         # "Save Image As" (and any other download) is silently abandoned by
         # WebKit unless a handler sets the destination.
@@ -266,6 +269,11 @@ class WebKitPreview(AbstractPreview):
         self._pending_scroll_restore_ratio: float | None = None
         self._style_manager = Adw.StyleManager.get_default()
         self._style_manager.connect("notify::dark", self._on_dark_changed)
+        # Holds Gio.SimpleAction objects for the current context menu.
+        # Must be kept alive on self — PyGObject's GC drops the Python wrapper
+        # and silently loses the 'activate' callback if the action is only
+        # referenced by a local variable inside _on_context_menu.
+        self._context_menu_actions: list[object] = []
         # Layer 2 & 3: async rendering + SVG cache
         self._mermaid_cache = MermaidCache()
         self._mmdc_available: bool = SubprocessMermaidRenderer().is_available()
@@ -345,6 +353,195 @@ class WebKitPreview(AbstractPreview):
         else:
             decision.ignore()
 
+    def _on_context_menu(
+        self,
+        _webview: object,
+        context_menu: object,
+        *args: object,
+    ) -> bool:
+        """Customise the right-click context menu when an image is right-clicked.
+
+        WebKit 6.0 signal:  (webview, context_menu, hit_test_result) → bool
+        WebKit 4.x signal:  (webview, context_menu, event, hit_test_result) → bool
+        Using *args makes the handler version-agnostic; hit_test_result is always last.
+
+        Actions taken:
+          - Remove "Copy Image Address" — for data: URIs it copies a useless
+            base64 blob; for file:// it copies a non-portable absolute path.
+          - Remove "Save Image As" (stock DOWNLOAD_IMAGE_TO_DISK) and replace
+            with our own implementation that bypasses WebKit's download state
+            machine entirely.  WebKit's async download-started handler is
+            unreliable for "Save Image As" because WebKit abandons the download
+            before the user can pick a destination file.
+          - Add "Copy Markdown Image" for http/https/file images.
+          - data: URI images (Mermaid diagrams) get "Save Image As…" only;
+            "Copy Markdown Image" is omitted (no stable file address).
+        """
+        hit_test_result = args[-1]
+        if not hit_test_result.context_is_image():
+            return False
+
+        image_uri = hit_test_result.get_image_uri() or ""
+
+        # Remove stock items we are replacing with better alternatives.
+        _remove = {
+            _WebKitModule.ContextMenuAction.COPY_IMAGE_URL_TO_CLIPBOARD,
+            _WebKitModule.ContextMenuAction.DOWNLOAD_IMAGE_TO_DISK,
+        }
+        for item in list(context_menu.get_items()):
+            if (
+                hasattr(item, "get_stock_action")
+                and item.get_stock_action() in _remove
+            ):
+                context_menu.remove(item)
+
+        # Clear previous actions — new ones are appended below.
+        self._context_menu_actions = []
+
+        # "Copy Markdown Image" — only useful for non-data: URIs.
+        if not image_uri.startswith("data:"):
+            md = self._uri_to_markdown_image(image_uri)
+            copy_action = Gio.SimpleAction.new("copy-markdown-image", None)
+            copy_action.connect(
+                "activate", lambda _a, _p, t=md: self._copy_to_clipboard(t)
+            )
+            self._context_menu_actions.append(copy_action)
+            try:
+                context_menu.append(
+                    _WebKitModule.ContextMenuItem.new_from_gaction(
+                        copy_action, "Copy Markdown Image", None
+                    )
+                )
+            except Exception:
+                pass
+
+        # "Save Image As…" — all image types, fully self-contained.
+        save_action = Gio.SimpleAction.new("save-image-as", None)
+        save_action.connect(
+            "activate", lambda _a, _p, u=image_uri: self._save_image(u)
+        )
+        self._context_menu_actions.append(save_action)
+        try:
+            context_menu.append(
+                _WebKitModule.ContextMenuItem.new_from_gaction(
+                    save_action, "Save Image As\u2026", None
+                )
+            )
+        except Exception:
+            pass
+
+        return False
+
+    def _save_image(self, image_uri: str) -> None:
+        """Show a save dialog then write the image to the chosen path.
+
+        Handles all three URI types without going through WebKit's download
+        state machine (which abandons the request before the async file dialog
+        can respond):
+          data:   — decode the base64 payload and write directly.
+          file:// — copy the local file with shutil.
+          http(s) — fetch in a daemon thread with urllib so the UI stays live.
+        """
+        dialog = Gtk.FileDialog.new()
+        dialog.set_initial_name(_default_save_filename(image_uri))
+        parent = self._view.get_root() if self._view else None
+        dialog.save(
+            parent,
+            None,
+            lambda d, r: self._on_save_image_response(d, r, image_uri),
+        )
+
+    def _on_save_image_response(
+        self,
+        dialog: Gtk.FileDialog,
+        result: object,
+        image_uri: str,
+    ) -> None:
+        try:
+            gfile = dialog.save_finish(result)
+        except GLib.Error:
+            return
+        if gfile is None:
+            return
+        path = gfile.get_path()
+        if not path:
+            return
+
+        if image_uri.startswith("data:"):
+            try:
+                header, _, data_part = image_uri.partition(",")
+                raw = (
+                    base64.b64decode(data_part)
+                    if ";base64" in header
+                    else unquote(data_part).encode("utf-8")
+                )
+                with open(path, "wb") as fh:
+                    fh.write(raw)
+            except Exception:
+                pass
+
+        elif image_uri.startswith("file://"):
+            src = unquote(urlparse(image_uri).path)
+            try:
+                shutil.copy2(src, path)
+            except OSError:
+                pass
+
+        else:
+            # Remote image — fetch in a background thread so the UI stays live.
+            # A browser-compatible User-Agent is required; many servers return
+            # 403 Forbidden to Python's default urllib agent.
+            def _fetch(url: str = image_uri, dest: str = path) -> None:
+                try:
+                    req = urllib.request.Request(
+                        url,
+                        headers={
+                            "User-Agent": (
+                                "Mozilla/5.0 (X11; Linux x86_64) "
+                                "Gecko/20100101 Firefox/128.0"
+                            )
+                        },
+                    )
+                    with urllib.request.urlopen(req) as resp:
+                        with open(dest, "wb") as fh:
+                            fh.write(resp.read())
+                except Exception:
+                    pass
+
+            threading.Thread(target=_fetch, daemon=True).start()
+
+    def _uri_to_markdown_image(self, uri: str) -> str:
+        """Return a Markdown image snippet for *uri*.
+
+        file:// URIs are converted to a path relative to the current document
+        directory so the snippet works when the Markdown file is moved.
+        http/https URIs are used verbatim.
+        """
+        if uri.startswith(("http://", "https://")):
+            return f"![image]({uri})"
+        if uri.startswith("file://"):
+            image_path = unquote(urlparse(uri).path)
+            base_path = unquote(urlparse(self._base_uri).path).rstrip("/")
+            try:
+                rel = os.path.relpath(image_path, base_path).replace(os.sep, "/")
+                return f"![image]({rel})"
+            except ValueError:
+                return f"![image]({image_path})"
+        return f"![image]({uri})"
+
+    def _copy_to_clipboard(self, text: str) -> None:
+        """Copy *text* to the system clipboard."""
+        try:
+            display = Gdk.Display.get_default()
+            if display is None:
+                return
+            provider = Gdk.ContentProvider.new_for_value(
+                GObject.Value(str, text)
+            )
+            display.get_clipboard().set_content(provider)
+        except Exception:
+            pass
+
     def _connect_download_signal(self, context: object) -> None:
         """Connect the download-started signal to _on_download_started.
 
@@ -405,14 +602,11 @@ class WebKitPreview(AbstractPreview):
         try:
             gfile = dialog.save_finish(result)
         except GLib.Error:
-            download.cancel()
+            # User dismissed the dialog — no destination set, WebKit
+            # abandons the download automatically. Do NOT call cancel();
+            # it segfaults in WebKit 6.0.
             return
         if gfile is None:
-            download.cancel()
-            return
-        path = gfile.get_path()
-        if not path:
-            download.cancel()
             return
 
         uri = download.get_request().get_uri()
@@ -421,6 +615,9 @@ class WebKitPreview(AbstractPreview):
             # Write the decoded bytes directly and let the WebKit download
             # exhaust itself — calling cancel() on a data: URI download
             # segfaults in WebKit 6.0.
+            path = gfile.get_path()
+            if not path:
+                return
             try:
                 header, _, data_part = uri.partition(",")
                 if ";base64" in header:
@@ -432,7 +629,12 @@ class WebKitPreview(AbstractPreview):
             except Exception:
                 pass
         else:
-            download.set_destination(path)
+            # WebKit 6.0: set_destination() expects an absolute path.
+            # WebKit 4.x expected a file:// URI — get_path() works for both
+            # since it always returns an absolute filesystem path.
+            path = gfile.get_path()
+            if path:
+                download.set_destination(path)
 
     def _on_create_web_view(
         self, _webview: object, navigation_action: object
