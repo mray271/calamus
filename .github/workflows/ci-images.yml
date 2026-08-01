@@ -7,7 +7,7 @@ name: CI Images
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
     paths:
       - "build-aux/ci/**"
       - ".github/workflows/ci-images.yml"
