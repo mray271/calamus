@@ -65,6 +65,22 @@ class AbstractTab(ABC):
         """Return the tab's preview."""
 
     @abstractmethod
+    def get_widget(self) -> Gtk.Widget:
+        """Return the underlying GTK widget for embedding in the tab view."""
+
+    @abstractmethod
+    def load_content(self, text: str, preview_base_path: str | None = None) -> None:
+        """Load text directly into the editor without marking the tab modified."""
+
+    @abstractmethod
+    def set_editor_visible(self, visible: bool) -> None:
+        """Show or hide the editor pane."""
+
+    @abstractmethod
+    def set_preview_visible(self, visible: bool) -> None:
+        """Show or hide the preview pane."""
+
+    @abstractmethod
     def save(self) -> bool:
         """Save the tab contents."""
 
@@ -81,12 +97,12 @@ class AbstractTab(ABC):
         """Load file contents into the tab."""
 
 
-@AbstractTab.register
-class EditorTab(Gtk.Box):
+class EditorTab(AbstractTab):
     """Concrete editor tab implementation."""
 
     def __init__(self, file_path: str | None = None, on_open_path=None) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        super().__init__()
+        self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._file_path = file_path
         self._modified = False
         self.search_bar = Gtk.SearchBar()
@@ -128,6 +144,9 @@ class EditorTab(Gtk.Box):
 
     def get_preview(self) -> AbstractPreview:
         return self.preview
+
+    def get_widget(self) -> Gtk.Widget:
+        return self._box
 
     def save(self) -> bool:
         if self._file_path is None:
@@ -188,11 +207,11 @@ class EditorTab(Gtk.Box):
     def _build_ui(self) -> None:
         self.search_bar.set_child(self.search_entry)
         self.search_bar.connect_entry(self.search_entry)
-        self.append(self.search_bar)
+        self._box.append(self.search_bar)
 
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         self._paned.set_vexpand(True)
-        self.append(self._paned)
+        self._box.append(self._paned)
 
         self._scroll_editor = Gtk.ScrolledWindow()
         self._scroll_editor.set_child(self.editor.get_widget())
@@ -271,6 +290,34 @@ class AbstractTabManager(ABC):
     def prev_tab(self) -> None:
         """Select the previous tab."""
 
+    @abstractmethod
+    def get_tab_count(self) -> int:
+        """Return the number of open tabs."""
+
+    @abstractmethod
+    def get_unsaved_tabs(self) -> list[str]:
+        """Return display names of all tabs with unsaved changes."""
+
+    @abstractmethod
+    def set_editor_pane_visible(self, visible: bool) -> None:
+        """Show or hide the editor pane across all tabs."""
+
+    @abstractmethod
+    def set_preview_pane_visible(self, visible: bool) -> None:
+        """Show or hide the preview pane across all tabs."""
+
+    @abstractmethod
+    def mark_current_saved(self) -> None:
+        """Mark the current tab as saved without writing to disk."""
+
+    @abstractmethod
+    def set_all_editors_editable(self, editable: bool) -> None:
+        """Set the editable state of every open editor."""
+
+    @abstractmethod
+    def set_title_change_callback(self, callback: object) -> None:
+        """Register a callback invoked when the active tab title changes."""
+
 
 class AdwTabManager(AbstractTabManager):
     """Adwaita TabView-backed tab manager (composition — AdwTabView is final)."""
@@ -282,9 +329,11 @@ class AdwTabManager(AbstractTabManager):
         self._editor_visible = True
         self._preview_visible = True
         self._on_title_changed: object = None
+        self._pages: dict[Adw.TabPage, EditorTab] = {}
         self._tab_view.connect(
             "notify::selected-page", lambda *_: self._notify_title_changed()
         )
+        self._tab_view.connect("page-detached", self._on_page_detached)
         self.new_tab()
 
     def get_widget(self) -> Gtk.Widget:
@@ -304,8 +353,9 @@ class AdwTabManager(AbstractTabManager):
         tab = EditorTab(file_path, on_open_path=self.open_file)
         tab.set_editor_visible(self._editor_visible)
         tab.set_preview_visible(self._preview_visible)
-        page = self._tab_view.append(tab)
+        page = self._tab_view.append(tab.get_widget())
         page.set_title(tab.title)
+        self._pages[page] = tab
 
         def _on_buffer_changed(*_args):
             page.set_title(tab.title)
@@ -315,33 +365,31 @@ class AdwTabManager(AbstractTabManager):
         self._tab_view.set_selected_page(page)
         return tab
 
+    def _on_page_detached(
+        self, _tab_view: Adw.TabView, page: Adw.TabPage, _position: int
+    ) -> None:
+        self._pages.pop(page, None)
+
     def get_tab_count(self) -> int:
         return self._tab_view.get_n_pages()
 
     def get_unsaved_tabs(self) -> list[str]:
         """Return display names of all tabs with unsaved changes."""
-        names = []
-        for index in range(self._tab_view.get_n_pages()):
-            child = self._tab_view.get_nth_page(index).get_child()
-            if isinstance(child, EditorTab) and child.modified:
-                names.append(
-                    os.path.basename(child.file_path) if child.file_path else "Untitled"
-                )
-        return names
+        return [
+            os.path.basename(tab.file_path) if tab.file_path else "Untitled"
+            for tab in self._pages.values()
+            if tab.modified
+        ]
 
     def set_editor_pane_visible(self, visible: bool) -> None:
         self._editor_visible = visible
-        for index in range(self._tab_view.get_n_pages()):
-            child = self._tab_view.get_nth_page(index).get_child()
-            if isinstance(child, EditorTab):
-                child.set_editor_visible(visible)
+        for tab in self._pages.values():
+            tab.set_editor_visible(visible)
 
     def set_preview_pane_visible(self, visible: bool) -> None:
         self._preview_visible = visible
-        for index in range(self._tab_view.get_n_pages()):
-            child = self._tab_view.get_nth_page(index).get_child()
-            if isinstance(child, EditorTab):
-                child.set_preview_visible(visible)
+        for tab in self._pages.values():
+            tab.set_preview_visible(visible)
 
     def open_file(self, path: str) -> None:
         try:
@@ -352,22 +400,17 @@ class AdwTabManager(AbstractTabManager):
             self._show_file_too_large_dialog(path, file_size)
             return
         # Switch to already-open tab if the file is loaded elsewhere.
-        for index in range(self._tab_view.get_n_pages()):
-            page = self._tab_view.get_nth_page(index)
-            child = page.get_child()
-            if isinstance(child, EditorTab) and child.file_path == path:
+        for page, tab in self._pages.items():
+            if tab.file_path == path:
                 self._tab_view.set_selected_page(page)
                 return
         # Replace a sole clean Untitled tab rather than opening alongside it.
         if self._tab_view.get_n_pages() == 1:
-            only = self._tab_view.get_nth_page(0).get_child()
-            if (
-                isinstance(only, EditorTab)
-                and only.file_path is None
-                and not only.modified
-            ):
+            page = self._tab_view.get_nth_page(0)
+            only = self._pages.get(page)
+            if only is not None and only.file_path is None and not only.modified:
                 only.load_file(path)
-                self._tab_view.get_nth_page(0).set_title(only.title)
+                page.set_title(only.title)
                 self._notify_title_changed()
                 return
         self.new_tab(path)
@@ -376,8 +419,7 @@ class AdwTabManager(AbstractTabManager):
         page = self._tab_view.get_selected_page()
         if page is None:
             return None
-        child = page.get_child()
-        return child if isinstance(child, EditorTab) else None
+        return self._pages.get(page)
 
     def get_current_editor(self) -> AbstractEditor | None:
         tab = self.get_current_tab()
@@ -406,10 +448,8 @@ class AdwTabManager(AbstractTabManager):
 
     def set_all_editors_editable(self, editable: bool) -> None:
         """Set the editable state of every open editor tab."""
-        for index in range(self._tab_view.get_n_pages()):
-            child = self._tab_view.get_nth_page(index).get_child()
-            if isinstance(child, EditorTab):
-                child.get_editor().set_editable(editable)
+        for tab in self._pages.values():
+            tab.get_editor().set_editable(editable)
 
     def save_as_current(self, parent: Gtk.Window) -> None:
         dialog = Gtk.FileDialog.new()

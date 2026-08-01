@@ -18,6 +18,7 @@ from calamus.exporter import HtmlExporter, OdtExporter, PdfExporter
 from calamus.formatting import DialogFormattingAction, FormattingRegistry
 from calamus.preferences import FileConfigProvider, PreferencesDialog
 from calamus.printer import GtkPrinter
+from calamus.protocols import HasWidget, Zoomable
 from calamus.recentfiles import ConfigFileRecentFilesProvider
 from calamus.tabs import AdwTabManager
 from calamus.theme import ThemeManager
@@ -224,7 +225,7 @@ class CalamusWindow(Adw.ApplicationWindow):
 
         self.dir_pane = GtkDirectoryPane()
         self.dir_pane.connect_file_activated(self._on_directory_file_activated)
-        self.paned.set_start_child(self.dir_pane)
+        self.paned.set_start_child(self.dir_pane.get_widget())
         self.paned.set_position(220)
 
         self.paned.set_end_child(tab_view)
@@ -562,7 +563,7 @@ class CalamusWindow(Adw.ApplicationWindow):
 
     def _on_toggle_dir_pane(self, action: Gio.SimpleAction, _param: object) -> None:
         self._dir_pane_visible = not self._dir_pane_visible
-        self.dir_pane.set_visible(self._dir_pane_visible)
+        self.dir_pane.get_widget().set_visible(self._dir_pane_visible)
         action.set_state(GLib.Variant.new_boolean(self._dir_pane_visible))
 
     def _on_toggle_editor_pane(self, action: Gio.SimpleAction, _param: object) -> None:
@@ -668,38 +669,34 @@ class CalamusWindow(Adw.ApplicationWindow):
         self.dir_pane.reset_zoom()
 
     def _zoom_focused_pane(self, factor: float) -> None:
-        focus = self.get_focus()
-        if self._is_focus_in_widget(focus, self.dir_pane):
-            self.dir_pane.zoom_by(factor)
-            return
-        if self._is_focus_in_current_preview(focus):
-            preview = self.tab_manager.get_current_preview()
-            if preview is not None:
-                preview.zoom_by(factor)
-            return
-        editor = self.tab_manager.get_current_editor()
-        if editor is not None:
-            editor.zoom_by(factor)
+        target = self._get_focused_zoomable()
+        if target is not None:
+            target.zoom_by(factor)
 
     def _reset_focused_pane(self) -> None:
+        target = self._get_focused_zoomable()
+        if target is not None:
+            target.reset_zoom()
+
+    def _get_focused_zoomable(self) -> Zoomable | None:
+        """Return the zoom-capable pane that currently has keyboard focus."""
         focus = self.get_focus()
-        if self._is_focus_in_widget(focus, self.dir_pane):
-            self.dir_pane.reset_zoom()
-            return
-        if self._is_focus_in_current_preview(focus):
-            preview = self.tab_manager.get_current_preview()
-            if preview is not None:
-                preview.reset_zoom()
-            return
-        editor = self.tab_manager.get_current_editor()
-        if editor is not None:
-            editor.reset_zoom()
+        if self._is_focus_in_pane(focus, self.dir_pane):
+            return self.dir_pane
+        if self._is_focus_in_pane(focus, self.tab_manager.get_current_preview()):
+            return self.tab_manager.get_current_preview()
+        return self.tab_manager.get_current_editor()
 
     def _is_focus_in_current_preview(self, focus: Gtk.Widget | None) -> bool:
-        preview = self.tab_manager.get_current_preview()
-        if preview is None:
+        return self._is_focus_in_pane(focus, self.tab_manager.get_current_preview())
+
+    def _is_focus_in_pane(
+        self, focus: Gtk.Widget | None, pane: HasWidget | None
+    ) -> bool:
+        """Return True when *focus* is inside the widget tree of *pane*."""
+        if pane is None:
             return False
-        return self._is_focus_in_widget(focus, preview.get_widget())
+        return self._is_focus_in_widget(focus, pane.get_widget())
 
     def _is_focus_in_widget(
         self, focus: Gtk.Widget | None, widget: Gtk.Widget | None

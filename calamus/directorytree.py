@@ -28,9 +28,14 @@ class AbstractDirectoryPane(ABC):
     def connect_file_activated(self, callback: Callable[[str], None]) -> None:
         """Connect a file-activation callback."""
 
+    def zoom_by(self, factor: float) -> None:
+        """Scale the pane font size by a factor. No-op by default."""
 
-@AbstractDirectoryPane.register
-class GtkDirectoryPane(Gtk.Box):
+    def reset_zoom(self) -> None:
+        """Reset pane zoom to default. No-op by default."""
+
+
+class GtkDirectoryPane(AbstractDirectoryPane):
     """GTK TreeView-backed directory pane."""
 
     _MAX_TRAVERSAL_DEPTH = 32
@@ -40,7 +45,8 @@ class GtkDirectoryPane(Gtk.Box):
     _DEFAULT_FONT_SIZE_PT = 11.0
 
     def __init__(self) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        super().__init__()
+        self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._callbacks: list[Callable[[str], None]] = []
         self._store = Gtk.TreeStore(str, str)
         self._tree = Gtk.TreeView(model=self._store)
@@ -52,8 +58,8 @@ class GtkDirectoryPane(Gtk.Box):
         self._visited_directory_count = 0
         self._max_traversal_depth = self._MAX_TRAVERSAL_DEPTH
         self._max_traversal_directories = self._MAX_TRAVERSAL_DIRECTORIES
-        self.set_size_request(200, -1)
-        self.add_css_class("calamus-directory-pane")
+        self._box.set_size_request(200, -1)
+        self._box.add_css_class("calamus-directory-pane")
         self._build_ui()
 
     def load_directory(self, path: str) -> None:
@@ -63,7 +69,7 @@ class GtkDirectoryPane(Gtk.Box):
         self._populate(None, path)
 
     def get_widget(self) -> Gtk.Widget:
-        return self
+        return self._box
 
     def connect_file_activated(self, callback: Callable[[str], None]) -> None:
         self._callbacks.append(callback)
@@ -85,11 +91,11 @@ class GtkDirectoryPane(Gtk.Box):
         label.set_xalign(0)
         label.add_css_class("heading")
         self._header_label = label
-        self.append(label)
+        self._box.append(label)
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
-        self.append(scroll)
+        self._box.append(scroll)
 
         self._tree.set_headers_visible(False)
         renderer = Gtk.CellRendererText()
@@ -112,7 +118,7 @@ class GtkDirectoryPane(Gtk.Box):
             f"font-size: {self._font_size_pt}pt; }}"
         )
         Gtk.StyleContext.add_provider_for_display(
-            self.get_display(),
+            self._box.get_display(),
             self._css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )

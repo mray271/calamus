@@ -121,6 +121,7 @@ class TestAdwTabManagerLargeFileGate:
         mgr._window = MagicMock()
         mgr._tab_view = MagicMock()
         mgr._tab_view.get_n_pages.return_value = 0
+        mgr._pages = {}
         return mgr
 
     def test_open_file_shows_dialog_for_oversized_file(self, tmp_path):
