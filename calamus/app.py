@@ -71,9 +71,15 @@ class CalamusApplication(Adw.Application):
         )
 
     def do_open(self, files: list, n_files: int, hint: str) -> None:
-        self._initial_files = [
-            os.path.abspath(f.get_path()) for f in files if f.get_path() is not None
-        ]
+        for f in files:
+            path = f.get_path()
+            if path is None:
+                continue
+            path = os.path.abspath(path)
+            if os.path.isdir(path):
+                self._initial_dir = path
+            else:
+                self._initial_files.append(path)
         self.activate()
 
     def do_activate(self) -> None:
