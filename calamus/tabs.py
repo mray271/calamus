@@ -211,6 +211,7 @@ class EditorTab(AbstractTab):
 
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         self._paned.set_vexpand(True)
+        self._paned.set_wide_handle(True)
         self._box.append(self._paned)
 
         self._scroll_editor = Gtk.ScrolledWindow()

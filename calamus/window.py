@@ -226,6 +226,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         # Three-pane area
         self.paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         self.paned.set_vexpand(True)
+        self.paned.set_wide_handle(True)
         inner_box.append(self.paned)
 
         self.dir_pane = GtkDirectoryPane()
