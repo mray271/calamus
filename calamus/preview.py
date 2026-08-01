@@ -134,7 +134,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   dt {{
     font-weight: 700;
   }}
-  img {{ max-width: 100%; }}
+  img {{ max-width: 100%; transform: scale(__PREVIEW_FONT_SCALE__); transform-origin: left top; }}
   /* Explicit sub/sup sizing — WebKit's UA default (font-size: smaller ≈ 83%)
      is not visually distinct enough, especially for symbol glyphs.
      position:relative + vertical-align:baseline prevents sub/sup from
