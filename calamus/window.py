@@ -172,6 +172,8 @@ class CalamusWindow(Adw.ApplicationWindow):
             ("document-new-symbolic", "app.new", "New file (Ctrl+N)"),
             ("document-open-symbolic", "app.open", "Open file (Ctrl+O)"),
             ("document-save-symbolic", "app.save", "Save (Ctrl+S)"),
+            ("go-up-symbolic", "app.dir-up", "Go to parent directory"),
+            ("user-home-symbolic", "app.dir-home", "Go to home directory"),
         ]:
             btn = Gtk.Button(icon_name=icon)
             btn.set_action_name(action)
@@ -263,7 +265,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         # Disable actions that don't make sense in a single-use pipe session.
         app = self.get_application()
         if app is not None:
-            for name in ("new", "open", "save-as"):
+            for name in ("new", "open", "save-as", "dir-up", "dir-home"):
                 action = app.lookup_action(name)
                 if action is not None:
                     action.set_enabled(False)
@@ -283,7 +285,16 @@ class CalamusWindow(Adw.ApplicationWindow):
 
         app = self.get_application()
         if app is not None:
-            for name in ("new", "open", "save", "save-as", "undo", "redo"):
+            for name in (
+                "new",
+                "open",
+                "save",
+                "save-as",
+                "dir-up",
+                "dir-home",
+                "undo",
+                "redo",
+            ):
                 action = app.lookup_action(name)
                 if action is not None:
                     action.set_enabled(False)
@@ -297,6 +308,8 @@ class CalamusWindow(Adw.ApplicationWindow):
             ("open", self._on_open, "<primary>o"),
             ("save", self._on_save, "<primary>s"),
             ("save-as", self._on_save_as, "<primary><shift>s"),
+            ("dir-up", self._on_dir_up, "<alt>Up"),
+            ("dir-home", self._on_dir_home, "<alt>Home"),
             ("reload", self._on_reload, None),
             ("next-tab", self._on_next_tab, "<primary>Page_Down"),
             ("prev-tab", self._on_prev_tab, "<primary>Page_Up"),
@@ -482,6 +495,12 @@ class CalamusWindow(Adw.ApplicationWindow):
 
     def _on_save_as(self, _action: Gio.SimpleAction, _param: object) -> None:
         self.tab_manager.save_as_current(self)
+
+    def _on_dir_up(self, _action: Gio.SimpleAction, _param: object) -> None:
+        self.dir_pane.load_parent_directory()
+
+    def _on_dir_home(self, _action: Gio.SimpleAction, _param: object) -> None:
+        self.dir_pane.load_home_directory()
 
     def _on_reload(self, _action: Gio.SimpleAction, _param: object) -> None:
         self.tab_manager.reload_current()
