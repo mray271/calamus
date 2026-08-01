@@ -28,6 +28,7 @@ python.install_sources(
     'calamus/preferences.py',
     'calamus/preview.py',
     'calamus/printer.py',
+    'calamus/protocols.py',
     'calamus/recentfiles.py',
     'calamus/renderer.py',
     'calamus/tabs.py',

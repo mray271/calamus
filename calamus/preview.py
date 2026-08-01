@@ -96,7 +96,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       --mark-bg: #6a6233;
     }}
   }}
-  body {{ font-family: "Noto Sans", "DejaVu Sans", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Emoji", "NotoSymbols2", "NotoSymbols", sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
+  body {{ font-family: "Noto Sans", "DejaVu Sans", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Noto Emoji", "NotoSymbols2", "NotoSymbols", sans-serif; font-size: __PREVIEW_FONT_SCALE__em; max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; background: var(--bg); color: var(--fg); }}
   a {{ color: var(--link-color); }}
   code {{ background: var(--code-bg); padding: 2px 4px; border-radius: 3px; font-family: monospace; }}
   pre {{ background: var(--code-bg); padding: 1em; border-radius: 4px; overflow-x: auto; }}
@@ -200,9 +200,21 @@ class AbstractPreview(ABC):
     def set_base_path(self, path: str | None) -> None:
         """Override the preview base path for resolving relative links."""
 
+    @abstractmethod
+    def zoom_by(self, factor: float) -> None:
+        """Scale preview text by a factor."""
+
+    @abstractmethod
+    def reset_zoom(self) -> None:
+        """Reset preview zoom to its default."""
+
 
 class WebKitPreview(AbstractPreview):
     """Preview implementation backed by WebKit (6.0) or WebKit2 (4.1)."""
+
+    _MIN_ZOOM = 0.5
+    _MAX_ZOOM = 3.0
+    _DEFAULT_ZOOM = 1.0
 
     def __init__(
         self,
@@ -221,7 +233,10 @@ class WebKitPreview(AbstractPreview):
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
+        self._view.connect("load-changed", self._on_load_changed)
         self._last_markdown: str = ""
+        self._zoom_level = self._DEFAULT_ZOOM
+        self._pending_scroll_restore_ratio: float | None = None
         self._style_manager = Adw.StyleManager.get_default()
         self._style_manager.connect("notify::dark", self._on_dark_changed)
         # Layer 2 & 3: async rendering + SVG cache
@@ -308,6 +323,15 @@ class WebKitPreview(AbstractPreview):
         if self._last_markdown:
             self.update(self._last_markdown)
 
+    def _on_load_changed(self, _webview: object, load_event: object) -> None:
+        if load_event != _WebKitModule.LoadEvent.FINISHED:
+            return
+        if self._pending_scroll_restore_ratio is None:
+            return
+        ratio = self._pending_scroll_restore_ratio
+        self._pending_scroll_restore_ratio = None
+        self._restore_scroll_ratio(ratio)
+
     def update(self, markdown_text: str) -> None:
         self._last_markdown = markdown_text
         dark = self._style_manager.get_dark()
@@ -388,6 +412,9 @@ class WebKitPreview(AbstractPreview):
             highlight_css=get_highlight_css_tag(dark=dark),
             highlight_script=get_highlight_script_tag(),
         )
+        html_text = html_text.replace(
+            "__PREVIEW_FONT_SCALE__", f"{self._zoom_level:.3f}"
+        )
         # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
         # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
         raw = GLib.Bytes.new(html_text.encode("utf-8"))
@@ -411,6 +438,97 @@ class WebKitPreview(AbstractPreview):
     def get_widget(self) -> Gtk.Widget:
         return self._view
 
+    def zoom_by(self, factor: float) -> None:
+        if factor <= 0:
+            return
+        next_level = max(
+            self._MIN_ZOOM,
+            min(self._MAX_ZOOM, round(self._zoom_level * factor, 3)),
+        )
+        if next_level == self._zoom_level:
+            return
+        self._set_zoom_preserving_scroll(next_level)
+
+    def reset_zoom(self) -> None:
+        if self._zoom_level == self._DEFAULT_ZOOM:
+            return
+        self._set_zoom_preserving_scroll(self._DEFAULT_ZOOM)
+
+    def _set_zoom_preserving_scroll(self, next_level: float) -> None:
+        self._capture_scroll_ratio(
+            lambda ratio: self._apply_zoom_with_scroll_restore(next_level, ratio)
+        )
+
+    def _apply_zoom_with_scroll_restore(
+        self, next_level: float, ratio: float | None
+    ) -> None:
+        self._pending_scroll_restore_ratio = ratio
+        self._zoom_level = next_level
+        self.update(self._last_markdown)
+
+    def _capture_scroll_ratio(self, callback: Callable[[float | None], None]) -> None:
+        js = """
+            (() => {
+              const maxY = Math.max(
+                1,
+                document.documentElement.scrollHeight - window.innerHeight
+              );
+              const y = Math.max(0, window.scrollY || window.pageYOffset || 0);
+              return y / maxY;
+            })();
+        """
+        if hasattr(self._view, "evaluate_javascript"):
+            self._view.evaluate_javascript(
+                js,
+                -1,
+                None,
+                None,
+                None,
+                self._on_capture_scroll_ratio_done,
+                callback,
+            )
+            return
+        callback(None)
+
+    def _on_capture_scroll_ratio_done(
+        self,
+        webview: object,
+        result: object,
+        callback: Callable[[float | None], None],
+    ) -> None:
+        callback(self._extract_scroll_ratio(webview, result))
+
+    def _extract_scroll_ratio(self, webview: object, result: object) -> float | None:
+        js_result = self._finish_javascript(webview, result)
+        if js_result is None:
+            return None
+        if hasattr(js_result, "is_number") and js_result.is_number():
+            return max(0.0, min(1.0, float(js_result.to_double())))
+        return None
+
+    def _finish_javascript(self, webview: object, result: object) -> object | None:
+        if hasattr(webview, "evaluate_javascript_finish"):
+            try:
+                return webview.evaluate_javascript_finish(result)
+            except GLib.Error:
+                return None
+        return None
+
+    def _restore_scroll_ratio(self, ratio: float | None) -> None:
+        if ratio is None:
+            return
+        safe_ratio = max(0.0, min(1.0, ratio))
+        js = (
+            "(() => {"
+            "const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);"
+            f"window.scrollTo(0, maxY * {safe_ratio:.6f});"
+            "})();"
+        )
+        if hasattr(self._view, "evaluate_javascript"):
+            self._view.evaluate_javascript(js, -1, None, None, None, None, None)
+        elif hasattr(self._view, "run_javascript"):
+            self._view.run_javascript(js, None, None, None)
+
 
 class TextViewPreview(AbstractPreview):
     """Fallback preview that shows raw Markdown text."""
@@ -421,6 +539,11 @@ class TextViewPreview(AbstractPreview):
         self._view.set_wrap_mode(Gtk.WrapMode.WORD)
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
+        self._css_provider = Gtk.CssProvider()
+        self._font_size_pt = 11.0
+        self._default_font_size_pt = self._font_size_pt
+        self._view.add_css_class("calamus-preview-fallback")
+        self._apply_font_size(self._font_size_pt)
 
     def update(self, markdown_text: str) -> None:
         self._view.get_buffer().set_text(markdown_text)
@@ -433,6 +556,26 @@ class TextViewPreview(AbstractPreview):
 
     def get_widget(self) -> Gtk.Widget:
         return self._view
+
+    def zoom_by(self, factor: float) -> None:
+        if factor <= 0:
+            return
+        size = max(8.0, min(48.0, round(self._font_size_pt * factor, 1)))
+        self._apply_font_size(size)
+
+    def reset_zoom(self) -> None:
+        self._apply_font_size(self._default_font_size_pt)
+
+    def _apply_font_size(self, size_pt: float) -> None:
+        self._font_size_pt = size_pt
+        self._css_provider.load_from_string(
+            f"textview.calamus-preview-fallback {{ font-size: {self._font_size_pt}pt; }}"
+        )
+        Gtk.StyleContext.add_provider_for_display(
+            self._view.get_display(),
+            self._css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
 
 
 def create_preview(
