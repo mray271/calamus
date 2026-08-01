@@ -7,16 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- `--pipe-base-path PATH` lets piped Markdown resolve relative links from an assumed file or directory path instead of `/`
-- Independent zoom controls for editor, preview, and directory tree panes, including focused-pane shortcuts and pane-specific in/out/reset actions
+## [0.5.2] - 2026-07-31
 
 ### Fixed
-- Directory tree traversal now follows valid symlinked directories while safely preventing symlink cycles and pathological recursion budgets from crashing the app
-- Footnote references now render as separate clickable superscripts with superscript commas, and sentence punctuation is placed before the footnote superscript run
-- Resolved CodeQL findings by hardening workflow token permissions and replacing URL substring assertions with structured URL/host checks in tests
-- Extended-syntax support now includes task lists, definition lists, Markdown Guide heading IDs (`{#custom-id}`), and `==highlight==` mark rendering
-- Preview now hides list bullets for task-list checkboxes, renders definition-list terms in bold, supports same-document heading anchor scrolling, and uses a softer desaturated yellow highlight color
+- Passing a directory path (including `.` and `..`) on the command line no longer errors with "file not found"; the directory tree pane is instead initialised to that directory
 
 ## [0.4.0] - 2026-07-12
 

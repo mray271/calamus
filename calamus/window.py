@@ -107,6 +107,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         pipe_content: str | None = None,
         pipe_base_path: str | None = None,
         initial_files: list[str] | None = None,
+        initial_dir: str | None = None,
         preview_mode: bool = False,
         **kwargs,
     ) -> None:
@@ -147,6 +148,8 @@ class CalamusWindow(Adw.ApplicationWindow):
             for path in initial_files:
                 self.tab_manager.open_file(path)
                 self._recent_files.add(path)
+        if initial_dir is not None:
+            self.dir_pane.load_directory(initial_dir)
 
     def _build_ui(self) -> None:
         self.tab_manager = AdwTabManager(self)
