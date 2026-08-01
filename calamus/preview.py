@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import os
+import tempfile
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -181,6 +183,24 @@ def _is_same_document_file_anchor(path: str, base_uri: str) -> bool:
     return normalized_path == normalized_base
 
 
+_SAVE_MIME_NAMES: dict[str, str] = {
+    "image/svg+xml": "diagram.svg",
+    "image/png": "image.png",
+    "image/jpeg": "image.jpg",
+    "image/gif": "image.gif",
+    "image/webp": "image.webp",
+}
+
+
+def _default_save_filename(uri: str) -> str:
+    """Return a reasonable default save filename derived from *uri*."""
+    if uri.startswith("data:"):
+        mime = uri[len("data:"):].partition(";")[0].partition(",")[0].strip().lower()
+        return _SAVE_MIME_NAMES.get(mime, "download")
+    last_segment = urlparse(uri).path.rstrip("/").rsplit("/", 1)[-1]
+    return unquote(last_segment) if last_segment else "image"
+
+
 class AbstractPreview(ABC):
     """Defines preview behavior."""
 
@@ -233,7 +253,14 @@ class WebKitPreview(AbstractPreview):
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
+        self._view.connect("create", self._on_create_web_view)
         self._view.connect("load-changed", self._on_load_changed)
+        # "Save Image As" (and any other download) is silently abandoned by
+        # WebKit unless a handler sets the destination.
+        # WebKit 6.0 moved download-started from WebContext to NetworkSession.
+        # Try the WebView's own session first (most specific), then the module-
+        # level NetworkSession, then fall back to WebContext for WebKit2 4.1.
+        self._connect_download_signal(context)
         self._last_markdown: str = ""
         self._zoom_level = self._DEFAULT_ZOOM
         self._pending_scroll_restore_ratio: float | None = None
@@ -285,6 +312,7 @@ class WebKitPreview(AbstractPreview):
 
         nav_action = decision.get_navigation_action()
         uri = nav_action.get_request().get_uri()
+
         if uri.startswith("file://"):
             raw_path = unquote(uri[len("file://") :])
             path, _, fragment = raw_path.partition("#")
@@ -316,6 +344,172 @@ class WebKitPreview(AbstractPreview):
                 pass
         else:
             decision.ignore()
+
+    def _connect_download_signal(self, context: object) -> None:
+        """Connect the download-started signal to _on_download_started.
+
+        The signal location changed between WebKit versions:
+          WebKit 6.0  — WebKitNetworkSession (via view.get_network_session()
+                         or NetworkSession.get_default())
+          WebKit2 4.1 — WebKitWebContext
+        """
+        source = None
+        if hasattr(self._view, "get_network_session"):
+            source = self._view.get_network_session()
+        elif hasattr(_WebKitModule, "NetworkSession"):
+            source = _WebKitModule.NetworkSession.get_default()
+        else:
+            source = context
+        if source is not None:
+            try:
+                source.connect("download-started", self._on_download_started)
+            except TypeError:
+                pass  # signal unavailable on this WebKit build — silently skip
+
+    def _on_download_started(
+        self, _context: object, download: object
+    ) -> None:
+        """Show a save dialog when WebKit initiates a download (e.g. 'Save Image As').
+
+        WebKit silently abandons downloads unless a handler calls
+        ``download.set_destination()``.  We restrict handling to downloads that
+        originated from our own WebView so other WebViews in the same process
+        (e.g. the ImageViewerWindow) are unaffected.
+        """
+        if (
+            hasattr(download, "get_web_view")
+            and download.get_web_view() is not self._view
+        ):
+            return
+
+        uri = download.get_request().get_uri()
+        # get_suggested_filename() was removed in WebKit 6.0; fall back to
+        # extracting a name from the URI (or a sensible default for data: URIs).
+        suggested = _default_save_filename(uri)
+
+        dialog = Gtk.FileDialog.new()
+        dialog.set_initial_name(suggested)
+        parent = self._view.get_root() if self._view else None
+        dialog.save(
+            parent,
+            None,
+            lambda d, r: self._on_save_dialog_response(d, r, download),
+        )
+
+    def _on_save_dialog_response(
+        self,
+        dialog: Gtk.FileDialog,
+        result: object,
+        download: object,
+    ) -> None:
+        try:
+            gfile = dialog.save_finish(result)
+        except GLib.Error:
+            download.cancel()
+            return
+        if gfile is None:
+            download.cancel()
+            return
+        path = gfile.get_path()
+        if not path:
+            download.cancel()
+            return
+
+        uri = download.get_request().get_uri()
+        if uri.startswith("data:"):
+            # WebKit cannot stream data: URIs to disk (no response body exists).
+            # Write the decoded bytes directly and let the WebKit download
+            # exhaust itself — calling cancel() on a data: URI download
+            # segfaults in WebKit 6.0.
+            try:
+                header, _, data_part = uri.partition(",")
+                if ";base64" in header:
+                    raw = base64.b64decode(data_part)
+                else:
+                    raw = unquote(data_part).encode("utf-8")
+                with open(path, "wb") as fh:
+                    fh.write(raw)
+            except Exception:
+                pass
+        else:
+            download.set_destination(path)
+
+    def _on_create_web_view(
+        self, _webview: object, navigation_action: object
+    ) -> object:
+        """Handle WebKit's request to open a new window (e.g. right-click →
+        'Open Image in New Window' or 'Open Link in New Window').
+
+        We never create a new WebView window. Instead we open the URI in the
+        system's default application (image viewer for local files, browser
+        for http/https) and return None to cancel the new-window creation.
+        """
+        try:
+            uri = navigation_action.get_request().get_uri()
+        except Exception:
+            return None
+        self._open_uri_externally(uri)
+        return None
+
+    def _open_uri_externally(self, uri: str) -> None:
+        """Open *uri* in the system default application (browser / image viewer).
+
+        ``data:`` URIs (e.g. inline SVG Mermaid diagrams) are written to a
+        temporary file first, because ``Gio.AppInfo.launch_default_for_uri``
+        does not handle ``data:`` scheme URIs.
+        """
+        if uri.startswith("data:"):
+            self._open_data_uri_externally(uri)
+            return
+        try:
+            Gio.AppInfo.launch_default_for_uri(uri, None)
+        except GLib.Error:
+            pass
+
+    def _open_data_uri_externally(self, uri: str) -> None:
+        """Display or open a data: URI appropriately.
+
+        SVG images are opened in Calamus's own WebKit viewer window because
+        common system image viewers (gthumb, eog) do not fully support SVG.
+        All other image types are decoded to a temporary file and opened with
+        the system default application.
+        """
+        header, _, data_part = uri.partition(",")
+        mime = header[len("data:"):].split(";")[0].strip().lower()
+
+        if mime == "image/svg+xml":
+            # Use the built-in WebKit viewer — it renders SVG perfectly.
+            from calamus.imageviewer import ImageViewerWindow
+
+            viewer = ImageViewerWindow(uri, title="SVG Viewer")
+            viewer.present()
+            return
+
+        # For other image types decode to a temp file and use the system app.
+        try:
+            _MIME_EXTS = {
+                "image/png": ".png",
+                "image/jpeg": ".jpg",
+                "image/gif": ".gif",
+                "image/webp": ".webp",
+            }
+            ext = _MIME_EXTS.get(mime, "")
+            is_base64 = ";base64" in header
+            if is_base64:
+                raw = base64.b64decode(data_part)
+            else:
+                raw = unquote(data_part).encode("utf-8")
+            with tempfile.NamedTemporaryFile(
+                suffix=ext, delete=False, prefix="calamus_img_"
+            ) as tmp:
+                tmp.write(raw)
+                tmp_path = tmp.name
+        except Exception:
+            return
+        try:
+            Gio.AppInfo.launch_default_for_uri(f"file://{tmp_path}", None)
+        except GLib.Error:
+            pass
 
     def _on_dark_changed(
         self, _style_manager: Adw.StyleManager, _param: object

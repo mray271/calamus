@@ -321,7 +321,7 @@ class ImageAction(DialogFormattingAction):
         def on_response(_dialog: Adw.MessageDialog, response: str) -> None:
             if response != "insert":
                 return
-            url = url_entry.get_text() or "image.png"
+            url = url_entry.get_text() or "https://example.com/image.png"
             alt = alt_entry.get_text() or "image"
             editor.insert_at_cursor(f"![{alt}]({url})")
 

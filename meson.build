@@ -24,6 +24,7 @@ python.install_sources(
     'calamus/exporter.py',
     'calamus/formatting.py',
     'calamus/highlight_support.py',
+    'calamus/imageviewer.py',
     'calamus/mermaid_support.py',
     'calamus/preferences.py',
     'calamus/preview.py',
