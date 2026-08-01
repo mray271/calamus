@@ -109,9 +109,9 @@ class ImageViewerWindow(Adw.Window):
         box.append(header)
 
         for icon, tooltip, callback in [
-            ("zoom-in-symbolic",      "Zoom in (Ctrl++)",     self._on_zoom_in),
-            ("zoom-out-symbolic",     "Zoom out (Ctrl+-)",    self._on_zoom_out),
-            ("zoom-fit-best-symbolic","Reset zoom (Ctrl+0)",  self._on_zoom_reset),
+            ("zoom-in-symbolic", "Zoom in (Ctrl++)", self._on_zoom_in),
+            ("zoom-out-symbolic", "Zoom out (Ctrl+-)", self._on_zoom_out),
+            ("zoom-fit-best-symbolic", "Reset zoom (Ctrl+0)", self._on_zoom_reset),
         ]:
             btn = Gtk.Button(icon_name=icon)
             btn.set_tooltip_text(tooltip)
@@ -178,8 +178,7 @@ class ImageViewerWindow(Adw.Window):
         entry.connect("activate", self._on_find_next)
         entry.connect("next-match", self._on_find_next)
         entry.connect("previous-match", self._on_find_prev)
-        bar.connect("notify::search-mode-enabled",
-                    lambda b, _: self._sync_find_btn())
+        bar.connect("notify::search-mode-enabled", lambda b, _: self._sync_find_btn())
         return bar
 
     def _build_key_controller(self) -> None:

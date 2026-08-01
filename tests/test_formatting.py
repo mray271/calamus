@@ -283,9 +283,7 @@ def test_image_action_defaults_to_previewable_url(monkeypatch):
     dialog.connect(
         "response",
         lambda _dialog, response: editor.insert_at_cursor(
-            f"![image](https://example.com/image.png)"
-            if response == "insert"
-            else ""
+            f"![image](https://example.com/image.png)" if response == "insert" else ""
         ),
     )
     dialog._response_handler(dialog, "insert")

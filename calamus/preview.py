@@ -138,7 +138,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   dt {{
     font-weight: 700;
   }}
-  img {{ max-width: 100%; }}
+  img {{ max-width: 100%; transform: scale(__PREVIEW_FONT_SCALE__); transform-origin: left top; }}
   /* Explicit sub/sup sizing — WebKit's UA default (font-size: smaller ≈ 83%)
      is not visually distinct enough, especially for symbol glyphs.
      position:relative + vertical-align:baseline prevents sub/sup from
@@ -197,7 +197,7 @@ _SAVE_MIME_NAMES: dict[str, str] = {
 def _default_save_filename(uri: str) -> str:
     """Return a reasonable default save filename derived from *uri*."""
     if uri.startswith("data:"):
-        mime = uri[len("data:"):].partition(";")[0].partition(",")[0].strip().lower()
+        mime = uri[len("data:") :].partition(";")[0].partition(",")[0].strip().lower()
         return _SAVE_MIME_NAMES.get(mime, "download")
     last_segment = urlparse(uri).path.rstrip("/").rsplit("/", 1)[-1]
     return unquote(last_segment) if last_segment else "image"
@@ -389,10 +389,7 @@ class WebKitPreview(AbstractPreview):
             _WebKitModule.ContextMenuAction.DOWNLOAD_IMAGE_TO_DISK,
         }
         for item in list(context_menu.get_items()):
-            if (
-                hasattr(item, "get_stock_action")
-                and item.get_stock_action() in _remove
-            ):
+            if hasattr(item, "get_stock_action") and item.get_stock_action() in _remove:
                 context_menu.remove(item)
 
         # Clear previous actions — new ones are appended below.
@@ -417,9 +414,7 @@ class WebKitPreview(AbstractPreview):
 
         # "Save Image As…" — all image types, fully self-contained.
         save_action = Gio.SimpleAction.new("save-image-as", None)
-        save_action.connect(
-            "activate", lambda _a, _p, u=image_uri: self._save_image(u)
-        )
+        save_action.connect("activate", lambda _a, _p, u=image_uri: self._save_image(u))
         self._context_menu_actions.append(save_action)
         try:
             context_menu.append(
@@ -535,9 +530,7 @@ class WebKitPreview(AbstractPreview):
             display = Gdk.Display.get_default()
             if display is None:
                 return
-            provider = Gdk.ContentProvider.new_for_value(
-                GObject.Value(str, text)
-            )
+            provider = Gdk.ContentProvider.new_for_value(GObject.Value(str, text))
             display.get_clipboard().set_content(provider)
         except Exception:
             pass
@@ -563,9 +556,7 @@ class WebKitPreview(AbstractPreview):
             except TypeError:
                 pass  # signal unavailable on this WebKit build — silently skip
 
-    def _on_download_started(
-        self, _context: object, download: object
-    ) -> None:
+    def _on_download_started(self, _context: object, download: object) -> None:
         """Show a save dialog when WebKit initiates a download (e.g. 'Save Image As').
 
         WebKit silently abandons downloads unless a handler calls
@@ -677,7 +668,7 @@ class WebKitPreview(AbstractPreview):
         the system default application.
         """
         header, _, data_part = uri.partition(",")
-        mime = header[len("data:"):].split(";")[0].strip().lower()
+        mime = header[len("data:") :].split(";")[0].strip().lower()
 
         if mime == "image/svg+xml":
             # Use the built-in WebKit viewer — it renders SVG perfectly.

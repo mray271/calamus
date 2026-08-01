@@ -458,7 +458,7 @@ def test_webkit_preview_non_svg_data_uri_written_to_temp_file(monkeypatch, tmp_p
 
     assert len(opened_uris) == 1, "Expected exactly one URI to be opened"
     assert opened_uris[0].startswith("file://"), "Must open a file:// URI"
-    opened_path = opened_uris[0][len("file://"):]
+    opened_path = opened_uris[0][len("file://") :]
     assert opened_path.endswith(".png"), "Temp file must have .png extension"
     with open(opened_path, "rb") as f:
         assert f.read() == b64.b64decode(png_b64)
