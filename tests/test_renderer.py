@@ -340,3 +340,178 @@ def test_renderer_render_mmdc_available_path(monkeypatch):
         "# Hello"
     )  # no mermaid blocks — preprocess returns text unchanged
     assert "<h1" in result
+
+
+# ---------------------------------------------------------------------------
+# Preview._open_uri_externally — "Open Image in New Window" regression
+# ---------------------------------------------------------------------------
+
+
+def test_webkit_preview_new_window_action_opens_uri_externally(monkeypatch):
+    """The 'create' signal (fired by right-click → Open Image in New Window)
+    must open the URI externally and return None — never creating a new window."""
+    import types
+
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+
+    import calamus.preview as preview_mod
+
+    opened_uris: list[str] = []
+
+    import gi.repository as gi_repo
+
+    class FakeAppInfo:
+        @staticmethod
+        def launch_default_for_uri(uri, _ctx):
+            opened_uris.append(uri)
+
+    monkeypatch.setattr(gi_repo.Gio, "AppInfo", FakeAppInfo)
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+
+    class FakeNavAction:
+        def get_request(self):
+            return types.SimpleNamespace(
+                get_uri=lambda: "https://example.com/photo.jpg"
+            )
+
+    result = preview_mod.WebKitPreview._on_create_web_view(
+        preview, None, FakeNavAction()
+    )
+
+    assert result is None, "_on_create_web_view must return None (no new window)"
+    assert opened_uris == [
+        "https://example.com/photo.jpg"
+    ], "URI must be opened in the system browser/image viewer"
+
+
+def test_webkit_preview_svg_data_uri_opens_viewer_window(monkeypatch):
+    """SVG data: URIs must open in Calamus's ImageViewerWindow, not a temp file,
+    because system image viewers (gthumb, eog) do not fully support SVG."""
+    import base64 as b64
+
+    import calamus.preview as preview_mod
+
+    presented: list[str] = []
+
+    class FakeViewer:
+        def __init__(self, uri, title="Image Viewer", **_kwargs):
+            self._uri = uri
+
+        def present(self):
+            presented.append(self._uri)
+
+    monkeypatch.setattr("calamus.imageviewer.ImageViewerWindow", FakeViewer)
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+
+    svg_content = b"<svg xmlns='http://www.w3.org/2000/svg'><rect/></svg>"
+    encoded = b64.b64encode(svg_content).decode("ascii")
+    data_uri = f"data:image/svg+xml;base64,{encoded}"
+
+    preview_mod.WebKitPreview._open_uri_externally(preview, data_uri)
+
+    assert len(presented) == 1, "Expected ImageViewerWindow.present() to be called"
+    assert presented[0] == data_uri, "Viewer must receive the original data: URI"
+
+
+def test_webkit_preview_non_svg_data_uri_written_to_temp_file(monkeypatch, tmp_path):
+    """Non-SVG data: URIs (PNG, JPEG, etc.) must be decoded to a temp file
+    and opened with the system default application."""
+    import base64 as b64
+
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+
+    import calamus.preview as preview_mod
+
+    opened_uris: list[str] = []
+
+    import gi.repository as gi_repo
+
+    class FakeAppInfo:
+        @staticmethod
+        def launch_default_for_uri(uri, _ctx):
+            opened_uris.append(uri)
+
+    monkeypatch.setattr(gi_repo.Gio, "AppInfo", FakeAppInfo)
+
+    import tempfile as tf
+
+    monkeypatch.setattr(tf, "gettempdir", lambda: str(tmp_path))
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+
+    # Minimal 1×1 PNG
+    png_b64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+        "YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    )
+    data_uri = f"data:image/png;base64,{png_b64}"
+
+    preview_mod.WebKitPreview._open_uri_externally(preview, data_uri)
+
+    assert len(opened_uris) == 1, "Expected exactly one URI to be opened"
+    assert opened_uris[0].startswith("file://"), "Must open a file:// URI"
+    opened_path = opened_uris[0][len("file://") :]
+    assert opened_path.endswith(".png"), "Temp file must have .png extension"
+    with open(opened_path, "rb") as f:
+        assert f.read() == b64.b64decode(png_b64)
+
+
+# ---------------------------------------------------------------------------
+# _uri_to_markdown_image — "Copy Markdown Image" context menu item
+# ---------------------------------------------------------------------------
+
+
+def test_uri_to_markdown_image_https():
+    """https:// URIs should be used verbatim."""
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    preview._base_uri = "file:///home/user/docs/"
+    result = preview_mod.WebKitPreview._uri_to_markdown_image(
+        preview, "https://example.com/diagram.png"
+    )
+    assert result == "![image](https://example.com/diagram.png)"
+
+
+def test_uri_to_markdown_image_file_relative():
+    """file:// URIs in the same directory should produce a bare filename."""
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    preview._base_uri = "file:///home/user/docs/"
+    result = preview_mod.WebKitPreview._uri_to_markdown_image(
+        preview, "file:///home/user/docs/photo.png"
+    )
+    assert result == "![image](photo.png)"
+
+
+def test_uri_to_markdown_image_file_subdirectory():
+    """file:// URIs in a subdirectory should produce a relative path."""
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    preview._base_uri = "file:///home/user/docs/"
+    result = preview_mod.WebKitPreview._uri_to_markdown_image(
+        preview, "file:///home/user/docs/assets/chart.svg"
+    )
+    assert result == "![image](assets/chart.svg)"
+
+
+def test_uri_to_markdown_image_file_parent_directory():
+    """file:// URIs above the document directory should use ../."""
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    preview._base_uri = "file:///home/user/docs/chapter1/"
+    result = preview_mod.WebKitPreview._uri_to_markdown_image(
+        preview, "file:///home/user/docs/shared/logo.png"
+    )
+    assert result == "![image](../shared/logo.png)"

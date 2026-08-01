@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-08-01
+
+### Fixed
+- Right-click context menu on preview images now works correctly across all image types:
+  - **Open Image in New Window**: connects the WebKit `create` signal; SVG `data:` URIs (Mermaid diagrams) open in a new `ImageViewerWindow` backed by WebKit (system image viewers lack SVG support); `http/https/file://` images open in the system default app
+  - **Save Image As**: replaced WebKit's broken stock download mechanism (which abandons downloads before an async file dialog can respond) with a self-contained implementation — `data:` URIs are decoded and written directly; local `file://` images are copied with `shutil`; remote `https://` images are fetched in a daemon thread with a browser-compatible User-Agent (Firefox 128 ESR, Linux x86_64)
+  - **Copy Markdown Image**: replaces the unusable "Copy Image Address" (which produced a non-portable `data:` blob or absolute `file://` path); produces a ready-to-paste `![image](relative/path)` snippet, computing the path relative to the current document directory for `file://` images and using the URL verbatim for `https://` images; omitted for `data:` URI images (Mermaid diagrams have no stable file address — use a heading anchor link instead)
+  - **ImageViewerWindow** (`calamus/imageviewer.py`): new lightweight SVG viewer with zoom (toolbar buttons, Ctrl++/-/0, Ctrl+scroll) and find-in-page (Ctrl+F) via `WebKit.FindController`; inlines SVG in HTML so WebKit runs in full browser mode (loading a raw `data:image/svg+xml` URI disables all browser interaction)
+  - Image insert dialog (`Format → Image…`) default URL fallback changed from bare `image.png` to `https://example.com/image.png` so the inserted image renders in preview immediately
+
+### Added
+- `calamus/imageviewer.py`: lightweight WebKit-backed SVG viewer window
+
 ## [0.5.4] - 2026-08-01
 
 ### Fixed

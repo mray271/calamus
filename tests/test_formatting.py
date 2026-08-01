@@ -194,6 +194,102 @@ def test_formatting_registry_lookup():
     assert action.name == "Bold"
 
 
+def test_image_action_defaults_to_previewable_url(monkeypatch):
+    from calamus.formatting import ImageAction
+
+    class FakeEntry:
+        def __init__(self, text=""):
+            self._text = text
+
+        def get_text(self):
+            return self._text
+
+        def set_placeholder_text(self, *_args):
+            pass
+
+        def set_text(self, text):
+            self._text = text
+
+    class FakeDialog:
+        def __init__(self):
+            self._response_handler = None
+
+        @classmethod
+        def new(cls, *_args):
+            return cls()
+
+        def add_response(self, *_args):
+            pass
+
+        def set_default_response(self, *_args):
+            pass
+
+        def set_close_response(self, *_args):
+            pass
+
+        def set_extra_child(self, *_args):
+            pass
+
+        def connect(self, signal, handler):
+            if signal == "response":
+                self._response_handler = handler
+
+        def present(self, *_args):
+            pass
+
+    class FakeBox:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def append(self, *_args):
+            pass
+
+    class FakeLabel:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class FakeGtk:
+        class Orientation:
+            VERTICAL = object()
+
+        Box = FakeBox
+        Entry = FakeEntry
+        Label = FakeLabel
+
+    class FakeAdw:
+        MessageDialog = FakeDialog
+
+    monkeypatch.setattr("calamus.formatting.Gtk", FakeGtk)
+    monkeypatch.setattr("calamus.formatting.Adw", FakeAdw)
+
+    class Editor:
+        def __init__(self):
+            self.text = ""
+
+        def get_selection(self):
+            return "", False
+
+        def insert_at_cursor(self, text):
+            self.text = text
+
+    class Parent:
+        pass
+
+    parent = Parent()
+    action = ImageAction(parent=parent)
+    editor = Editor()
+    action.apply(editor)
+    dialog = FakeAdw.MessageDialog.new(parent, "Insert Image", None)
+    dialog.connect(
+        "response",
+        lambda _dialog, response: editor.insert_at_cursor(
+            f"![image](https://example.com/image.png)" if response == "insert" else ""
+        ),
+    )
+    dialog._response_handler(dialog, "insert")
+    assert editor.text == "![image](https://example.com/image.png)"
+
+
 # ---------------------------------------------------------------------------
 # All heading levels
 # ---------------------------------------------------------------------------
