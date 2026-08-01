@@ -894,66 +894,69 @@ MENU_XML = """
           <attribute name="target">dark</attribute>
         </item>
       </section>
-      <section>
+      <submenu>
         <attribute name="label">Zoom</attribute>
-        <item>
-          <attribute name="label">Zoom In (Focused Pane)</attribute>
-          <attribute name="action">app.zoom-in</attribute>
-        </item>
-        <item>
-          <attribute name="label">Zoom Out (Focused Pane)</attribute>
-          <attribute name="action">app.zoom-out</attribute>
-        </item>
-        <item>
-          <attribute name="label">Reset Zoom (Focused Pane)</attribute>
-          <attribute name="action">app.zoom-reset</attribute>
-        </item>
-      </section>
-      <section>
-        <attribute name="label">Editor</attribute>
-        <item>
-          <attribute name="label">Editor Zoom In</attribute>
-          <attribute name="action">app.zoom-editor-in</attribute>
-        </item>
-        <item>
-          <attribute name="label">Editor Zoom Out</attribute>
-          <attribute name="action">app.zoom-editor-out</attribute>
-        </item>
-        <item>
-          <attribute name="label">Editor Reset Zoom</attribute>
-          <attribute name="action">app.zoom-editor-reset</attribute>
-        </item>
-      </section>
-      <section>
-        <attribute name="label">Preview</attribute>
-        <item>
-          <attribute name="label">Preview Zoom In</attribute>
-          <attribute name="action">app.zoom-preview-in</attribute>
-        </item>
-        <item>
-          <attribute name="label">Preview Zoom Out</attribute>
-          <attribute name="action">app.zoom-preview-out</attribute>
-        </item>
-        <item>
-          <attribute name="label">Preview Reset Zoom</attribute>
-          <attribute name="action">app.zoom-preview-reset</attribute>
-        </item>
-      </section>
-      <section>
-        <attribute name="label">Directory Tree</attribute>
-        <item>
-          <attribute name="label">Directory Zoom In</attribute>
-          <attribute name="action">app.zoom-directory-in</attribute>
-        </item>
-        <item>
-          <attribute name="label">Directory Zoom Out</attribute>
-          <attribute name="action">app.zoom-directory-out</attribute>
-        </item>
-        <item>
-          <attribute name="label">Directory Reset Zoom</attribute>
-          <attribute name="action">app.zoom-directory-reset</attribute>
-        </item>
-      </section>
+        <submenu>
+          <attribute name="label">Focused Pane</attribute>
+          <item>
+            <attribute name="label">Zoom In</attribute>
+            <attribute name="action">app.zoom-in</attribute>
+          </item>
+          <item>
+            <attribute name="label">Zoom Out</attribute>
+            <attribute name="action">app.zoom-out</attribute>
+          </item>
+          <item>
+            <attribute name="label">Reset</attribute>
+            <attribute name="action">app.zoom-reset</attribute>
+          </item>
+        </submenu>
+        <submenu>
+          <attribute name="label">Editor</attribute>
+          <item>
+            <attribute name="label">Zoom In</attribute>
+            <attribute name="action">app.zoom-editor-in</attribute>
+          </item>
+          <item>
+            <attribute name="label">Zoom Out</attribute>
+            <attribute name="action">app.zoom-editor-out</attribute>
+          </item>
+          <item>
+            <attribute name="label">Reset</attribute>
+            <attribute name="action">app.zoom-editor-reset</attribute>
+          </item>
+        </submenu>
+        <submenu>
+          <attribute name="label">Preview</attribute>
+          <item>
+            <attribute name="label">Zoom In</attribute>
+            <attribute name="action">app.zoom-preview-in</attribute>
+          </item>
+          <item>
+            <attribute name="label">Zoom Out</attribute>
+            <attribute name="action">app.zoom-preview-out</attribute>
+          </item>
+          <item>
+            <attribute name="label">Reset</attribute>
+            <attribute name="action">app.zoom-preview-reset</attribute>
+          </item>
+        </submenu>
+        <submenu>
+          <attribute name="label">Directory Tree</attribute>
+          <item>
+            <attribute name="label">Zoom In</attribute>
+            <attribute name="action">app.zoom-directory-in</attribute>
+          </item>
+          <item>
+            <attribute name="label">Zoom Out</attribute>
+            <attribute name="action">app.zoom-directory-out</attribute>
+          </item>
+          <item>
+            <attribute name="label">Reset</attribute>
+            <attribute name="action">app.zoom-directory-reset</attribute>
+          </item>
+        </submenu>
+      </submenu>
     </submenu>
     <submenu>
       <attribute name="label">Help</attribute>

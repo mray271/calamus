@@ -233,8 +233,10 @@ class WebKitPreview(AbstractPreview):
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
+        self._view.connect("load-changed", self._on_load_changed)
         self._last_markdown: str = ""
         self._zoom_level = self._DEFAULT_ZOOM
+        self._pending_scroll_restore_ratio: float | None = None
         self._style_manager = Adw.StyleManager.get_default()
         self._style_manager.connect("notify::dark", self._on_dark_changed)
         # Layer 2 & 3: async rendering + SVG cache
@@ -320,6 +322,15 @@ class WebKitPreview(AbstractPreview):
     ) -> None:
         if self._last_markdown:
             self.update(self._last_markdown)
+
+    def _on_load_changed(self, _webview: object, load_event: object) -> None:
+        if load_event != _WebKitModule.LoadEvent.FINISHED:
+            return
+        if self._pending_scroll_restore_ratio is None:
+            return
+        ratio = self._pending_scroll_restore_ratio
+        self._pending_scroll_restore_ratio = None
+        self._restore_scroll_ratio(ratio)
 
     def update(self, markdown_text: str) -> None:
         self._last_markdown = markdown_text
@@ -436,14 +447,87 @@ class WebKitPreview(AbstractPreview):
         )
         if next_level == self._zoom_level:
             return
-        self._zoom_level = next_level
-        self.update(self._last_markdown)
+        self._set_zoom_preserving_scroll(next_level)
 
     def reset_zoom(self) -> None:
         if self._zoom_level == self._DEFAULT_ZOOM:
             return
-        self._zoom_level = self._DEFAULT_ZOOM
+        self._set_zoom_preserving_scroll(self._DEFAULT_ZOOM)
+
+    def _set_zoom_preserving_scroll(self, next_level: float) -> None:
+        self._capture_scroll_ratio(
+            lambda ratio: self._apply_zoom_with_scroll_restore(next_level, ratio)
+        )
+
+    def _apply_zoom_with_scroll_restore(
+        self, next_level: float, ratio: float | None
+    ) -> None:
+        self._pending_scroll_restore_ratio = ratio
+        self._zoom_level = next_level
         self.update(self._last_markdown)
+
+    def _capture_scroll_ratio(self, callback: Callable[[float | None], None]) -> None:
+        js = """
+            (() => {
+              const maxY = Math.max(
+                1,
+                document.documentElement.scrollHeight - window.innerHeight
+              );
+              const y = Math.max(0, window.scrollY || window.pageYOffset || 0);
+              return y / maxY;
+            })();
+        """
+        if hasattr(self._view, "evaluate_javascript"):
+            self._view.evaluate_javascript(
+                js,
+                -1,
+                None,
+                None,
+                None,
+                self._on_capture_scroll_ratio_done,
+                callback,
+            )
+            return
+        callback(None)
+
+    def _on_capture_scroll_ratio_done(
+        self,
+        webview: object,
+        result: object,
+        callback: Callable[[float | None], None],
+    ) -> None:
+        callback(self._extract_scroll_ratio(webview, result))
+
+    def _extract_scroll_ratio(self, webview: object, result: object) -> float | None:
+        js_result = self._finish_javascript(webview, result)
+        if js_result is None:
+            return None
+        if hasattr(js_result, "is_number") and js_result.is_number():
+            return max(0.0, min(1.0, float(js_result.to_double())))
+        return None
+
+    def _finish_javascript(self, webview: object, result: object) -> object | None:
+        if hasattr(webview, "evaluate_javascript_finish"):
+            try:
+                return webview.evaluate_javascript_finish(result)
+            except GLib.Error:
+                return None
+        return None
+
+    def _restore_scroll_ratio(self, ratio: float | None) -> None:
+        if ratio is None:
+            return
+        safe_ratio = max(0.0, min(1.0, ratio))
+        js = (
+            "(() => {"
+            "const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);"
+            f"window.scrollTo(0, maxY * {safe_ratio:.6f});"
+            "})();"
+        )
+        if hasattr(self._view, "evaluate_javascript"):
+            self._view.evaluate_javascript(js, -1, None, None, None, None, None)
+        elif hasattr(self._view, "run_javascript"):
+            self._view.run_javascript(js, None, None, None)
 
 
 class TextViewPreview(AbstractPreview):
