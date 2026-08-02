@@ -781,12 +781,23 @@ class WebKitPreview(AbstractPreview):
             GLib.idle_add(self._on_async_render_done, markdown_text)
 
     def _on_async_render_done(self, markdown_text: str) -> bool:
-        """Main-thread callback: re-render once background SVGs are ready."""
+        """Main-thread callback: re-render once background SVGs are ready.
+
+        Captures the current scroll position before reloading the page and
+        restores it after WebKit finishes loading, so the view doesn't snap
+        back to the top when a Mermaid diagram finishes rendering.
+        """
         if markdown_text == self._last_markdown:
-            preprocessed = preprocess_with_cache(markdown_text, self._mermaid_cache)
-            html_body = self._renderer.render_preprocessed(preprocessed)
-            self._render_page(html_body, "", self._style_manager.get_dark())
+            self._capture_scroll_ratio(self._apply_async_render_with_scroll)
         return GLib.SOURCE_REMOVE
+
+    def _apply_async_render_with_scroll(self, ratio: float | None) -> None:
+        """Re-render the page and schedule a scroll restore for the given ratio."""
+        if ratio is not None:
+            self._pending_scroll_restore_ratio = ratio
+        preprocessed = preprocess_with_cache(self._last_markdown, self._mermaid_cache)
+        html_body = self._renderer.render_preprocessed(preprocessed)
+        self._render_page(html_body, "", self._style_manager.get_dark())
 
     def _render_page(self, html_body: str, mermaid_script: str, dark: bool) -> None:
         color_scheme = "dark" if dark else "light"

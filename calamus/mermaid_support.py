@@ -52,12 +52,33 @@ def get_mermaid_init_script() -> str:
     """
 
 
+def _outer_fenced_ranges(text: str) -> list[tuple[int, int]]:
+    """Return (start, end) byte ranges of outer fences (4+ backticks).
+
+    These are blocks like ````markdown ... ```` that are used to show raw
+    fenced-code examples.  Any ```mermaid fence nested inside such a range
+    should be treated as literal text, not as a diagram to render.
+    """
+    ranges: list[tuple[int, int]] = []
+    # Match fences of 4 or more backticks (outermost level only).
+    outer = re.compile(r"(`{4,})[^\n]*\n.*?\1", re.DOTALL)
+    for m in outer.finditer(text):
+        ranges.append((m.start(), m.end()))
+    return ranges
+
+
+def _is_inside_outer_fence(pos: int, ranges: list[tuple[int, int]]) -> bool:
+    return any(start < pos < end for start, end in ranges)
+
+
 def extract_mermaid_blocks(markdown_text: str) -> list[tuple[int, str]]:
-    """Find all Mermaid fenced code blocks."""
+    """Find all Mermaid fenced code blocks not nested inside an outer fence."""
+    outer_ranges = _outer_fenced_ranges(markdown_text)
     pattern = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL)
     return [
         (match.start(), match.group(1).strip())
         for match in pattern.finditer(markdown_text)
+        if not _is_inside_outer_fence(match.start(), outer_ranges)
     ]
 
 
@@ -179,10 +200,16 @@ def preprocess_with_cache(markdown_text: str, cache: MermaidCache) -> str:
     not yet cached are replaced with ``<pre class="mermaid">`` so the
     browser-side mermaid.js can render them as a fallback while the
     background thread computes the SVG.
+
+    Mermaid fences that appear inside an outer fence of 4+ backticks (e.g.
+    ````markdown … ````) are left untouched so they render as literal code.
     """
+    outer_ranges = _outer_fenced_ranges(markdown_text)
     pattern = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL)
 
     def repl(match: re.Match[str]) -> str:
+        if _is_inside_outer_fence(match.start(), outer_ranges):
+            return match.group(0)  # leave as-is; outer fence handles it
         diagram_source = match.group(1).strip()
         svg = cache.get(diagram_source)
         if svg is not None:
@@ -198,11 +225,17 @@ def preprocess_with_cache(markdown_text: str, cache: MermaidCache) -> str:
 
 
 def preprocess_markdown_for_static_export(markdown_text: str) -> str:
-    """Replace Mermaid fenced blocks with inline SVG data URIs."""
+    """Replace Mermaid fenced blocks with inline SVG data URIs.
+
+    Mermaid fences inside an outer fence of 4+ backticks are left untouched.
+    """
     renderer = get_best_renderer()
+    outer_ranges = _outer_fenced_ranges(markdown_text)
     pattern = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL)
 
     def repl(match: re.Match[str]) -> str:
+        if _is_inside_outer_fence(match.start(), outer_ranges):
+            return match.group(0)
         diagram_source = match.group(1).strip()
         svg = renderer.render_to_svg(diagram_source) or ""
         encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")

@@ -148,6 +148,76 @@ class TestSearchStateHistoryNavigation:
         assert s._history_index == -1
 
 
+class TestSearchStateMakeDialogScratch:
+    def test_scratch_starts_blank(self):
+        """make_dialog_scratch returns a fresh state with all flags False."""
+        live = SearchState()
+        live.case_sensitive = True
+        live.use_regex = True
+        live.push_find("hello")
+        scratch = live.make_dialog_scratch()
+        assert scratch.case_sensitive is False
+        assert scratch.use_regex is False
+        assert scratch.whole_word is False
+        assert scratch.search_backward is False
+        assert scratch.keep_dialog is False
+        assert scratch.replace_string == ""
+
+    def test_scratch_shares_history_lists(self):
+        """Scratch and live share the same history list objects."""
+        live = SearchState()
+        live.push_find("a")
+        scratch = live.make_dialog_scratch()
+        assert scratch.find_history is live.find_history
+        assert scratch.replace_history is live.replace_history
+
+    def test_scratch_history_recall_sees_live_history(self):
+        """↑/↓ recall on the scratch reflects history pushed to live."""
+        live = SearchState()
+        live.push_find("first")
+        live.push_find("second")
+        scratch = live.make_dialog_scratch()
+        assert scratch.history_prev() == "second"
+
+
+class TestSearchStateCommitTo:
+    def test_commit_copies_flags_and_strings(self):
+        """commit_to copies all option flags and replace_string to target."""
+        scratch = SearchState()
+        scratch.case_sensitive = True
+        scratch.use_regex = True
+        scratch.whole_word = True
+        scratch.search_backward = True
+        scratch.keep_dialog = True
+        scratch.replace_string = "bar"
+        live = SearchState()
+        scratch.commit_to(live)
+        assert live.case_sensitive is True
+        assert live.use_regex is True
+        assert live.whole_word is True
+        assert live.search_backward is True
+        assert live.keep_dialog is True
+        assert live.replace_string == "bar"
+
+    def test_commit_does_not_touch_original(self):
+        """commit_to does not modify the source state."""
+        scratch = SearchState()
+        scratch.case_sensitive = True
+        live = SearchState()
+        scratch.commit_to(live)
+        # scratch unchanged
+        assert scratch.case_sensitive is True
+
+    def test_live_unchanged_without_commit(self):
+        """Modifying scratch without commit leaves live state untouched."""
+        live = SearchState()
+        live.case_sensitive = True
+        scratch = live.make_dialog_scratch()
+        scratch.case_sensitive = False
+        # live was not committed to
+        assert live.case_sensitive is True
+
+
 # ---------------------------------------------------------------------------
 # GTK dialog smoke tests — require a display
 # ---------------------------------------------------------------------------
@@ -241,9 +311,11 @@ class _TestFindLogic:
         class _Impl(FindDialogLogic):
             def __init__(self_, *, editor, state, find_text):
                 self_._editor = editor
-                self_._state = state
+                # In tests, scratch == live so assertions on state work directly.
+                self_._live_state = state
+                self_._state = state.make_dialog_scratch()
                 self_._find_text = find_text
-                self_._checks = _make_fake_checks(keep_dialog=state.keep_dialog)
+                self_._checks = _make_fake_checks(keep_dialog=keep_dialog)
                 self_._closed = False
 
             def get_find_text(self_):
@@ -324,7 +396,9 @@ class _TestReplaceLogic:
         class _Impl(ReplaceDialogLogic):
             def __init__(self_, *, editor, state, find_text, replace_text):
                 self_._editor = editor
-                self_._state = state
+                # In tests, scratch == live so assertions on state work directly.
+                self_._live_state = state
+                self_._state = state.make_dialog_scratch()
                 self_._tab_manager = None
                 self_._find_text = find_text
                 self_._replace_text = replace_text

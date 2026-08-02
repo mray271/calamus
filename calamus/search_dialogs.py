@@ -24,7 +24,6 @@ from calamus.search import (
     FindDialogLogic,
     ReplaceDialogLogic,
     SearchState,
-    _sync_options_to_state,
 )
 
 if TYPE_CHECKING:
@@ -243,7 +242,11 @@ class FindDialog(FindDialogLogic, Adw.Window):
     ) -> None:
         Adw.Window.__init__(self, **kwargs)
         self._editor = editor
-        self._state = state
+        # _live_state is the window's shared state (used by Find Again etc.).
+        # _state is a fresh blank scratch copy for this dialog session.
+        # History lists are shared by reference so ↑/↓ recall works.
+        self._live_state = state
+        self._state = state.make_dialog_scratch()
         self.set_title("Find")
         self.set_modal(False)
 
@@ -263,12 +266,14 @@ class FindDialog(FindDialogLogic, Adw.Window):
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
+        # Scratch state is blank — entry starts empty.
+        # ↑/↓ history recall pulls from the shared live history list.
         _wire_entry_history_recall(
-            self._find_entry, state.history_prev, state.history_next
+            self._find_entry, self._state.history_prev, self._state.history_next
         )
         content_box.append(self._find_entry)
 
-        options_box, self._checks = _build_options_box(state)
+        options_box, self._checks = _build_options_box(self._state)
         _wire_regex_constraints(self._checks)
         _wire_keep_dialog_title(self, "Find", self._checks, file_path)
         content_box.append(options_box)
@@ -293,9 +298,8 @@ class FindDialog(FindDialogLogic, Adw.Window):
 
         _update_find_sensitivity()
         self._find_entry.connect("notify::text", _update_find_sensitivity)
-
-        self.connect("close-request", lambda _w: state.reset_options() or False)
-        state.reset_history_cursor()
+        # No close-request hook: Cancel and window-close leave live state
+        # untouched so Find Again continues using the prior search settings.
 
     def get_find_text(self) -> str:
         return self._find_entry.get_text()
@@ -317,7 +321,11 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
     ) -> None:
         Adw.Window.__init__(self, **kwargs)
         self._editor = editor
-        self._state = state
+        # _live_state is the window's shared state (used by Replace Again etc.).
+        # _state is a fresh blank scratch copy for this dialog session.
+        # History lists are shared by reference so ↑/↓ recall works.
+        self._live_state = state
+        self._state = state.make_dialog_scratch()
         self._tab_manager = tab_manager
         self.set_title("Replace/Find")
         self.set_modal(False)
@@ -338,8 +346,10 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
+        # Scratch state is blank — entries start empty.
+        # ↑/↓ history recall pulls from the shared live history list.
         _wire_entry_history_recall(
-            self._find_entry, state.history_prev, state.history_next
+            self._find_entry, self._state.history_prev, self._state.history_next
         )
         content_box.append(self._find_entry)
 
@@ -350,11 +360,13 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         self._replace_entry = Gtk.Entry()
         self._replace_entry.set_hexpand(True)
         _wire_entry_history_recall(
-            self._replace_entry, state.replace_history_prev, state.replace_history_next
+            self._replace_entry,
+            self._state.replace_history_prev,
+            self._state.replace_history_next,
         )
         content_box.append(self._replace_entry)
 
-        options_box, self._checks = _build_options_box(state)
+        options_box, self._checks = _build_options_box(self._state)
         _wire_regex_constraints(self._checks)
         _wire_keep_dialog_title(self, "Replace/Find", self._checks, file_path)
         content_box.append(options_box)
@@ -402,9 +414,8 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
 
         _update_replace_sensitivity()
         self._find_entry.connect("notify::text", _update_replace_sensitivity)
-
-        self.connect("close-request", lambda _w: state.reset_options() or False)
-        state.reset_history_cursor()
+        # No close-request hook: Cancel and window-close leave live state
+        # untouched so Replace Again continues using the prior settings.
 
     def get_find_text(self) -> str:
         return self._find_entry.get_text()
