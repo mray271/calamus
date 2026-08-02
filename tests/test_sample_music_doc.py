@@ -23,7 +23,11 @@ from pathlib import Path
 
 import pytest
 
-SAMPLE_PATH = Path(__file__).parent.parent / "samples" / "why_claude_sonnet_fails_to_discover_music.md"
+SAMPLE_PATH = (
+    Path(__file__).parent.parent
+    / "samples"
+    / "why_claude_sonnet_fails_to_discover_music.md"
+)
 SAMPLE_MD = SAMPLE_PATH.read_text(encoding="utf-8")
 
 MMDC_AVAILABLE = shutil.which("mmdc") is not None
@@ -89,9 +93,9 @@ def test_renderer_all_five_mermaid_diagrams_rendered():
     html = MistuneRenderer().render(SAMPLE_MD)
     pre_count = html.count('<pre class="mermaid">')
     img_count = html.count("data:image/svg+xml;base64,")
-    assert pre_count + img_count == 5, (
-        f"Expected 5 rendered Mermaid blocks, got {pre_count} <pre> + {img_count} <img>"
-    )
+    assert (
+        pre_count + img_count == 5
+    ), f"Expected 5 rendered Mermaid blocks, got {pre_count} <pre> + {img_count} <img>"
 
 
 def test_renderer_init_directive_mindmap_rendered():
@@ -103,9 +107,9 @@ def test_renderer_init_directive_mindmap_rendered():
     # The mindmap label "Search Failure" must survive in one of the two forms.
     pre_has_mindmap = "mindmap" in html and "Search Failure" in html
     img_has_data_uri = "data:image/svg+xml;base64," in html
-    assert pre_has_mindmap or img_has_data_uri, (
-        "Mindmap diagram with %%{init:%% directive appears to have been dropped"
-    )
+    assert (
+        pre_has_mindmap or img_has_data_uri
+    ), "Mindmap diagram with %%{init:%% directive appears to have been dropped"
 
 
 def test_renderer_relative_subfolder_image_path_preserved():
@@ -114,9 +118,9 @@ def test_renderer_relative_subfolder_image_path_preserved():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(SAMPLE_MD)
-    assert f"{IMAGE_SUBDIR}/ADST_logo.png" in html, (
-        "Relative subfolder image path was not preserved in rendered HTML"
-    )
+    assert (
+        f"{IMAGE_SUBDIR}/ADST_logo.png" in html
+    ), "Relative subfolder image path was not preserved in rendered HTML"
 
 
 def test_renderer_html_img_tags_preserved_in_table_cells():
