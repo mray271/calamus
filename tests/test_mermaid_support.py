@@ -295,6 +295,41 @@ def test_preprocess_with_cache_passthrough_when_no_blocks():
     assert preprocess_with_cache(text, cache) == text
 
 
+def test_preprocess_with_cache_ignores_mermaid_inside_outer_fence():
+    """Mermaid blocks nested inside a ````markdown outer fence are left as-is."""
+    from calamus.mermaid_support import MermaidCache, preprocess_with_cache
+
+    cache = MermaidCache()
+    diagram = "graph LR\nA --> B"
+    cache.put(diagram, "<svg>cached</svg>")
+    # The ```mermaid fence is inside a ````markdown outer fence.
+    text = "````markdown\n```mermaid\n{}\n```\n````".format(diagram)
+    result = preprocess_with_cache(text, cache)
+    assert "```mermaid" in result
+    assert "<img" not in result
+    assert '<pre class="mermaid">' not in result
+
+
+def test_extract_mermaid_blocks_ignores_nested_in_outer_fence():
+    """extract_mermaid_blocks skips blocks nested inside an outer fence."""
+    from calamus.mermaid_support import extract_mermaid_blocks
+
+    text = "````markdown\n```mermaid\ngraph TD\nA-->B\n```\n````"
+    assert extract_mermaid_blocks(text) == []
+
+
+def test_preprocess_static_export_ignores_mermaid_inside_outer_fence(monkeypatch):
+    """preprocess_markdown_for_static_export leaves nested mermaid blocks untouched."""
+    import calamus.mermaid_support as ms
+
+    monkeypatch.setattr(ms.SubprocessMermaidRenderer, "_mmdc_available", False)
+    diagram = "graph LR\nA --> B"
+    text = "````markdown\n```mermaid\n{}\n```\n````".format(diagram)
+    result = ms.preprocess_markdown_for_static_export(text)
+    assert "```mermaid" in result
+    assert "<img" not in result
+
+
 # ---------------------------------------------------------------------------
 # SubprocessMermaidRenderer — output file not created
 # ---------------------------------------------------------------------------
