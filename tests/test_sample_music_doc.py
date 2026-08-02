@@ -61,8 +61,9 @@ def test_sample_contains_html_img_tags_with_height():
 
 
 def test_sample_contains_external_links():
-    assert "https://adst.bandcamp.com" in SAMPLE_MD
-    assert "https://www.wammies.org" in SAMPLE_MD
+    # Check for the complete Markdown link syntax to avoid an incomplete-URL-substring match
+    assert "](https://adst.bandcamp.com)" in SAMPLE_MD
+    assert "](https://www.wammies.org)" in SAMPLE_MD
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +228,7 @@ def test_html_exporter_sample_preserves_external_links(tmp_path):
     dest = str(tmp_path / "music_doc.html")
     HtmlExporter().export(SAMPLE_MD, dest)
     content = (tmp_path / "music_doc.html").read_text(encoding="utf-8")
-    assert "adst.bandcamp.com" in content
+    assert 'href="https://adst.bandcamp.com"' in content
 
 
 def test_html_exporter_sample_no_raw_mermaid_fences(tmp_path):
