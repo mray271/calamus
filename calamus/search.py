@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from calamus.editor import AbstractEditor
-    from calamus.protocols import HasGetActive, TabManagerLike
+    from calamus.protocols import HasGetActive
+    from calamus.tabs import AbstractTabManager
 
 _MAX_HISTORY = 20
 
@@ -180,7 +181,7 @@ class ReplaceDialogLogic(ABC):
 
     _editor: "AbstractEditor"
     _state: SearchState
-    _tab_manager: "TabManagerLike | None"
+    _tab_manager: "AbstractTabManager | None"
     _checks: "dict[str, HasGetActive]"
 
     @abstractmethod
@@ -239,11 +240,10 @@ class ReplaceDialogLogic(ABC):
     def _get_all_editors(self) -> "list[AbstractEditor]":
         if self._tab_manager is None:
             return [self._editor]
-        editors = []
-        tab_count = self._tab_manager.get_n_pages()
-        for i in range(tab_count):
-            page = self._tab_manager.get_nth_page(i)
-            if page is not None and hasattr(page, "editor"):
-                editors.append(page.editor)
+        editors = [
+            tab.get_editor()
+            for i in range(self._tab_manager.get_tab_count())
+            if (tab := self._tab_manager.get_nth_tab(i)) is not None
+        ]
         return editors or [self._editor]
 

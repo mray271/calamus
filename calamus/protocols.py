@@ -33,24 +33,6 @@ class HasGetActive(Protocol):
         ...
 
 
-class TabManagerLike(Protocol):
-    """Structural protocol for objects that manage a paged set of editor tabs.
-
-    Satisfied by ``AbstractTabManager`` (and its concrete implementations).
-    Used in :class:`calamus.search.ReplaceDialogLogic` so the replace-all
-    "Multiple Tabs" scope can iterate editors without importing the full
-    tab manager hierarchy.
-    """
-
-    def get_n_pages(self) -> int:
-        """Return the number of open tab pages."""
-        ...
-
-    def get_nth_page(self, n: int) -> object:
-        """Return the tab page at index *n*, or None if out of range."""
-        ...
-
-
 class HasWidget(Protocol):
     """Structural protocol for objects that wrap and expose a GTK widget.
 
