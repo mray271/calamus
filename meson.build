@@ -1,6 +1,6 @@
 project(
   'calamus',
-  version:       '0.1.0',
+  version:       '0.6.0',
   meson_version: '>= 0.59.0',
   license:       'GPL-3.0-or-later',
 )
@@ -32,6 +32,8 @@ python.install_sources(
     'calamus/protocols.py',
     'calamus/recentfiles.py',
     'calamus/renderer.py',
+    'calamus/search.py',
+    'calamus/search_dialogs.py',
     'calamus/tabs.py',
     'calamus/theme.py',
     'calamus/window.py',

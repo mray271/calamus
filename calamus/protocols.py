@@ -20,6 +20,19 @@ if TYPE_CHECKING:
     from gi.repository import Gtk
 
 
+class HasGetActive(Protocol):
+    """Structural protocol for toggle widgets with a boolean active state.
+
+    Satisfied by ``Gtk.CheckButton``, ``Gtk.ToggleButton``, and similar.
+    Used in :func:`calamus.search._sync_options_to_state` to avoid coupling
+    the pure-Python logic layer to GTK types.
+    """
+
+    def get_active(self) -> bool:
+        """Return True if the widget is in the active/checked state."""
+        ...
+
+
 class HasWidget(Protocol):
     """Structural protocol for objects that wrap and expose a GTK widget.
 

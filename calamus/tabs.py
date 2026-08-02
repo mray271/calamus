@@ -236,6 +236,10 @@ class EditorTab(AbstractTab):
 
     def _flush_preview(self) -> bool:
         self._preview_timer_id = None
+        GLib.idle_add(self._do_preview_update)
+        return GLib.SOURCE_REMOVE
+
+    def _do_preview_update(self) -> bool:
         self.preview.update(self.editor.get_text())
         return GLib.SOURCE_REMOVE
 
@@ -294,6 +298,10 @@ class AbstractTabManager(ABC):
     @abstractmethod
     def get_tab_count(self) -> int:
         """Return the number of open tabs."""
+
+    @abstractmethod
+    def get_nth_tab(self, n: int) -> AbstractTab | None:
+        """Return the tab at 0-based index *n*, or None if out of range."""
 
     @abstractmethod
     def get_unsaved_tabs(self) -> list[str]:
@@ -373,6 +381,10 @@ class AdwTabManager(AbstractTabManager):
 
     def get_tab_count(self) -> int:
         return self._tab_view.get_n_pages()
+
+    def get_nth_tab(self, n: int) -> AbstractTab | None:
+        page = self._tab_view.get_nth_page(n)
+        return self._pages.get(page) if page is not None else None
 
     def get_unsaved_tabs(self) -> list[str]:
         """Return display names of all tabs with unsaved changes."""

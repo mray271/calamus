@@ -167,3 +167,157 @@ def test_editor_toggle_find_bar_no_revealer():
     editor = MarkdownEditor()
     # _find_revealer is None — should not raise
     editor.toggle_find_bar()
+
+
+# ---------------------------------------------------------------------------
+# Search / Replace API tests (require display)
+# ---------------------------------------------------------------------------
+
+
+def test_editor_find_next_finds_text():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("hello world hello")
+    state = SearchState()
+    state.push_find("hello")
+    found = editor.find_next(state)
+    assert found is True
+
+
+def test_editor_find_next_returns_false_when_not_found():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("hello world")
+    state = SearchState()
+    state.push_find("xyz_not_present")
+    found = editor.find_next(state)
+    assert found is False
+
+
+def test_editor_find_previous_finds_text():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("hello world hello")
+    state = SearchState()
+    state.push_find("hello")
+    # Move cursor to end so backward search finds something
+    buf = editor.get_buffer()
+    buf.place_cursor(buf.get_end_iter())
+    found = editor.find_previous(state)
+    assert found is True
+
+
+def test_editor_find_previous_returns_false_when_not_found():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("hello world")
+    state = SearchState()
+    state.push_find("zzz_missing")
+    found = editor.find_previous(state)
+    assert found is False
+
+
+def test_editor_replace_current_replaces_selection():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("hello world")
+    state = SearchState()
+    state.push_find("hello")
+    editor.find_next(state)
+    replaced = editor.replace_current("goodbye", state)
+    assert replaced is True
+    assert "goodbye" in editor.get_text()
+
+
+def test_editor_replace_current_returns_false_with_no_selection():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("hello world")
+    state = SearchState()
+    state.push_find("hello")
+    # Don't call find_next — no selection
+    result = editor.replace_current("x", state)
+    assert result is False
+
+
+def test_editor_replace_all_window():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("cat cat cat")
+    state = SearchState()
+    state.push_find("cat")
+    count = editor.replace_all("dog", "window", state)
+    assert count == 3
+    assert editor.get_text() == "dog dog dog"
+
+
+def test_editor_replace_and_find():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("foo foo foo")
+    state = SearchState()
+    state.push_find("foo")
+    editor.find_next(state)  # select first "foo"
+    result = editor.replace_and_find("bar", state)
+    # After replace_and_find the second "foo" should be selected
+    assert "bar" in editor.get_text()
+    # result indicates whether the *next* occurrence was found
+    assert isinstance(result, bool)
+
+
+def test_editor_find_with_case_sensitive():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("Hello HELLO hello")
+    state = SearchState()
+    state.push_find("hello")
+    state.case_sensitive = True
+    found = editor.find_next(state)
+    assert found is True
+    # Should match only the lowercase "hello"
+    buf = editor.get_buffer()
+    start, end = buf.get_selection_bounds()
+    matched = buf.get_text(start, end, True)
+    assert matched == "hello"
+
+
+def test_editor_abstract_methods_present():
+    _init_gtk()
+    from calamus.editor import AbstractEditor
+
+    abstract_methods = {
+        "find_next",
+        "find_previous",
+        "replace_current",
+        "replace_all",
+        "replace_and_find",
+    }
+    for method in abstract_methods:
+        assert hasattr(AbstractEditor, method)
