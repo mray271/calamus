@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import pytest
 
+from calamus.search import _MAX_HISTORY, SearchState
+
 # ---------------------------------------------------------------------------
 # SearchState — pure Python, no display needed
 # ---------------------------------------------------------------------------
 
-from calamus.search import SearchState, _MAX_HISTORY
 
 
 class TestSearchStateDefaults:
@@ -243,9 +244,7 @@ class _TestFindLogic:
                 self_._editor = editor
                 self_._state = state
                 self_._find_text = find_text
-                self_._checks = _make_fake_checks(
-                    keep_dialog=state.keep_dialog
-                )
+                self_._checks = _make_fake_checks(keep_dialog=state.keep_dialog)
                 self_._closed = False
 
             def get_find_text(self_):
@@ -330,9 +329,7 @@ class _TestReplaceLogic:
                 self_._tab_manager = None
                 self_._find_text = find_text
                 self_._replace_text = replace_text
-                self_._checks = _make_fake_checks(
-                    keep_dialog=state.keep_dialog
-                )
+                self_._checks = _make_fake_checks(keep_dialog=state.keep_dialog)
                 self_._closed = False
 
             def get_find_text(self_):

@@ -686,12 +686,12 @@ class CalamusWindow(Adw.ApplicationWindow):
         editor.find_next(self._search_state)
         self._search_state.search_backward = saved_backward
 
-    def _on_replace_find_again(
-        self, _action: Gio.SimpleAction, _param: object
-    ) -> None:
+    def _on_replace_find_again(self, _action: Gio.SimpleAction, _param: object) -> None:
         editor = self.tab_manager.get_current_editor()
         if editor is not None:
-            editor.replace_and_find(self._search_state.replace_string, self._search_state)
+            editor.replace_and_find(
+                self._search_state.replace_string, self._search_state
+            )
 
     def _on_replace_again(self, _action: Gio.SimpleAction, _param: object) -> None:
         """Ctrl+Shift+T — replace the current selection, or find-then-replace if nothing selected."""

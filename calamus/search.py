@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -128,7 +128,9 @@ class SearchState:
 # ---------------------------------------------------------------------------
 
 
-def _sync_options_to_state(checks: "dict[str, HasGetActive]", state: SearchState) -> None:
+def _sync_options_to_state(
+    checks: "dict[str, HasGetActive]", state: SearchState
+) -> None:
     """Copy checkbox states into *state*.
 
     *checks* maps option-key strings to objects with a ``get_active()`` method
@@ -138,12 +140,16 @@ def _sync_options_to_state(checks: "dict[str, HasGetActive]", state: SearchState
         setattr(state, key, btn.get_active())
 
 
-class FindDialogLogic(ABC):
+class FindDialogLogic:
     """Pure-Python handler logic for the Find dialog.
 
     Subclassed by ``FindDialog`` (GTK) and used directly in tests.
     Subclasses must implement :meth:`get_find_text`; override
     :meth:`close_dialog` to actually dismiss a window.
+
+    Note: intentionally does *not* inherit ``ABC`` — mixing ABCMeta with
+    GObject's metaclass causes a metaclass conflict in GTK subclasses.
+    The ``@abstractmethod`` markers are enforced statically by type checkers.
     """
 
     _editor: "AbstractEditor"
@@ -171,12 +177,16 @@ class FindDialogLogic(ABC):
         return found
 
 
-class ReplaceDialogLogic(ABC):
+class ReplaceDialogLogic:
     """Pure-Python handler logic for the Replace dialog.
 
     Subclassed by ``ReplaceDialog`` (GTK) and used directly in tests.
     Subclasses must implement :meth:`get_find_text` and
     :meth:`get_replace_text`; override :meth:`close_dialog` to dismiss a window.
+
+    Note: intentionally does *not* inherit ``ABC`` — mixing ABCMeta with
+    GObject's metaclass causes a metaclass conflict in GTK subclasses.
+    The ``@abstractmethod`` markers are enforced statically by type checkers.
     """
 
     _editor: "AbstractEditor"
@@ -216,9 +226,7 @@ class ReplaceDialogLogic(ABC):
 
     def handle_replace_and_find(self) -> bool:
         self.commit_entries()
-        found = self._editor.replace_and_find(
-            self._state.replace_string, self._state
-        )
+        found = self._editor.replace_and_find(self._state.replace_string, self._state)
         if found and not self._state.keep_dialog:
             self.close_dialog()
         return found
@@ -246,4 +254,3 @@ class ReplaceDialogLogic(ABC):
             if (tab := self._tab_manager.get_nth_tab(i)) is not None
         ]
         return editors or [self._editor]
-

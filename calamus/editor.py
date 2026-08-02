@@ -102,7 +102,9 @@ class AbstractEditor(ABC):
         """
 
     @abstractmethod
-    def replace_current(self, replacement: str, state: "SearchState") -> bool:  # noqa: F821
+    def replace_current(
+        self, replacement: str, state: "SearchState"
+    ) -> bool:  # noqa: F821
         """Replace the currently-selected match with *replacement*.
 
         Returns True if a replacement was performed.
@@ -119,7 +121,9 @@ class AbstractEditor(ABC):
         """
 
     @abstractmethod
-    def replace_and_find(self, replacement: str, state: "SearchState") -> bool:  # noqa: F821
+    def replace_and_find(
+        self, replacement: str, state: "SearchState"
+    ) -> bool:  # noqa: F821
         """Replace the current match then immediately find the next one.
 
         Returns True if the replacement was performed.
@@ -159,7 +163,9 @@ class MarkdownEditor(AbstractEditor):
         # Build a SearchContext bound to this buffer so we can reuse it across
         # all find/replace calls without recreating settings each time.
         self._search_settings = GtkSource.SearchSettings()
-        self._search_context = GtkSource.SearchContext.new(buffer, self._search_settings)
+        self._search_context = GtkSource.SearchContext.new(
+            buffer, self._search_settings
+        )
 
     def _setup_view(self) -> None:
         self._view.set_show_line_numbers(True)
@@ -267,6 +273,7 @@ class MarkdownEditor(AbstractEditor):
 
     def show_goto_line_dialog(self, parent: Gtk.Window) -> None:
         from calamus.search_dialogs import GotoLineDialog
+
         GotoLineDialog(self, parent)
 
     def goto_line(self, line: int, col: int = 0) -> None:
@@ -358,8 +365,12 @@ class MarkdownEditor(AbstractEditor):
         else:
             cursor_offset = buffer.get_iter_at_mark(buffer.get_insert()).get_offset()
         result = self._find_in_text(
-            needle, text, cursor_offset,
-            state.use_regex, state.case_sensitive, state.whole_word,
+            needle,
+            text,
+            cursor_offset,
+            state.use_regex,
+            state.case_sensitive,
+            state.whole_word,
         )
         if result is None:
             return False
@@ -385,8 +396,12 @@ class MarkdownEditor(AbstractEditor):
         else:
             cursor_offset = buffer.get_iter_at_mark(buffer.get_insert()).get_offset()
         result = self._find_in_text(
-            needle, text, cursor_offset,
-            state.use_regex, state.case_sensitive, state.whole_word,
+            needle,
+            text,
+            cursor_offset,
+            state.use_regex,
+            state.case_sensitive,
+            state.whole_word,
             backward=True,
         )
         if result is None:
@@ -409,9 +424,7 @@ class MarkdownEditor(AbstractEditor):
         buffer.end_user_action()
         return True
 
-    def replace_all(
-        self, replacement: str, scope: str, state: SearchState
-    ) -> int:
+    def replace_all(self, replacement: str, scope: str, state: SearchState) -> int:
         """Replace all occurrences. *scope*: ``"window"`` or ``"selection"``."""
         import re
 

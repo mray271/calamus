@@ -204,8 +204,6 @@ def _wire_entry_history_recall(
     entry.add_controller(key_controller)
 
 
-
-
 def _wire_keep_dialog_title(
     dialog: Adw.Window,
     base_title: str,
@@ -259,11 +257,15 @@ class FindDialog(FindDialogLogic, Adw.Window):
         content_box.set_margin_start(16)
         content_box.set_margin_end(16)
 
-        find_label = Gtk.Label(label="String to Find  (use ↑ arrow key to recall previous)", xalign=0.0)
+        find_label = Gtk.Label(
+            label="String to Find  (use ↑ arrow key to recall previous)", xalign=0.0
+        )
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
-        _wire_entry_history_recall(self._find_entry, state.history_prev, state.history_next)
+        _wire_entry_history_recall(
+            self._find_entry, state.history_prev, state.history_next
+        )
         content_box.append(self._find_entry)
 
         options_box, self._checks = _build_options_box(state)
@@ -330,18 +332,26 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         content_box.set_margin_start(16)
         content_box.set_margin_end(16)
 
-        find_label = Gtk.Label(label="String to Find  (use ↑ arrow key to recall previous)", xalign=0.0)
+        find_label = Gtk.Label(
+            label="String to Find  (use ↑ arrow key to recall previous)", xalign=0.0
+        )
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
-        _wire_entry_history_recall(self._find_entry, state.history_prev, state.history_next)
+        _wire_entry_history_recall(
+            self._find_entry, state.history_prev, state.history_next
+        )
         content_box.append(self._find_entry)
 
-        replace_label = Gtk.Label(label="Replace With  (use ↑ arrow key to recall previous)", xalign=0.0)
+        replace_label = Gtk.Label(
+            label="Replace With  (use ↑ arrow key to recall previous)", xalign=0.0
+        )
         content_box.append(replace_label)
         self._replace_entry = Gtk.Entry()
         self._replace_entry.set_hexpand(True)
-        _wire_entry_history_recall(self._replace_entry, state.replace_history_prev, state.replace_history_next)
+        _wire_entry_history_recall(
+            self._replace_entry, state.replace_history_prev, state.replace_history_next
+        )
         content_box.append(self._replace_entry)
 
         options_box, self._checks = _build_options_box(state)
@@ -359,9 +369,7 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
             ("Multiple Tabs/Documents", "all_tabs"),
         ]:
             btn = Gtk.Button(label=scope_label)
-            btn.connect(
-                "clicked", lambda _b, sk=scope_key: self.handle_replace_all(sk)
-            )
+            btn.connect("clicked", lambda _b, sk=scope_key: self.handle_replace_all(sk))
             scope_box.append(btn)
             scope_btns.append(btn)
         content_box.append(scope_box)
