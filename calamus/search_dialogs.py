@@ -242,14 +242,13 @@ class FindDialog(FindDialogLogic, Adw.Window):
     ) -> None:
         Adw.Window.__init__(self, **kwargs)
         self._editor = editor
-        self._state = state
+        # _live_state is the window's shared state (used by Find Again etc.).
+        # _state is a fresh blank scratch copy for this dialog session.
+        # History lists are shared by reference so ↑/↓ recall works.
+        self._live_state = state
+        self._state = state.make_dialog_scratch()
         self.set_title("Find")
         self.set_modal(False)
-
-        # Prepare state: reset search_backward/keep_dialog to defaults and
-        # reset history cursors.  Search flags and find_history are preserved
-        # so the dialog shows exactly what Find Again would use.
-        state.prepare_for_dialog_open()
 
         toolbar_view = Adw.ToolbarView()
         header = Adw.HeaderBar()
@@ -267,16 +266,14 @@ class FindDialog(FindDialogLogic, Adw.Window):
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
-        # Pre-populate with the last search term so the user sees what
-        # Find Again would repeat; they can edit or leave it as-is.
-        if state.find_history:
-            self._find_entry.set_text(state.find_history[-1])
+        # Scratch state is blank — entry starts empty.
+        # ↑/↓ history recall pulls from the shared live history list.
         _wire_entry_history_recall(
-            self._find_entry, state.history_prev, state.history_next
+            self._find_entry, self._state.history_prev, self._state.history_next
         )
         content_box.append(self._find_entry)
 
-        options_box, self._checks = _build_options_box(state)
+        options_box, self._checks = _build_options_box(self._state)
         _wire_regex_constraints(self._checks)
         _wire_keep_dialog_title(self, "Find", self._checks, file_path)
         content_box.append(options_box)
@@ -324,17 +321,14 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
     ) -> None:
         Adw.Window.__init__(self, **kwargs)
         self._editor = editor
-        self._state = state
+        # _live_state is the window's shared state (used by Replace Again etc.).
+        # _state is a fresh blank scratch copy for this dialog session.
+        # History lists are shared by reference so ↑/↓ recall works.
+        self._live_state = state
+        self._state = state.make_dialog_scratch()
         self._tab_manager = tab_manager
         self.set_title("Replace/Find")
         self.set_modal(False)
-
-        # Prepare state: reset search_backward/keep_dialog to defaults and
-        # reset history cursors.  Search flags, find_history, and
-        # replace_string are preserved so the dialog shows the last-used
-        # settings, and Replace/Find Again continue using them unless the
-        # user explicitly clicks an action button.
-        state.prepare_for_dialog_open()
 
         toolbar_view = Adw.ToolbarView()
         header = Adw.HeaderBar()
@@ -352,10 +346,10 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
-        if state.find_history:
-            self._find_entry.set_text(state.find_history[-1])
+        # Scratch state is blank — entries start empty.
+        # ↑/↓ history recall pulls from the shared live history list.
         _wire_entry_history_recall(
-            self._find_entry, state.history_prev, state.history_next
+            self._find_entry, self._state.history_prev, self._state.history_next
         )
         content_box.append(self._find_entry)
 
@@ -365,14 +359,14 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         content_box.append(replace_label)
         self._replace_entry = Gtk.Entry()
         self._replace_entry.set_hexpand(True)
-        if state.replace_string:
-            self._replace_entry.set_text(state.replace_string)
         _wire_entry_history_recall(
-            self._replace_entry, state.replace_history_prev, state.replace_history_next
+            self._replace_entry,
+            self._state.replace_history_prev,
+            self._state.replace_history_next,
         )
         content_box.append(self._replace_entry)
 
-        options_box, self._checks = _build_options_box(state)
+        options_box, self._checks = _build_options_box(self._state)
         _wire_regex_constraints(self._checks)
         _wire_keep_dialog_title(self, "Replace/Find", self._checks, file_path)
         content_box.append(options_box)

@@ -18,9 +18,18 @@ _MAX_HISTORY = 20
 class SearchState:
     """Shared state for all find/replace operations and dialogs.
 
-    A single instance is owned by CalamusWindow and passed to every
-    dialog and no-dialog action so that history and flags persist
-    across invocations.
+    A single instance (``_search_state``) is owned by CalamusWindow and
+    represents the **active** settings used by Find Again, Find Again Reverse,
+    Replace and Find Again, and Replace Again.  It starts empty and is only
+    updated when the user clicks an action button in a dialog.
+
+    Dialogs always open fresh (empty entries, all options unchecked) and
+    operate on a local scratch copy.  On action the scratch copy is committed
+    to the live instance.  Cancel / close never touches the live instance.
+
+    History (``find_history``, ``replace_history``) lives on the live instance
+    and is shared with dialog scratch copies by reference so that ↑/↓ recall
+    always reflects the full accumulated history even in fresh dialogs.
     """
 
     find_history: list[str] = field(default_factory=list)
@@ -107,24 +116,37 @@ class SearchState:
         self._history_index = -1
         self._replace_history_index = -1
 
-    def prepare_for_dialog_open(self) -> None:
-        """Prepare state for a fresh dialog open.
+    def make_dialog_scratch(self) -> "SearchState":
+        """Return a fresh blank SearchState for dialog-local use.
 
-        Resets only the dialog-local UI flags so the widgets initialize to
-        sensible defaults: ``search_backward`` and ``keep_dialog`` are cleared
-        (they are per-session UI choices, not part of the "last search").
-        History cursors are reset so ↑/↓ recall starts from the most-recent
-        entry.
-
-        ``use_regex``, ``case_sensitive``, ``whole_word``, ``find_history``,
-        and ``replace_string`` are intentionally **preserved** — the dialog
-        pre-populates from them so the user sees the last-used settings, and
-        Find Again / Replace Again continue to use those settings unchanged
-        unless the user explicitly clicks an action button.
+        All option flags start at their defaults (False) and entries are
+        empty, so dialogs always open clean.  The new instance shares the
+        same ``find_history`` and ``replace_history`` list objects as the
+        live state so that ↑/↓ recall in the dialog reflects the full
+        accumulated history.
         """
-        self.search_backward = False
-        self.keep_dialog = False
-        self.reset_history_cursor()
+        scratch = SearchState(
+            find_history=self.find_history,
+            replace_history=self.replace_history,
+        )
+        return scratch
+
+    def commit_to(self, target: "SearchState") -> None:
+        """Copy this state's options and strings into *target* (the live state).
+
+        Called when the user clicks an action button so that Find Again and
+        Replace Again pick up the new settings.  History lists are already
+        shared by reference and updated in place via push_find/push_replace,
+        so they do not need to be copied.
+        """
+        target.find_history[:] = self.find_history
+        target.replace_history[:] = self.replace_history
+        target.replace_string = self.replace_string
+        target.use_regex = self.use_regex
+        target.case_sensitive = self.case_sensitive
+        target.whole_word = self.whole_word
+        target.search_backward = self.search_backward
+        target.keep_dialog = self.keep_dialog
 
 
 # ---------------------------------------------------------------------------
@@ -151,13 +173,18 @@ class FindDialogLogic:
     Subclasses must implement :meth:`get_find_text`; override
     :meth:`close_dialog` to actually dismiss a window.
 
+    ``_state`` is a dialog-local scratch copy (always fresh/blank on open).
+    ``_live_state`` is the window's shared state used by Find Again etc.
+    Action buttons sync scratch → live; Cancel/close leaves live untouched.
+
     Note: intentionally does *not* inherit ``ABC`` — mixing ABCMeta with
     GObject's metaclass causes a metaclass conflict in GTK subclasses.
     The ``@abstractmethod`` markers are enforced statically by type checkers.
     """
 
     _editor: "AbstractEditor"
-    _state: SearchState
+    _state: SearchState        # dialog-local scratch copy
+    _live_state: SearchState   # window's shared live state
     _checks: "dict[str, HasGetActive]"
 
     @abstractmethod
@@ -168,15 +195,19 @@ class FindDialogLogic:
         """Close the dialog. No-op in pure-logic / test context."""
 
     def handle_find(self) -> bool:
-        """Execute a find action. Returns True if a match was found."""
+        """Commit scratch state to live state and execute find.
+
+        Returns True if a match was found.
+        """
         text = self.get_find_text()
         _sync_options_to_state(self._checks, self._state)
         self._state.push_find(text)
-        if self._state.search_backward:
-            found = self._editor.find_previous(self._state)
+        self._state.commit_to(self._live_state)
+        if self._live_state.search_backward:
+            found = self._editor.find_previous(self._live_state)
         else:
-            found = self._editor.find_next(self._state)
-        if found and not self._state.keep_dialog:
+            found = self._editor.find_next(self._live_state)
+        if found and not self._live_state.keep_dialog:
             self.close_dialog()
         return found
 
@@ -188,13 +219,18 @@ class ReplaceDialogLogic:
     Subclasses must implement :meth:`get_find_text` and
     :meth:`get_replace_text`; override :meth:`close_dialog` to dismiss a window.
 
+    ``_state`` is a dialog-local scratch copy (always fresh/blank on open).
+    ``_live_state`` is the window's shared state used by Replace Again etc.
+    Action buttons sync scratch → live; Cancel/close leaves live untouched.
+
     Note: intentionally does *not* inherit ``ABC`` — mixing ABCMeta with
     GObject's metaclass causes a metaclass conflict in GTK subclasses.
     The ``@abstractmethod`` markers are enforced statically by type checkers.
     """
 
     _editor: "AbstractEditor"
-    _state: SearchState
+    _state: SearchState        # dialog-local scratch copy
+    _live_state: SearchState   # window's shared live state
     _tab_manager: "AbstractTabManager | None"
     _checks: "dict[str, HasGetActive]"
 
@@ -210,28 +246,31 @@ class ReplaceDialogLogic:
         """Close the dialog. No-op in pure-logic / test context."""
 
     def commit_entries(self) -> None:
-        """Sync entry text and checkbox state into ``_state``."""
+        """Sync entry text and checkbox state into scratch, then commit to live."""
         text = self.get_find_text()
         _sync_options_to_state(self._checks, self._state)
         self._state.push_find(text)
         self._state.replace_string = self.get_replace_text()
         self._state.push_replace(self._state.replace_string)
+        self._state.commit_to(self._live_state)
 
     def handle_find(self) -> None:
         self.commit_entries()
-        if self._state.search_backward:
-            self._editor.find_previous(self._state)
+        if self._live_state.search_backward:
+            self._editor.find_previous(self._live_state)
         else:
-            self._editor.find_next(self._state)
+            self._editor.find_next(self._live_state)
 
     def handle_replace(self) -> None:
         self.commit_entries()
-        self._editor.replace_current(self._state.replace_string, self._state)
+        self._editor.replace_current(self._live_state.replace_string, self._live_state)
 
     def handle_replace_and_find(self) -> bool:
         self.commit_entries()
-        found = self._editor.replace_and_find(self._state.replace_string, self._state)
-        if found and not self._state.keep_dialog:
+        found = self._editor.replace_and_find(
+            self._live_state.replace_string, self._live_state
+        )
+        if found and not self._live_state.keep_dialog:
             self.close_dialog()
         return found
 
@@ -241,11 +280,11 @@ class ReplaceDialogLogic:
             total = 0
             for editor in self._get_all_editors():
                 total += editor.replace_all(
-                    self._state.replace_string, "window", self._state
+                    self._live_state.replace_string, "window", self._live_state
                 )
         else:
             total = self._editor.replace_all(
-                self._state.replace_string, scope, self._state
+                self._live_state.replace_string, scope, self._live_state
             )
         return total
 

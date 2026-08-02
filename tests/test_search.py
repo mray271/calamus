@@ -148,46 +148,74 @@ class TestSearchStateHistoryNavigation:
         assert s._history_index == -1
 
 
-class TestSearchStatePrepareForDialogOpen:
-    def test_clears_search_backward_and_keep_dialog(self):
-        """prepare_for_dialog_open resets search_backward and keep_dialog."""
-        s = SearchState()
-        s.search_backward = True
-        s.keep_dialog = True
-        s.prepare_for_dialog_open()
-        assert s.search_backward is False
-        assert s.keep_dialog is False
+class TestSearchStateMakeDialogScratch:
+    def test_scratch_starts_blank(self):
+        """make_dialog_scratch returns a fresh state with all flags False."""
+        live = SearchState()
+        live.case_sensitive = True
+        live.use_regex = True
+        live.push_find("hello")
+        scratch = live.make_dialog_scratch()
+        assert scratch.case_sensitive is False
+        assert scratch.use_regex is False
+        assert scratch.whole_word is False
+        assert scratch.search_backward is False
+        assert scratch.keep_dialog is False
+        assert scratch.replace_string == ""
 
-    def test_preserves_search_flags(self):
-        """case_sensitive, use_regex, whole_word are preserved so the dialog
-        pre-populates with the last-used settings and Find Again keeps them."""
-        s = SearchState()
-        s.case_sensitive = True
-        s.use_regex = True
-        s.whole_word = True
-        s.prepare_for_dialog_open()
-        assert s.case_sensitive is True
-        assert s.use_regex is True
-        assert s.whole_word is True
+    def test_scratch_shares_history_lists(self):
+        """Scratch and live share the same history list objects."""
+        live = SearchState()
+        live.push_find("a")
+        scratch = live.make_dialog_scratch()
+        assert scratch.find_history is live.find_history
+        assert scratch.replace_history is live.replace_history
 
-    def test_preserves_find_history_and_replace_string(self):
-        """find_history and replace_string survive so dialogs pre-populate."""
-        s = SearchState()
-        s.push_find("hello")
-        s.replace_string = "world"
-        s.prepare_for_dialog_open()
-        assert s.find_history[-1] == "hello"
-        assert s.replace_string == "world"
+    def test_scratch_history_recall_sees_live_history(self):
+        """↑/↓ recall on the scratch reflects history pushed to live."""
+        live = SearchState()
+        live.push_find("first")
+        live.push_find("second")
+        scratch = live.make_dialog_scratch()
+        assert scratch.history_prev() == "second"
 
-    def test_resets_history_cursors(self):
-        """History navigation indices are reset so ↑/↓ starts from most recent."""
-        s = SearchState()
-        s.push_find("a")
-        s.push_find("b")
-        s.history_prev()
-        assert s._history_index != -1
-        s.prepare_for_dialog_open()
-        assert s._history_index == -1
+
+class TestSearchStateCommitTo:
+    def test_commit_copies_flags_and_strings(self):
+        """commit_to copies all option flags and replace_string to target."""
+        scratch = SearchState()
+        scratch.case_sensitive = True
+        scratch.use_regex = True
+        scratch.whole_word = True
+        scratch.search_backward = True
+        scratch.keep_dialog = True
+        scratch.replace_string = "bar"
+        live = SearchState()
+        scratch.commit_to(live)
+        assert live.case_sensitive is True
+        assert live.use_regex is True
+        assert live.whole_word is True
+        assert live.search_backward is True
+        assert live.keep_dialog is True
+        assert live.replace_string == "bar"
+
+    def test_commit_does_not_touch_original(self):
+        """commit_to does not modify the source state."""
+        scratch = SearchState()
+        scratch.case_sensitive = True
+        live = SearchState()
+        scratch.commit_to(live)
+        # scratch unchanged
+        assert scratch.case_sensitive is True
+
+    def test_live_unchanged_without_commit(self):
+        """Modifying scratch without commit leaves live state untouched."""
+        live = SearchState()
+        live.case_sensitive = True
+        scratch = live.make_dialog_scratch()
+        scratch.case_sensitive = False
+        # live was not committed to
+        assert live.case_sensitive is True
 
 
 # ---------------------------------------------------------------------------
@@ -283,9 +311,11 @@ class _TestFindLogic:
         class _Impl(FindDialogLogic):
             def __init__(self_, *, editor, state, find_text):
                 self_._editor = editor
-                self_._state = state
+                # In tests, scratch == live so assertions on state work directly.
+                self_._live_state = state
+                self_._state = state.make_dialog_scratch()
                 self_._find_text = find_text
-                self_._checks = _make_fake_checks(keep_dialog=state.keep_dialog)
+                self_._checks = _make_fake_checks(keep_dialog=keep_dialog)
                 self_._closed = False
 
             def get_find_text(self_):
@@ -366,7 +396,9 @@ class _TestReplaceLogic:
         class _Impl(ReplaceDialogLogic):
             def __init__(self_, *, editor, state, find_text, replace_text):
                 self_._editor = editor
-                self_._state = state
+                # In tests, scratch == live so assertions on state work directly.
+                self_._live_state = state
+                self_._state = state.make_dialog_scratch()
                 self_._tab_manager = None
                 self_._find_text = find_text
                 self_._replace_text = replace_text
