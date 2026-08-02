@@ -54,13 +54,32 @@ CI will fail your PR automatically if an unapproved subprocess call is detected.
 
 ## Code Style
 
-All Python code must be formatted with [black](https://black.readthedocs.io/):
+All Python code must pass both [black](https://black.readthedocs.io/) and
+[isort](https://pycfound.readthedocs.io/en/latest/isort/) checks. CI runs:
 
-```bash
-uv run black .
+```
+uvx black --check .
+uvx isort --check-only --diff .
 ```
 
-Formatting is enforced by CI — unformatted PRs will fail.
+Run the same checks locally before every commit using the project's Docker
+image (which has `uv` and the `dev` extras pre-installed):
+
+```bash
+docker run --rm -v "$(pwd)":/app -w /app \
+    $(docker build -q .) \
+    sh -c "uv sync --extra dev --no-install-project -q && uv run black . && uv run isort ."
+```
+
+Or if `uv` is available on your host:
+
+```bash
+uv sync --extra dev
+uv run black .
+uv run isort .
+```
+
+Formatting failures will block PR merges.
 
 ## Branch Naming
 
