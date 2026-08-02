@@ -10,6 +10,7 @@ Pure-Python handler logic lives in :mod:`calamus.search`
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import gi
@@ -28,6 +29,75 @@ from calamus.search import (
 
 if TYPE_CHECKING:
     from calamus.editor import AbstractEditor
+
+
+# ---------------------------------------------------------------------------
+# Goto Line dialog
+# ---------------------------------------------------------------------------
+
+
+class GotoLineDialog(Adw.Window):
+    """A non-modal Go to Line / Column dialog.
+
+    Accepts ``line`` or ``line:column`` input, jumps to that position in
+    *editor*, and selects the entire target line.
+    """
+
+    def __init__(self, editor: "AbstractEditor", parent: Gtk.Window) -> None:
+        super().__init__()
+        self._editor = editor
+        self.set_title("Go to Line")
+        self.set_default_size(300, -1)
+        self.set_resizable(True)
+        self.set_modal(False)
+        self.set_transient_for(parent)
+
+        toolbar_view = Adw.ToolbarView()
+        toolbar_view.add_top_bar(Adw.HeaderBar())
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
+
+        entry = Gtk.Entry()
+        entry.set_placeholder_text("line[:column]")
+        box.append(entry)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_halign(Gtk.Align.END)
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda _b: self.close())
+        ok_btn = Gtk.Button(label="Go")
+        ok_btn.add_css_class("suggested-action")
+        btn_box.append(cancel_btn)
+        btn_box.append(ok_btn)
+        box.append(btn_box)
+
+        toolbar_view.set_content(box)
+        self.set_content(toolbar_view)
+
+        ok_btn.connect("clicked", lambda _b: self._go(entry))
+        entry.connect("activate", lambda _e: self._go(entry))
+
+        self.present()
+
+    def _go(self, entry: Gtk.Entry) -> None:
+        text = entry.get_text().strip()
+        parts = text.split(":", 1)
+        try:
+            line = int(parts[0]) - 1
+        except ValueError:
+            return
+        col = 0
+        if len(parts) == 2:
+            try:
+                col = max(0, int(parts[1]) - 1)
+            except ValueError:
+                col = 0
+        self._editor.goto_line(max(0, line), col)
+        self.close()
 
 
 # ---------------------------------------------------------------------------
@@ -97,8 +167,16 @@ def _wire_regex_constraints(checks: dict[str, Gtk.CheckButton]) -> None:
     regex_btn.connect("toggled", _on_regex_toggled)
 
 
-def _wire_history_recall(entry: Gtk.Entry, state: SearchState) -> None:
-    """Wire up ↑/↓ key-press events on *entry* for history recall."""
+def _wire_entry_history_recall(
+    entry: Gtk.Entry,
+    prev_fn: Callable[[], str | None],
+    next_fn: Callable[[], str | None],
+) -> None:
+    """Wire ↑/↓ key-press events on *entry* for history recall.
+
+    *prev_fn* is called on ↑ (older), *next_fn* on ↓ (newer).
+    Both should return the text to set, or ``None`` to leave the entry unchanged / clear it.
+    """
     key_controller = Gtk.EventControllerKey.new()
 
     def on_key_pressed(
@@ -110,42 +188,14 @@ def _wire_history_recall(entry: Gtk.Entry, state: SearchState) -> None:
         from gi.repository import Gdk
 
         if keyval == Gdk.KEY_Up:
-            prev = state.history_prev()
-            if prev is not None:
-                entry.set_text(prev)
+            value = prev_fn()
+            if value is not None:
+                entry.set_text(value)
                 entry.set_position(-1)
             return True
         if keyval == Gdk.KEY_Down:
-            nxt = state.history_next()
-            entry.set_text(nxt if nxt is not None else "")
-            entry.set_position(-1)
-            return True
-        return False
-
-    key_controller.connect("key-pressed", on_key_pressed)
-    entry.add_controller(key_controller)
-
-def _wire_replace_history_recall(entry: Gtk.Entry, state: SearchState) -> None:
-    """Wire up ↑/↓ key-press events on the Replace With *entry*."""
-    key_controller = Gtk.EventControllerKey.new()
-
-    def on_key_pressed(
-        _ctrl: Gtk.EventControllerKey,
-        keyval: int,
-        _keycode: int,
-        _modifiers: int,
-    ) -> bool:
-        from gi.repository import Gdk
-
-        if keyval == Gdk.KEY_Up:
-            prev = state.replace_history_prev()
-            if prev is not None:
-                entry.set_text(prev)
-                entry.set_position(-1)
-            return True
-        if keyval == Gdk.KEY_Down:
-            nxt = state.replace_history_next()
-            entry.set_text(nxt if nxt is not None else "")
+            value = next_fn()
+            entry.set_text(value if value is not None else "")
             entry.set_position(-1)
             return True
         return False
@@ -213,7 +263,7 @@ class FindDialog(FindDialogLogic, Adw.Window):
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
-        _wire_history_recall(self._find_entry, state)
+        _wire_entry_history_recall(self._find_entry, state.history_prev, state.history_next)
         content_box.append(self._find_entry)
 
         options_box, self._checks = _build_options_box(state)
@@ -284,14 +334,14 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
-        _wire_history_recall(self._find_entry, state)
+        _wire_entry_history_recall(self._find_entry, state.history_prev, state.history_next)
         content_box.append(self._find_entry)
 
         replace_label = Gtk.Label(label="Replace With  (use ↑ arrow key to recall previous)", xalign=0.0)
         content_box.append(replace_label)
         self._replace_entry = Gtk.Entry()
         self._replace_entry.set_hexpand(True)
-        _wire_replace_history_recall(self._replace_entry, state)
+        _wire_entry_history_recall(self._replace_entry, state.replace_history_prev, state.replace_history_next)
         content_box.append(self._replace_entry)
 
         options_box, self._checks = _build_options_box(state)

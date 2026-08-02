@@ -20,6 +20,37 @@ if TYPE_CHECKING:
     from gi.repository import Gtk
 
 
+class HasGetActive(Protocol):
+    """Structural protocol for toggle widgets with a boolean active state.
+
+    Satisfied by ``Gtk.CheckButton``, ``Gtk.ToggleButton``, and similar.
+    Used in :func:`calamus.search._sync_options_to_state` to avoid coupling
+    the pure-Python logic layer to GTK types.
+    """
+
+    def get_active(self) -> bool:
+        """Return True if the widget is in the active/checked state."""
+        ...
+
+
+class TabManagerLike(Protocol):
+    """Structural protocol for objects that manage a paged set of editor tabs.
+
+    Satisfied by ``AbstractTabManager`` (and its concrete implementations).
+    Used in :class:`calamus.search.ReplaceDialogLogic` so the replace-all
+    "Multiple Tabs" scope can iterate editors without importing the full
+    tab manager hierarchy.
+    """
+
+    def get_n_pages(self) -> int:
+        """Return the number of open tab pages."""
+        ...
+
+    def get_nth_page(self, n: int) -> object:
+        """Return the tab page at index *n*, or None if out of range."""
+        ...
+
+
 class HasWidget(Protocol):
     """Structural protocol for objects that wrap and expose a GTK widget.
 

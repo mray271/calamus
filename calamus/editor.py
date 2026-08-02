@@ -64,6 +64,10 @@ class AbstractEditor(ABC):
         """Toggle the find UI."""
 
     @abstractmethod
+    def goto_line(self, line: int, col: int = 0) -> None:
+        """Jump to the given 0-based *line* and *col*, selecting the full line."""
+
+    @abstractmethod
     def zoom_by(self, factor: float) -> None:
         """Scale editor font size by a factor."""
 
@@ -262,65 +266,18 @@ class MarkdownEditor(AbstractEditor):
             buffer.redo()
 
     def show_goto_line_dialog(self, parent: Gtk.Window) -> None:
-        win = Adw.Window()
-        win.set_title("Go to Line")
-        win.set_default_size(300, -1)
-        win.set_resizable(True)
-        win.set_modal(False)
-        win.set_transient_for(parent)
+        from calamus.search_dialogs import GotoLineDialog
+        GotoLineDialog(self, parent)
 
-        toolbar_view = Adw.ToolbarView()
-        toolbar_view.add_top_bar(Adw.HeaderBar())
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        box.set_margin_top(12)
-        box.set_margin_bottom(12)
-        box.set_margin_start(16)
-        box.set_margin_end(16)
-
-        entry = Gtk.Entry()
-        entry.set_placeholder_text("line[:column]")
-        box.append(entry)
-
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        btn_box.set_halign(Gtk.Align.END)
-        cancel_btn = Gtk.Button(label="Cancel")
-        cancel_btn.connect("clicked", lambda _b: win.close())
-        ok_btn = Gtk.Button(label="Go")
-        ok_btn.add_css_class("suggested-action")
-        btn_box.append(cancel_btn)
-        btn_box.append(ok_btn)
-        box.append(btn_box)
-
-        toolbar_view.set_content(box)
-        win.set_content(toolbar_view)
-
-        def _go(*_: object) -> None:
-            text = entry.get_text().strip()
-            parts = text.split(":", 1)
-            try:
-                line = int(parts[0]) - 1
-            except ValueError:
-                return
-            col = 0
-            if len(parts) == 2:
-                try:
-                    col = max(0, int(parts[1]) - 1)
-                except ValueError:
-                    col = 0
-            buffer = self.get_buffer()
-            _ok, start = buffer.get_iter_at_line_offset(max(0, line), col)
-            end = start.copy()
-            if not end.ends_line():
-                end.forward_to_line_end()
-            buffer.select_range(start, end)
-            self._view.scroll_to_iter(start, 0.1, True, 0.0, 0.5)
-            win.close()
-
-        ok_btn.connect("clicked", _go)
-        entry.connect("activate", _go)
-
-        win.present()
+    def goto_line(self, line: int, col: int = 0) -> None:
+        """Jump to 0-based *line*/*col* and select the full line."""
+        buffer = self.get_buffer()
+        _ok, start = buffer.get_iter_at_line_offset(line, col)
+        end = start.copy()
+        if not end.ends_line():
+            end.forward_to_line_end()
+        buffer.select_range(start, end)
+        self._view.scroll_to_iter(start, 0.1, True, 0.0, 0.5)
 
     def toggle_find_bar(self) -> None:
         if self._find_revealer is not None:
@@ -461,7 +418,9 @@ class MarkdownEditor(AbstractEditor):
         needle = state.find_history[-1] if state.find_history else ""
         if not needle:
             return 0
-        flags = 0 if state.case_sensitive else re.IGNORECASE
+        flags = re.MULTILINE
+        if not state.case_sensitive:
+            flags |= re.IGNORECASE
         if state.use_regex:
             pattern = needle
         else:

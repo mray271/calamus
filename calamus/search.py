@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from calamus.editor import AbstractEditor
+    from calamus.protocols import HasGetActive, TabManagerLike
 
 _MAX_HISTORY = 20
 
@@ -125,7 +127,7 @@ class SearchState:
 # ---------------------------------------------------------------------------
 
 
-def _sync_options_to_state(checks: dict, state: SearchState) -> None:
+def _sync_options_to_state(checks: "dict[str, HasGetActive]", state: SearchState) -> None:
     """Copy checkbox states into *state*.
 
     *checks* maps option-key strings to objects with a ``get_active()`` method
@@ -135,23 +137,24 @@ def _sync_options_to_state(checks: dict, state: SearchState) -> None:
         setattr(state, key, btn.get_active())
 
 
-class FindDialogLogic:
+class FindDialogLogic(ABC):
     """Pure-Python handler logic for the Find dialog.
 
     Subclassed by ``FindDialog`` (GTK) and used directly in tests.
-    Override ``get_find_text()`` and ``close_dialog()`` as appropriate.
+    Subclasses must implement :meth:`get_find_text`; override
+    :meth:`close_dialog` to actually dismiss a window.
     """
 
-    _editor: AbstractEditor
+    _editor: "AbstractEditor"
     _state: SearchState
-    _checks: dict  # str -> CheckButton-like object with get_active()
+    _checks: "dict[str, HasGetActive]"
 
+    @abstractmethod
     def get_find_text(self) -> str:
         """Return the current text in the find entry."""
-        raise NotImplementedError
 
     def close_dialog(self) -> None:
-        """Close the dialog (no-op in pure-logic context)."""
+        """Close the dialog. No-op in pure-logic / test context."""
 
     def handle_find(self) -> bool:
         """Execute a find action. Returns True if a match was found."""
@@ -167,27 +170,29 @@ class FindDialogLogic:
         return found
 
 
-class ReplaceDialogLogic:
+class ReplaceDialogLogic(ABC):
     """Pure-Python handler logic for the Replace dialog.
 
     Subclassed by ``ReplaceDialog`` (GTK) and used directly in tests.
+    Subclasses must implement :meth:`get_find_text` and
+    :meth:`get_replace_text`; override :meth:`close_dialog` to dismiss a window.
     """
 
-    _editor: AbstractEditor
+    _editor: "AbstractEditor"
     _state: SearchState
-    _tab_manager: object
-    _checks: dict
+    _tab_manager: "TabManagerLike | None"
+    _checks: "dict[str, HasGetActive]"
 
+    @abstractmethod
     def get_find_text(self) -> str:
         """Return the current text in the find entry."""
-        raise NotImplementedError
 
+    @abstractmethod
     def get_replace_text(self) -> str:
         """Return the current text in the replace entry."""
-        raise NotImplementedError
 
     def close_dialog(self) -> None:
-        """Close the dialog (no-op in pure-logic context)."""
+        """Close the dialog. No-op in pure-logic / test context."""
 
     def commit_entries(self) -> None:
         """Sync entry text and checkbox state into ``_state``."""
@@ -231,7 +236,7 @@ class ReplaceDialogLogic:
             )
         return total
 
-    def _get_all_editors(self) -> list[AbstractEditor]:
+    def _get_all_editors(self) -> "list[AbstractEditor]":
         if self._tab_manager is None:
             return [self._editor]
         editors = []
