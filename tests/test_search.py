@@ -148,35 +148,46 @@ class TestSearchStateHistoryNavigation:
         assert s._history_index == -1
 
 
-class TestSearchStateResetOptions:
-    def test_reset_options_clears_transient_state(self):
-        """reset_options clears replace_string, search_backward, keep_dialog."""
+class TestSearchStatePrepareForDialogOpen:
+    def test_clears_search_backward_and_keep_dialog(self):
+        """prepare_for_dialog_open resets search_backward and keep_dialog."""
         s = SearchState()
-        s.replace_string = "bar"
         s.search_backward = True
         s.keep_dialog = True
-        s.reset_options()
-        assert s.replace_string == ""
+        s.prepare_for_dialog_open()
         assert s.search_backward is False
         assert s.keep_dialog is False
 
-    def test_reset_options_preserves_search_flags(self):
-        """case_sensitive, use_regex, whole_word survive reset_options so
-        Find Again (Ctrl+G) repeats the exact same search after dialog close."""
+    def test_preserves_search_flags(self):
+        """case_sensitive, use_regex, whole_word are preserved so the dialog
+        pre-populates with the last-used settings and Find Again keeps them."""
         s = SearchState()
         s.case_sensitive = True
         s.use_regex = True
         s.whole_word = True
-        s.reset_options()
+        s.prepare_for_dialog_open()
         assert s.case_sensitive is True
         assert s.use_regex is True
         assert s.whole_word is True
 
-    def test_reset_options_preserves_find_string(self):
+    def test_preserves_find_history_and_replace_string(self):
+        """find_history and replace_string survive so dialogs pre-populate."""
         s = SearchState()
         s.push_find("hello")
-        s.reset_options()
-        assert s.find_history[0] == "hello"
+        s.replace_string = "world"
+        s.prepare_for_dialog_open()
+        assert s.find_history[-1] == "hello"
+        assert s.replace_string == "world"
+
+    def test_resets_history_cursors(self):
+        """History navigation indices are reset so ↑/↓ starts from most recent."""
+        s = SearchState()
+        s.push_find("a")
+        s.push_find("b")
+        s.history_prev()
+        assert s._history_index != -1
+        s.prepare_for_dialog_open()
+        assert s._history_index == -1
 
 
 # ---------------------------------------------------------------------------

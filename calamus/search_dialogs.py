@@ -24,7 +24,6 @@ from calamus.search import (
     FindDialogLogic,
     ReplaceDialogLogic,
     SearchState,
-    _sync_options_to_state,
 )
 
 if TYPE_CHECKING:
@@ -247,6 +246,11 @@ class FindDialog(FindDialogLogic, Adw.Window):
         self.set_title("Find")
         self.set_modal(False)
 
+        # Prepare state: reset search_backward/keep_dialog to defaults and
+        # reset history cursors.  Search flags and find_history are preserved
+        # so the dialog shows exactly what Find Again would use.
+        state.prepare_for_dialog_open()
+
         toolbar_view = Adw.ToolbarView()
         header = Adw.HeaderBar()
         toolbar_view.add_top_bar(header)
@@ -263,6 +267,10 @@ class FindDialog(FindDialogLogic, Adw.Window):
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
+        # Pre-populate with the last search term so the user sees what
+        # Find Again would repeat; they can edit or leave it as-is.
+        if state.find_history:
+            self._find_entry.set_text(state.find_history[-1])
         _wire_entry_history_recall(
             self._find_entry, state.history_prev, state.history_next
         )
@@ -293,9 +301,8 @@ class FindDialog(FindDialogLogic, Adw.Window):
 
         _update_find_sensitivity()
         self._find_entry.connect("notify::text", _update_find_sensitivity)
-
-        self.connect("close-request", lambda _w: state.reset_options() or False)
-        state.reset_history_cursor()
+        # No close-request hook: Cancel and window-close leave live state
+        # untouched so Find Again continues using the prior search settings.
 
     def get_find_text(self) -> str:
         return self._find_entry.get_text()
@@ -322,6 +329,13 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         self.set_title("Replace/Find")
         self.set_modal(False)
 
+        # Prepare state: reset search_backward/keep_dialog to defaults and
+        # reset history cursors.  Search flags, find_history, and
+        # replace_string are preserved so the dialog shows the last-used
+        # settings, and Replace/Find Again continue using them unless the
+        # user explicitly clicks an action button.
+        state.prepare_for_dialog_open()
+
         toolbar_view = Adw.ToolbarView()
         header = Adw.HeaderBar()
         toolbar_view.add_top_bar(header)
@@ -338,6 +352,8 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         content_box.append(find_label)
         self._find_entry = Gtk.Entry()
         self._find_entry.set_hexpand(True)
+        if state.find_history:
+            self._find_entry.set_text(state.find_history[-1])
         _wire_entry_history_recall(
             self._find_entry, state.history_prev, state.history_next
         )
@@ -349,6 +365,8 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         content_box.append(replace_label)
         self._replace_entry = Gtk.Entry()
         self._replace_entry.set_hexpand(True)
+        if state.replace_string:
+            self._replace_entry.set_text(state.replace_string)
         _wire_entry_history_recall(
             self._replace_entry, state.replace_history_prev, state.replace_history_next
         )
@@ -402,9 +420,8 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
 
         _update_replace_sensitivity()
         self._find_entry.connect("notify::text", _update_replace_sensitivity)
-
-        self.connect("close-request", lambda _w: state.reset_options() or False)
-        state.reset_history_cursor()
+        # No close-request hook: Cancel and window-close leave live state
+        # untouched so Replace Again continues using the prior settings.
 
     def get_find_text(self) -> str:
         return self._find_entry.get_text()

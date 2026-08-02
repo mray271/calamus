@@ -107,22 +107,24 @@ class SearchState:
         self._history_index = -1
         self._replace_history_index = -1
 
-    def reset_options(self) -> None:
-        """Reset transient dialog state when a dialog is closed.
+    def prepare_for_dialog_open(self) -> None:
+        """Prepare state for a fresh dialog open.
 
-        ``find_history``, ``find_string``, ``use_regex``, ``case_sensitive``,
-        and ``whole_word`` are intentionally preserved so ``Find Again``
-        (Ctrl+G) repeats the exact same search — including its options — after
-        the dialog is dismissed.
+        Resets only the dialog-local UI flags so the widgets initialize to
+        sensible defaults: ``search_backward`` and ``keep_dialog`` are cleared
+        (they are per-session UI choices, not part of the "last search").
+        History cursors are reset so ↑/↓ recall starts from the most-recent
+        entry.
 
-        Only truly dialog-local state is cleared here: ``replace_string``
-        (belongs to Replace dialog only), ``search_backward`` (direction is
-        re-set each time the dialog opens), and ``keep_dialog`` (UI pref).
+        ``use_regex``, ``case_sensitive``, ``whole_word``, ``find_history``,
+        and ``replace_string`` are intentionally **preserved** — the dialog
+        pre-populates from them so the user sees the last-used settings, and
+        Find Again / Replace Again continue to use those settings unchanged
+        unless the user explicitly clicks an action button.
         """
-        self.replace_string = ""
         self.search_backward = False
         self.keep_dialog = False
-        self._replace_history_index = -1
+        self.reset_history_cursor()
 
 
 # ---------------------------------------------------------------------------
