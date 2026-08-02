@@ -148,6 +148,37 @@ class TestSearchStateHistoryNavigation:
         assert s._history_index == -1
 
 
+class TestSearchStateResetOptions:
+    def test_reset_options_clears_transient_state(self):
+        """reset_options clears replace_string, search_backward, keep_dialog."""
+        s = SearchState()
+        s.replace_string = "bar"
+        s.search_backward = True
+        s.keep_dialog = True
+        s.reset_options()
+        assert s.replace_string == ""
+        assert s.search_backward is False
+        assert s.keep_dialog is False
+
+    def test_reset_options_preserves_search_flags(self):
+        """case_sensitive, use_regex, whole_word survive reset_options so
+        Find Again (Ctrl+G) repeats the exact same search after dialog close."""
+        s = SearchState()
+        s.case_sensitive = True
+        s.use_regex = True
+        s.whole_word = True
+        s.reset_options()
+        assert s.case_sensitive is True
+        assert s.use_regex is True
+        assert s.whole_word is True
+
+    def test_reset_options_preserves_find_string(self):
+        s = SearchState()
+        s.push_find("hello")
+        s.reset_options()
+        assert s.find_history[0] == "hello"
+
+
 # ---------------------------------------------------------------------------
 # GTK dialog smoke tests — require a display
 # ---------------------------------------------------------------------------

@@ -108,16 +108,18 @@ class SearchState:
         self._replace_history_index = -1
 
     def reset_options(self) -> None:
-        """Reset all option flags and replace string to their defaults.
+        """Reset transient dialog state when a dialog is closed.
 
-        Called when a dialog is closed so the next opening starts clean.
-        ``find_history`` is intentionally preserved so ``Find Again`` keeps
-        working after the dialog is dismissed.
+        ``find_history``, ``find_string``, ``use_regex``, ``case_sensitive``,
+        and ``whole_word`` are intentionally preserved so ``Find Again``
+        (Ctrl+G) repeats the exact same search — including its options — after
+        the dialog is dismissed.
+
+        Only truly dialog-local state is cleared here: ``replace_string``
+        (belongs to Replace dialog only), ``search_backward`` (direction is
+        re-set each time the dialog opens), and ``keep_dialog`` (UI pref).
         """
         self.replace_string = ""
-        self.use_regex = False
-        self.case_sensitive = False
-        self.whole_word = False
         self.search_backward = False
         self.keep_dialog = False
         self._replace_history_index = -1
