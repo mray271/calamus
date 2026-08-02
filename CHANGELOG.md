@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-02
+
+### Added
+- Search menu and advanced search workflows:
+  - Find dialog (`Ctrl+F`) with case-sensitive, regex, whole-word, and search-backward options
+  - Replace/Find dialog (`Ctrl+R`) with Replace, Replace & Find, and Replace All scopes (Window / Selection / Multiple Tabs)
+  - Go to Line / Column dialog (`Ctrl+L`)
+  - Dialog-free search/replace accelerators (`Ctrl+G`, `Ctrl+Shift+G`, `Ctrl+T`, `Ctrl+Shift+T`, `Ctrl+H`)
+  - Search history navigation with ↑/↓ in Find/Replace fields
+
+### Fixed
+- Search dialog lifecycle now preserves **Find Again/Replace Again** state while ensuring newly opened dialogs always start clean
+- Preview no longer snaps to top on initial file load or when Mermaid background rendering completes
+- Mermaid fenced blocks embedded inside outer markdown code fences now render as literal code examples instead of diagrams
+
+### Changed
+- `meson.build` now derives the application version directly from `pyproject.toml`, eliminating manual version-sync drift
+
 ## [0.5.5] - 2026-08-01
 
 ### Fixed
@@ -34,6 +52,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Passing a directory path (including `.` and `..`) on the command line no longer errors with "file not found"; the directory tree pane is instead initialised to that directory
+
+## [0.4.5] - 2026-07-19
+
+### Added
+- Extended Markdown compatibility improvements that close several syntax support gaps
+
+### Fixed
+- Prevented symlink recursion loops in directory tree traversal
+- Improved footnote superscript punctuation and placement
+- Resolved CodeQL-identified issues and incorporated additional hardening updates
+- Updated Mistune dependency to include upstream parser/rendering fixes
+
+### Changed
+- Release asset publishing workflow hardened for safer release delivery
+- Public launch readiness documentation finalized
+- Added initial Dependabot configuration scaffold
 
 ## [0.4.0] - 2026-07-12
 
