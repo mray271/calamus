@@ -20,6 +20,8 @@ from calamus.preferences import FileConfigProvider, PreferencesDialog
 from calamus.printer import GtkPrinter
 from calamus.protocols import HasWidget, Zoomable
 from calamus.recentfiles import ConfigFileRecentFilesProvider
+from calamus.search import SearchState
+from calamus.search_dialogs import FindDialog, ReplaceDialog
 from calamus.tabs import AdwTabManager
 from calamus.theme import ThemeManager
 
@@ -122,6 +124,7 @@ class CalamusWindow(Adw.ApplicationWindow):
         self._preview_pane_visible = True
         self._confirmed_quit = False
         self._printer = GtkPrinter()
+        self._search_state = SearchState()
         self._pipe_content = pipe_content
         self._pipe_mode = pipe_content is not None
         self._pipe_saved_content: str | None = None
@@ -324,8 +327,14 @@ class CalamusWindow(Adw.ApplicationWindow):
             ("cut", self._on_cut, "<primary>x"),
             ("copy", self._on_copy, "<primary>c"),
             ("paste", self._on_paste, "<primary>v"),
-            ("goto-line", self._on_goto_line, "<primary>g"),
+            ("goto-line", self._on_goto_line, "<primary>l"),
             ("find", self._on_find, "<primary>f"),
+            ("replace", self._on_replace, "<primary>r"),
+            ("find-again", self._on_find_again, "<primary>g"),
+            ("find-again-reverse", self._on_find_again_reverse, "<primary><shift>g"),
+            ("find-selection", self._on_find_selection, "<primary>h"),
+            ("replace-find-again", self._on_replace_find_again, "<primary>t"),
+            ("replace-again", self._on_replace_again, "<primary><shift>t"),
             ("preferences", self._on_preferences, None),
             ("export-html", self._on_export_html, None),
             ("export-pdf", self._on_export_pdf, None),
@@ -630,9 +639,68 @@ class CalamusWindow(Adw.ApplicationWindow):
             editor.show_goto_line_dialog(self)
 
     def _on_find(self, _action: Gio.SimpleAction, _param: object) -> None:
+        tab = self.tab_manager.get_current_tab()
+        if tab is not None:
+            dlg = FindDialog(
+                editor=tab.editor,
+                state=self._search_state,
+                file_path=tab.file_path,
+            )
+            dlg.set_transient_for(self)
+            dlg.present()
+
+    def _on_replace(self, _action: Gio.SimpleAction, _param: object) -> None:
+        tab = self.tab_manager.get_current_tab()
+        if tab is not None:
+            dlg = ReplaceDialog(
+                editor=tab.editor,
+                state=self._search_state,
+                tab_manager=self.tab_manager,
+                file_path=tab.file_path,
+            )
+            dlg.set_transient_for(self)
+            dlg.present()
+
+    def _on_find_again(self, _action: Gio.SimpleAction, _param: object) -> None:
+        """Ctrl+G — repeat last find forward (wraps at end of file)."""
         editor = self.tab_manager.get_current_editor()
         if editor is not None:
-            editor.toggle_find_bar()
+            editor.find_next(self._search_state)
+
+    def _on_find_again_reverse(self, _action: Gio.SimpleAction, _param: object) -> None:
+        """Ctrl+Shift+G — repeat last find backward (wraps at start of file)."""
+        editor = self.tab_manager.get_current_editor()
+        if editor is not None:
+            editor.find_previous(self._search_state)
+
+    def _on_find_selection(self, _action: Gio.SimpleAction, _param: object) -> None:
+        editor = self.tab_manager.get_current_editor()
+        if editor is None:
+            return
+        text, has_sel = editor.get_selection()
+        if not (has_sel and text):
+            return
+        self._search_state.push_find(text)
+        saved_backward = self._search_state.search_backward
+        self._search_state.search_backward = False
+        editor.find_next(self._search_state)
+        self._search_state.search_backward = saved_backward
+
+    def _on_replace_find_again(
+        self, _action: Gio.SimpleAction, _param: object
+    ) -> None:
+        editor = self.tab_manager.get_current_editor()
+        if editor is not None:
+            editor.replace_and_find(self._search_state.replace_string, self._search_state)
+
+    def _on_replace_again(self, _action: Gio.SimpleAction, _param: object) -> None:
+        """Ctrl+Shift+T — replace the current selection, or find-then-replace if nothing selected."""
+        editor = self.tab_manager.get_current_editor()
+        if editor is None:
+            return
+        if not editor.get_buffer().get_has_selection():
+            editor.find_next(self._search_state)
+        editor.replace_current(self._search_state.replace_string, self._search_state)
 
     def _on_preferences(self, _action: Gio.SimpleAction, _param: object) -> None:
         PreferencesDialog(
@@ -866,9 +934,20 @@ MENU_XML = """
       <item><attribute name="label">Cut</attribute><attribute name="action">app.cut</attribute></item>
       <item><attribute name="label">Copy</attribute><attribute name="action">app.copy</attribute></item>
       <item><attribute name="label">Paste</attribute><attribute name="action">app.paste</attribute></item>
-      <item><attribute name="label">Go to Line…</attribute><attribute name="action">app.goto-line</attribute></item>
-      <item><attribute name="label">Find…</attribute><attribute name="action">app.find</attribute></item>
       <item><attribute name="label">Preferences</attribute><attribute name="action">app.preferences</attribute></item>
+    </submenu>
+    <submenu>
+      <attribute name="label">Search</attribute>
+      <item><attribute name="label">Find…</attribute><attribute name="action">app.find</attribute></item>
+      <item><attribute name="label">Replace…</attribute><attribute name="action">app.replace</attribute></item>
+      <item><attribute name="label">Goto Line Number…</attribute><attribute name="action">app.goto-line</attribute></item>
+      <section>
+      <item><attribute name="label">Find Again (Ctrl+G)</attribute><attribute name="action">app.find-again</attribute></item>
+      <item><attribute name="label">Find Again Reverse (Ctrl+Shift+G)</attribute><attribute name="action">app.find-again-reverse</attribute></item>
+      <item><attribute name="label">Find Selection</attribute><attribute name="action">app.find-selection</attribute></item>
+      <item><attribute name="label">Replace &amp; Find Again</attribute><attribute name="action">app.replace-find-again</attribute></item>
+      <item><attribute name="label">Replace Again (Ctrl+Shift+T)</attribute><attribute name="action">app.replace-again</attribute></item>
+      </section>
     </submenu>
     <submenu>
       <attribute name="label">Formatting</attribute>

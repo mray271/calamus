@@ -61,4 +61,7 @@
   <!-- Line break (trailing spaces) — subtle indicator -->
   <style name="markdown:line-break"      background="#deddda"/>
 
+  <!-- Search match highlight -->
+  <style name="search-match"             background="#f9f06b" foreground="#000000"/>
+
 </style-scheme>

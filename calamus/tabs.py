@@ -236,6 +236,10 @@ class EditorTab(AbstractTab):
 
     def _flush_preview(self) -> bool:
         self._preview_timer_id = None
+        GLib.idle_add(self._do_preview_update)
+        return GLib.SOURCE_REMOVE
+
+    def _do_preview_update(self) -> bool:
         self.preview.update(self.editor.get_text())
         return GLib.SOURCE_REMOVE
 

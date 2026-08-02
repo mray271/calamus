@@ -5,6 +5,10 @@ from __future__ import annotations
 import configparser
 import os
 from abc import ABC, ABCMeta, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from calamus.search import SearchState
 
 import gi
 
@@ -79,6 +83,44 @@ class AbstractEditor(ABC):
     def set_editable(self, editable: bool) -> None:
         """Set whether the editor is editable."""
 
+    @abstractmethod
+    def find_next(self, state: "SearchState") -> bool:  # noqa: F821
+        """Find the next occurrence matching *state*.
+
+        Returns True if a match was found and selected, False otherwise.
+        """
+
+    @abstractmethod
+    def find_previous(self, state: "SearchState") -> bool:  # noqa: F821
+        """Find the previous occurrence matching *state*.
+
+        Returns True if a match was found and selected, False otherwise.
+        """
+
+    @abstractmethod
+    def replace_current(self, replacement: str, state: "SearchState") -> bool:  # noqa: F821
+        """Replace the currently-selected match with *replacement*.
+
+        Returns True if a replacement was performed.
+        """
+
+    @abstractmethod
+    def replace_all(
+        self, replacement: str, scope: str, state: "SearchState"  # noqa: F821
+    ) -> int:
+        """Replace all occurrences of the search term with *replacement*.
+
+        *scope* is one of ``"window"``, ``"selection"``.
+        Returns the number of replacements made.
+        """
+
+    @abstractmethod
+    def replace_and_find(self, replacement: str, state: "SearchState") -> bool:  # noqa: F821
+        """Replace the current match then immediately find the next one.
+
+        Returns True if the replacement was performed.
+        """
+
 
 class MarkdownEditor(AbstractEditor):
     """Concrete GtkSource-based Markdown editor."""
@@ -110,6 +152,10 @@ class MarkdownEditor(AbstractEditor):
             buffer.set_language(language)
         buffer.set_highlight_syntax(True)
         self._view.set_buffer(buffer)
+        # Build a SearchContext bound to this buffer so we can reuse it across
+        # all find/replace calls without recreating settings each time.
+        self._search_settings = GtkSource.SearchSettings()
+        self._search_context = GtkSource.SearchContext.new(buffer, self._search_settings)
 
     def _setup_view(self) -> None:
         self._view.set_show_line_numbers(True)
@@ -216,37 +262,242 @@ class MarkdownEditor(AbstractEditor):
             buffer.redo()
 
     def show_goto_line_dialog(self, parent: Gtk.Window) -> None:
-        dialog = Adw.MessageDialog.new(parent, "Go to Line", None)
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("go", "Go")
-        dialog.set_default_response("go")
-        dialog.set_close_response("cancel")
+        win = Adw.Window()
+        win.set_title("Go to Line")
+        win.set_default_size(300, -1)
+        win.set_resizable(True)
+        win.set_modal(False)
+        win.set_transient_for(parent)
+
+        toolbar_view = Adw.ToolbarView()
+        toolbar_view.add_top_bar(Adw.HeaderBar())
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
 
         entry = Gtk.Entry()
-        entry.set_placeholder_text("Line number")
-        entry.set_input_purpose(Gtk.InputPurpose.NUMBER)
-        dialog.set_extra_child(entry)
+        entry.set_placeholder_text("line[:column]")
+        box.append(entry)
 
-        def on_response(_dialog: Adw.MessageDialog, response: str) -> None:
-            if response != "go":
-                return
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_halign(Gtk.Align.END)
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda _b: win.close())
+        ok_btn = Gtk.Button(label="Go")
+        ok_btn.add_css_class("suggested-action")
+        btn_box.append(cancel_btn)
+        btn_box.append(ok_btn)
+        box.append(btn_box)
+
+        toolbar_view.set_content(box)
+        win.set_content(toolbar_view)
+
+        def _go(*_: object) -> None:
+            text = entry.get_text().strip()
+            parts = text.split(":", 1)
             try:
-                line = int(entry.get_text()) - 1
+                line = int(parts[0]) - 1
             except ValueError:
                 return
+            col = 0
+            if len(parts) == 2:
+                try:
+                    col = max(0, int(parts[1]) - 1)
+                except ValueError:
+                    col = 0
             buffer = self.get_buffer()
-            iterator = buffer.get_iter_at_line(max(0, line))
-            buffer.place_cursor(iterator)
-            self._view.scroll_to_iter(iterator, 0.1, True, 0.0, 0.5)
+            _ok, start = buffer.get_iter_at_line_offset(max(0, line), col)
+            end = start.copy()
+            if not end.ends_line():
+                end.forward_to_line_end()
+            buffer.select_range(start, end)
+            self._view.scroll_to_iter(start, 0.1, True, 0.0, 0.5)
+            win.close()
 
-        dialog.connect("response", on_response)
-        dialog.present()
+        ok_btn.connect("clicked", _go)
+        entry.connect("activate", _go)
+
+        win.present()
 
     def toggle_find_bar(self) -> None:
         if self._find_revealer is not None:
             self._find_revealer.set_reveal_child(
                 not self._find_revealer.get_reveal_child()
             )
+
+    # ------------------------------------------------------------------
+    # Search / Replace helpers
+    # ------------------------------------------------------------------
+
+    def _update_search_highlighting(self, state: SearchState) -> None:
+        """Sync GtkSource.SearchSettings for live in-editor highlighting."""
+        self._search_settings.set_search_text(
+            state.find_history[-1] if state.find_history else ""
+        )
+        self._search_settings.set_regex_enabled(state.use_regex)
+        self._search_settings.set_case_sensitive(state.case_sensitive)
+        self._search_settings.set_at_word_boundaries(state.whole_word)
+
+    def _find_in_text(
+        self,
+        needle: str,
+        haystack: str,
+        from_offset: int,
+        use_regex: bool,
+        case_sensitive: bool,
+        whole_word: bool,
+        backward: bool = False,
+    ) -> tuple[int, int] | None:
+        """Return (start, end) offsets of the next/prev match, or None."""
+        import re
+
+        flags = re.MULTILINE
+        if not case_sensitive:
+            flags |= re.IGNORECASE
+        if use_regex:
+            pattern = needle
+        else:
+            pattern = re.escape(needle)
+        if whole_word:
+            pattern = r"\b" + pattern + r"\b"
+        try:
+            compiled = re.compile(pattern, flags)
+        except re.error:
+            return None
+
+        if backward:
+            # Search from start up to from_offset, keep last match
+            matches = list(compiled.finditer(haystack, 0, from_offset))
+            if not matches:
+                # Wrap around: search whole buffer
+                matches = list(compiled.finditer(haystack))
+                if not matches:
+                    return None
+            m = matches[-1]
+        else:
+            m = compiled.search(haystack, from_offset)
+            if m is None:
+                # Wrap around from the beginning
+                m = compiled.search(haystack, 0, from_offset)
+            if m is None:
+                return None
+        return m.start(), m.end()
+
+    def find_next(self, state: SearchState) -> bool:
+        """Find and select the next occurrence. Returns True on match."""
+        self._update_search_highlighting(state)
+        needle = state.find_history[-1] if state.find_history else ""
+        if not needle:
+            return False
+        buffer = self.get_buffer()
+        text = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)
+        # Advance past the end of any current selection so we don't re-find it.
+        if buffer.get_has_selection():
+            _sel_start, sel_end = buffer.get_selection_bounds()
+            cursor_offset = sel_end.get_offset()
+        else:
+            cursor_offset = buffer.get_iter_at_mark(buffer.get_insert()).get_offset()
+        result = self._find_in_text(
+            needle, text, cursor_offset,
+            state.use_regex, state.case_sensitive, state.whole_word,
+        )
+        if result is None:
+            return False
+        start_off, end_off = result
+        start_iter = buffer.get_iter_at_offset(start_off)
+        end_iter = buffer.get_iter_at_offset(end_off)
+        buffer.select_range(start_iter, end_iter)
+        self._view.scroll_to_iter(start_iter, 0.1, True, 0.0, 0.5)
+        return True
+
+    def find_previous(self, state: SearchState) -> bool:
+        """Find and select the previous occurrence. Returns True on match."""
+        self._update_search_highlighting(state)
+        needle = state.find_history[-1] if state.find_history else ""
+        if not needle:
+            return False
+        buffer = self.get_buffer()
+        text = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)
+        # Search before the start of any current selection so we don't re-find it.
+        if buffer.get_has_selection():
+            sel_start, _sel_end = buffer.get_selection_bounds()
+            cursor_offset = sel_start.get_offset()
+        else:
+            cursor_offset = buffer.get_iter_at_mark(buffer.get_insert()).get_offset()
+        result = self._find_in_text(
+            needle, text, cursor_offset,
+            state.use_regex, state.case_sensitive, state.whole_word,
+            backward=True,
+        )
+        if result is None:
+            return False
+        start_off, end_off = result
+        start_iter = buffer.get_iter_at_offset(start_off)
+        end_iter = buffer.get_iter_at_offset(end_off)
+        buffer.select_range(start_iter, end_iter)
+        self._view.scroll_to_iter(start_iter, 0.1, True, 0.0, 0.5)
+        return True
+
+    def replace_current(self, replacement: str, state: SearchState) -> bool:
+        """Replace the currently-selected match. Returns True if replaced."""
+        buffer = self.get_buffer()
+        if not buffer.get_has_selection():
+            return False
+        buffer.begin_user_action()
+        buffer.delete_selection(True, True)
+        buffer.insert_at_cursor(replacement)
+        buffer.end_user_action()
+        return True
+
+    def replace_all(
+        self, replacement: str, scope: str, state: SearchState
+    ) -> int:
+        """Replace all occurrences. *scope*: ``"window"`` or ``"selection"``."""
+        import re
+
+        needle = state.find_history[-1] if state.find_history else ""
+        if not needle:
+            return 0
+        flags = 0 if state.case_sensitive else re.IGNORECASE
+        if state.use_regex:
+            pattern = needle
+        else:
+            pattern = re.escape(needle)
+        if state.whole_word:
+            pattern = r"\b" + pattern + r"\b"
+        try:
+            compiled = re.compile(pattern, flags)
+        except re.error:
+            return 0
+
+        buffer = self.get_buffer()
+        if scope == "selection" and buffer.get_has_selection():
+            sel_start, sel_end = buffer.get_selection_bounds()
+            region_text = buffer.get_text(sel_start, sel_end, True)
+            new_text, count = compiled.subn(replacement, region_text)
+            if count:
+                buffer.begin_user_action()
+                buffer.delete(sel_start, sel_end)
+                buffer.insert(sel_start, new_text)
+                buffer.end_user_action()
+            return count
+        full_text = buffer.get_text(
+            buffer.get_start_iter(), buffer.get_end_iter(), True
+        )
+        new_text, count = compiled.subn(replacement, full_text)
+        if count:
+            buffer.begin_user_action()
+            buffer.set_text(new_text)
+            buffer.end_user_action()
+        return count
+
+    def replace_and_find(self, replacement: str, state: SearchState) -> bool:
+        """Replace the current match then find the next one."""
+        self.replace_current(replacement, state)
+        return self.find_next(state)
 
     def zoom_by(self, factor: float) -> None:
         if factor <= 0:

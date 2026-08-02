@@ -57,4 +57,7 @@
   <!-- Line break indicator -->
   <style name="markdown:line-break"      background="#3d3846"/>
 
+  <!-- Search match highlight -->
+  <style name="search-match"             background="#e5a50a" foreground="#000000"/>
+
 </style-scheme>

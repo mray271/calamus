@@ -65,6 +65,7 @@ omit = [
     "calamus/imageviewer.py",
     "calamus/printer.py",
     "calamus/highlight_support.py",
+    "calamus/search_dialogs.py",
 ]
 
 [tool.pytest.ini_options]
