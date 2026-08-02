@@ -1,6 +1,10 @@
 project(
   'calamus',
-  version:       '0.6.0',
+  version:       run_command(
+                   'python3', '-c',
+                   'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"], end="")',
+                   check: true,
+                 ).stdout(),
   meson_version: '>= 0.59.0',
   license:       'GPL-3.0-or-later',
 )
