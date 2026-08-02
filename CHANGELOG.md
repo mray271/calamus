@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-08-02
+
+### Added
+- `samples/why_claude_sonnet_fails_to_discover_music.md`: real-world example document featuring multiple Mermaid diagrams (graph TD, mindmap with `%%{init:%%` directive, graph LR), GFM tables with raw HTML `<img>` tags, relative subfolder image paths, and external hyperlinks
+- `samples/why_claude_sonnet_fails_to_discover_music/`: companion image assets for the example document
+- `tests/test_sample_music_doc.py`: integration test suite using the new sample as a fixture, covering multi-diagram rendering, `%%{init:%%` mindmap directive, `<img>` tags inside table cells, relative subfolder image path preservation, external link rendering, and full HTML export
+
 ## [0.6.1] - 2026-08-02
 
 ### Added
