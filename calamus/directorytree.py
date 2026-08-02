@@ -147,6 +147,7 @@ class GtkDirectoryPane(AbstractDirectoryPane):
         self._tree.connect("row-activated", self._on_row_activated)
         self._tree.connect("row-expanded", self._on_row_expanded)
         self._tree.connect("row-collapsed", self._on_row_collapsed)
+
         scroll.set_child(self._tree)
         self._apply_font_size(self._font_size_pt)
 
@@ -268,7 +269,13 @@ class GtkDirectoryPane(AbstractDirectoryPane):
         tree_iter = self._store.get_iter(tree_path)
         path = self._store.get_value(tree_iter, self._PATH_COLUMN)
         is_dir = self._store.get_value(tree_iter, self._IS_DIR_COLUMN)
-        if not path or is_dir:
+        if not path:
+            return
+        if is_dir:
+            if self._tree.row_expanded(tree_path):
+                self._tree.collapse_row(tree_path)
+            else:
+                self._tree.expand_row(tree_path, False)
             return
         for callback in self._callbacks:
             callback(path)
@@ -300,6 +307,7 @@ class GtkDirectoryPane(AbstractDirectoryPane):
             self._store.set_value(tree_iter, self._IS_LOADED_COLUMN, True)
             self._store.set_value(tree_iter, self._IS_LOADING_COLUMN, False)
             return
+
         self._clear_children(tree_iter)
         self._append_status_row(tree_iter, "Loading…")
         self._store.set_value(tree_iter, self._IS_LOADING_COLUMN, True)

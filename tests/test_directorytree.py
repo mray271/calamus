@@ -50,12 +50,43 @@ class _TestPane:
     _entry_sort_key = staticmethod(GtkDirectoryPane._entry_sort_key)
     _safe_is_dir = staticmethod(GtkDirectoryPane._safe_is_dir)
     _enter_directory = GtkDirectoryPane._enter_directory
+    _PATH_COLUMN = GtkDirectoryPane._PATH_COLUMN
+    _IS_DIR_COLUMN = GtkDirectoryPane._IS_DIR_COLUMN
 
     def __init__(self) -> None:
         self._current_directory = "/tmp"
         self._visited_directory_count = 0
         self._max_traversal_depth = GtkDirectoryPane._MAX_TRAVERSAL_DEPTH
         self._max_traversal_directories = GtkDirectoryPane._MAX_TRAVERSAL_DIRECTORIES
+
+
+class _FakeStore:
+    def __init__(self, rows: dict[object, dict[int, object]]) -> None:
+        self._rows = rows
+
+    def get_iter(self, tree_path: object) -> object:
+        return tree_path
+
+    def get_value(self, tree_iter: object, column: int) -> object:
+        return self._rows[tree_iter][column]
+
+
+class _FakeTree:
+    def __init__(self, expanded_paths: set[object] | None = None) -> None:
+        self.expanded_paths = expanded_paths or set()
+        self.expanded_calls: list[object] = []
+        self.collapsed_calls: list[object] = []
+
+    def row_expanded(self, tree_path: object) -> bool:
+        return tree_path in self.expanded_paths
+
+    def expand_row(self, tree_path: object, _open_all: bool) -> None:
+        self.expanded_calls.append(tree_path)
+        self.expanded_paths.add(tree_path)
+
+    def collapse_row(self, tree_path: object) -> None:
+        self.collapsed_calls.append(tree_path)
+        self.expanded_paths.discard(tree_path)
 
 
 def test_scan_directory_tolerates_oserror_from_is_dir(monkeypatch):
@@ -152,3 +183,67 @@ def test_load_home_directory_uses_expanduser(monkeypatch):
     pane.load_home_directory()
 
     assert loaded_paths == ["/home/tester"]
+
+
+def test_row_activated_expands_directory_without_firing_file_callbacks():
+    tree_path = object()
+    pane = _TestPane()
+    pane._store = _FakeStore(
+        {
+            tree_path: {
+                GtkDirectoryPane._PATH_COLUMN: "/tmp/project",
+                GtkDirectoryPane._IS_DIR_COLUMN: True,
+            }
+        }
+    )
+    pane._tree = _FakeTree()
+    callbacks: list[str] = []
+    pane._callbacks = callbacks
+
+    GtkDirectoryPane._on_row_activated(pane, pane._tree, tree_path, None)
+
+    assert pane._tree.expanded_calls == [tree_path]
+    assert pane._tree.collapsed_calls == []
+    assert callbacks == []
+
+
+def test_row_activated_collapses_expanded_directory():
+    tree_path = object()
+    pane = _TestPane()
+    pane._store = _FakeStore(
+        {
+            tree_path: {
+                GtkDirectoryPane._PATH_COLUMN: "/tmp/project",
+                GtkDirectoryPane._IS_DIR_COLUMN: True,
+            }
+        }
+    )
+    pane._tree = _FakeTree(expanded_paths={tree_path})
+    callbacks: list[str] = []
+    pane._callbacks = callbacks
+
+    GtkDirectoryPane._on_row_activated(pane, pane._tree, tree_path, None)
+
+    assert pane._tree.expanded_calls == []
+    assert pane._tree.collapsed_calls == [tree_path]
+    assert callbacks == []
+
+
+def test_row_activated_opens_files():
+    tree_path = object()
+    pane = _TestPane()
+    pane._store = _FakeStore(
+        {
+            tree_path: {
+                GtkDirectoryPane._PATH_COLUMN: "/tmp/project/notes.md",
+                GtkDirectoryPane._IS_DIR_COLUMN: False,
+            }
+        }
+    )
+    pane._tree = _FakeTree()
+    callbacks: list[str] = []
+    pane._callbacks = [callbacks.append]
+
+    GtkDirectoryPane._on_row_activated(pane, pane._tree, tree_path, None)
+
+    assert callbacks == ["/tmp/project/notes.md"]
