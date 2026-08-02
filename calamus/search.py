@@ -183,8 +183,8 @@ class FindDialogLogic:
     """
 
     _editor: "AbstractEditor"
-    _state: SearchState        # dialog-local scratch copy
-    _live_state: SearchState   # window's shared live state
+    _state: SearchState  # dialog-local scratch copy
+    _live_state: SearchState  # window's shared live state
     _checks: "dict[str, HasGetActive]"
 
     @abstractmethod
@@ -229,8 +229,8 @@ class ReplaceDialogLogic:
     """
 
     _editor: "AbstractEditor"
-    _state: SearchState        # dialog-local scratch copy
-    _live_state: SearchState   # window's shared live state
+    _state: SearchState  # dialog-local scratch copy
+    _live_state: SearchState  # window's shared live state
     _tab_manager: "AbstractTabManager | None"
     _checks: "dict[str, HasGetActive]"
 
