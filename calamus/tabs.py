@@ -110,6 +110,7 @@ class EditorTab(AbstractTab):
         self.editor: MarkdownEditor = MarkdownEditor()
         self.preview: AbstractPreview = create_preview(on_open_path=on_open_path)
         self._preview_timer_id: int | None = None
+        self._loading: bool = False  # suppresses debounce re-render during load
         config = FileConfigProvider().load()
         self._preview_delay_ms: int = config.getint(
             "Preview", "refresh_delay_ms", fallback=500
@@ -173,7 +174,11 @@ class EditorTab(AbstractTab):
             self.preview.set_base_path(preview_base_path)
         elif self._file_path is not None:
             self.preview.set_file_path(self._file_path)
-        self.editor.set_text(text)
+        self._loading = True
+        try:
+            self.editor.set_text(text)
+        finally:
+            self._loading = False
         self.preview.update(text)
         self._modified = False
 
@@ -190,11 +195,19 @@ class EditorTab(AbstractTab):
             raise
         except OSError as error:
             content = f"Error loading file: {error}"
-            self.editor.set_text(content)
+            self._loading = True
+            try:
+                self.editor.set_text(content)
+            finally:
+                self._loading = False
             self.preview.update(content)
             self._modified = False
             return
-        self.editor.set_text(content)
+        self._loading = True
+        try:
+            self.editor.set_text(content)
+        finally:
+            self._loading = False
         self.preview.update(content)
         self._modified = False
 
@@ -225,6 +238,11 @@ class EditorTab(AbstractTab):
         self.editor.get_buffer().connect("changed", self._on_buffer_changed)
 
     def _on_buffer_changed(self, _buffer: object) -> None:
+        # During a programmatic load, set_text() fires this signal but the
+        # preview is already being updated synchronously — skip the debounce
+        # and leave _modified for load_file/load_content to reset.
+        if self._loading:
+            return
         self._modified = True
         # Debounce: cancel any pending preview refresh and restart the timer.
         # The preview only updates after the user pauses for _preview_delay_ms.
