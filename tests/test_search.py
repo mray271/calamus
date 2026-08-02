@@ -15,7 +15,6 @@ from calamus.search import _MAX_HISTORY, SearchState
 # ---------------------------------------------------------------------------
 
 
-
 class TestSearchStateDefaults:
     def test_initial_find_history_is_empty(self):
         s = SearchState()
