@@ -23,7 +23,7 @@ class CalamusApplication(Adw.Application):
     def __init__(self) -> None:
         super().__init__(
             application_id="io.github.calamus.Calamus",
-            flags=Gio.ApplicationFlags.HANDLES_OPEN,
+            flags=Gio.ApplicationFlags.HANDLES_OPEN | Gio.ApplicationFlags.NON_UNIQUE,
         )
         # When adding options here (or via add_main_option_entries /
         # add_option_group), update resources/completions/{bash,zsh,fish}/

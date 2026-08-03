@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-03
+
+### Added
+- Multiple instances support: Calamus now launches as an independent process each time it is invoked, relaxing GNOME's single-instance default. Users can open separate windows for different directories, mix GUI editing with piped-input workflows, and integrate Calamus freely into tool chains and macros. Closes [#76](https://github.com/mray271/calamus/issues/76).
+
 ## [0.6.3] - 2026-08-02
 
 ### Added
