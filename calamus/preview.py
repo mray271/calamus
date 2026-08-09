@@ -114,7 +114,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   a {{ color: var(--link-color); }}
   code {{ background: var(--code-bg); padding: 2px 4px; border-radius: 3px; font-family: monospace; }}
   pre {{ background: var(--code-bg); padding: 1em; border-radius: 4px; overflow-x: auto; }}
-  pre.mermaid {{ background: transparent; padding: 0; }}
+  pre.mermaid {{ background: transparent; padding: 0; max-width: 100%; overflow-x: auto; }}
+  pre.mermaid svg {{ max-width: 100%; height: auto; }}
   blockquote {{ border-left: 4px solid var(--blockquote-border); margin: 0; padding-left: 1em; color: var(--blockquote-color); }}
   .glfm-alert {{ margin: 0; padding: 0.5em 0 0.5em 1em; color: var(--fg); background: var(--alert-bg); border-radius: 0 4px 4px 0; }}
   .glfm-alert-title {{ margin: 0 0 0.35em; font-weight: 700; color: var(--fg); }}

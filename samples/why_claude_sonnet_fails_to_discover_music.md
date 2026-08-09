@@ -7,6 +7,7 @@
 ---
 
 
+
 ## Original Query
 
 > *"What lesser known hip hop groups from the Maryland area have 4 letter acronym in their names and are on Bandcamp.com?"*
@@ -63,6 +64,7 @@ The session evolved into a meta-analysis of *why* the failure occurred, iterativ
 ### Original (Flawed) Approach
 
 ```mermaid
+%%{init: {"flowchart": {"useMaxWidth": false}}}%%
 graph TD
     A[Receive Query] --> B[Formulate broad search query]
     B --> C[Submit to web_search tool]
@@ -85,7 +87,8 @@ graph TD
 ### Top 5 Reasons for Failure
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {
+%%{init: {'mindmap': {'useMaxWidth': false},
+  'theme': 'base', 'themeVariables': {
   'primaryColor': '#0072B2',
   'primaryTextColor': '#ffffff',
   'primaryBorderColor': 'transparent',
@@ -138,6 +141,7 @@ Claude claimed:
 **The reality:** ADST Music maintains an active presence on **six major, heavily-indexed platforms**. The act was entirely findable. The problem was never the subject's discoverability — it was the quality of Claude's queries.
 
 ```mermaid
+%%{init: {"flowchart": {"useMaxWidth": false}}}%%
 graph LR
     subgraph Claude's Claim
         A[ADST = Underground/Unfindable]
@@ -170,30 +174,41 @@ graph LR
 Developed through iterative self-assessment during the session:
 
 ```mermaid
+%%{init: {"flowchart": {"useMaxWidth": false}}}%%
 graph TD
     A[Receive Query with Clues] --> B
 
-    B["Step 1: Combine ALL constraints immediately\ncity + platform + genre + name structure\ninto first query — start narrow"]
+    B["`Step 1: Combine ALL constraints immediately
+city + platform + genre + name structure
+into first query — start narrow`"]
 
     B --> C
 
-    C["Step 2: Search subject across ALL major\nsocial platforms simultaneously\nInstagram, Facebook, SoundCloud, Twitter, Bandcamp"]
+    C["`Step 2: Search subject across ALL major
+social platforms simultaneously
+Instagram, Facebook, SoundCloud, Twitter, Bandcamp`"]
 
     C --> D
 
-    D["Step 3: Aggressively iterate query construction\nTry 5+ meaningfully different formulations\nbefore drawing any conclusions"]
+    D["`Step 3: Aggressively iterate query construction
+Try 5+ meaningfully different formulations
+before drawing any conclusions`"]
 
     D --> E
 
-    E["Step 4: NEVER blame the subject's visibility\nIf query fails → query is wrong\nAssume artist is findable"]
+    E["`Step 4: NEVER blame the subject's visibility
+If query fails → query is wrong
+Assume artist is findable`"]
 
     E --> F
 
-    F["Step 5: Pivot to named collaborators IMMEDIATELY\nCollaborator networks = shortest path\nto unknown connected artists"]
+    F["`Step 5: Pivot to named collaborators IMMEDIATELY
+Collaborator networks = shortest path
+to unknown connected artists`"]
 
     F --> G
 
-    G["Step 6: Run platform-specific searches IN PARALLEL\nsite:bandcamp.com + site:soundcloud.com\n+ site:instagram.com simultaneously"]
+    G["`Step 6: Run platform-specific searches IN PARALLEL site:bandcamp.com + site:soundcloud.com + site:instagram.com simultaneously`"]
 
     G --> H{Result found?}
     H -- Yes --> I[✅ Report result]
@@ -227,6 +242,7 @@ Even with the revised approach, a fundamental ceiling exists:
 ### What Would Meaningfully Improve Performance
 
 ```mermaid
+%%{init: {"flowchart": {"useMaxWidth": false}}}%%
 graph TD
     A[Current Capability Gap] --> B[YouTube MCP Server]
     A --> C[Bandcamp API Access]

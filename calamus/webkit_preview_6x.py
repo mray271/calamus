@@ -142,9 +142,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   table {{
     border-collapse: collapse;
   }}
-  table, th, td {{
-    border: 1px solid;
-  }}
   th, td {{
     text-align: left;
     padding: 0.5ex;
@@ -250,8 +247,10 @@ class WebKitPreview_6x(AbstractWebKitPreview):
 
     def _setup_sandbox(self, context: object) -> None:
         """Configure WebKit 6.0 sandbox (disable for Docker environments)."""
-        # WebKit 6.0 always has set_sandbox_enabled()
-        context.set_sandbox_enabled(False)
+        # WebKit 6.0 does not expose set_sandbox_enabled().
+        # Sandbox is managed internally; no action needed here.
+        # For Docker/restricted environments, set WEBKIT_FORCE_SANDBOX=0 in environment.
+        pass
 
     def _connect_download_signal(self, context: object) -> None:
         """Connect download-started signal (WebKit 6.0 uses NetworkSession)."""
@@ -295,14 +294,12 @@ class WebKitPreview_6x(AbstractWebKitPreview):
         self._footer_wrapper.set_margin_start(4)
         self._footer_wrapper.set_visible(False)
 
-        # Add CSS styling
+        # Add CSS styling (no border - let the tooltip handle its own styling)
         css_provider = Gtk.CssProvider.new()
         css_provider.load_from_data(b"""
 box {
-  background-color: alpha(@theme_bg_color, 0.95);
-  border: 1px solid alpha(@theme_fg_color, 0.2);
-  border-radius: 4px;
-  padding: 2px 4px;
+  background-color: transparent;
+  padding: 0;
   margin: 0;
 }
         """)
@@ -379,7 +376,7 @@ box {
         save_action.connect("activate", lambda *_: self._save_image(image_uri))
         self._context_menu_actions.append(save_action)
 
-        save_item = WebKit.ContextMenuItem.new(save_action)
+        save_item = WebKit.ContextMenuItem.new_from_gaction(save_action, "Save Image As...")
         context_menu.append(save_item)
 
         # Add "Copy Markdown Image" for http/https/file URLs
@@ -393,7 +390,7 @@ box {
             )
             self._context_menu_actions.append(markdown_action)
 
-            markdown_item = WebKit.ContextMenuItem.new(markdown_action)
+            markdown_item = WebKit.ContextMenuItem.new_from_gaction(markdown_action, "Copy Markdown Image")
             context_menu.append(markdown_item)
 
         return True
@@ -619,8 +616,6 @@ if (document.body) {
                 self._footer_wrapper.set_visible(True)
                 self._footer_wrapper.queue_resize()
                 self._footer_wrapper.queue_draw()
-                if self._on_link_hover:
-                    self._on_link_hover(href)
             elif state == "leave":
                 self._tooltip_manager.hide()
                 self._footer_wrapper.set_visible(False)
