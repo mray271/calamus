@@ -59,19 +59,22 @@ class LinkTooltipManager(AbstractLinkTooltip):
         box.set_hexpand(False)
         box.set_vexpand(False)
         box.set_halign(Gtk.Align.START)
-        box.set_size_request(-1, 32)
+        box.set_valign(Gtk.Align.START)
         box.set_name("url-tooltip-footer")
         
         # Store reference to update colors when theme changes
         self._footer_box = box
         
-        # Create label for URL text
+        # Create label for URL text with width constraint
         self._label = Gtk.Label()
         self._label.set_text("")
         self._label.set_wrap(False)
         self._label.set_hexpand(False)
         self._label.set_halign(Gtk.Align.START)
         self._label.set_ellipsize(3)  # Ellipsize at end (END=3)
+        # Set max width to prevent expanding beyond 60% of typical screen width
+        # This allows the text to wrap to ellipsis when URLs are very long
+        self._label.set_size_request(400, -1)
         
         box.append(self._label)
         
@@ -102,8 +105,7 @@ class LinkTooltipManager(AbstractLinkTooltip):
     color: @view_fg_color;
     border-top: 1px solid @borders;
     border-radius: 0 8px 0 0;
-    padding: 4px 12px;
-    max-width: 100%;
+    padding: 2px 12px;
 }
             """
         else:
@@ -114,8 +116,7 @@ class LinkTooltipManager(AbstractLinkTooltip):
     color: @view_fg_color;
     border-top: 1px solid @borders;
     border-radius: 0 8px 0 0;
-    padding: 4px 12px;
-    max-width: 100%;
+    padding: 2px 12px;
 }
             """
         
