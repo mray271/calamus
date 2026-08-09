@@ -110,8 +110,25 @@ class EditorTab(AbstractTab):
         self.search_entry = Gtk.SearchEntry()
         self.editor: MarkdownEditor = MarkdownEditor()
 
-        # Directly instantiate WebKitPreview_6x (WebKit 6.0+)
-        # WebKit 4.1 reached end-of-life (EOL) on Aug 31, 2023
+        # WebKit version detection and instantiation.
+        # Pattern allows clean version management and EOL deprecation.
+        #
+        # To support a new WebKit version (e.g., 7.0):
+        #   1. Create calamus/webkit_preview_7x.py (copy 6x, update changed APIs)
+        #   2. Update detect_webkit_version() to try 7.0 first
+        #   3. Add: elif webkit_version[0] >= 7 branch below
+        #   4. Add warning in detect_webkit_version() for deprecated versions
+        #
+        # To remove support for EOL version (e.g., when 6.0 reaches EOL):
+        #   1. Remove from detect_webkit_version() completely
+        #   2. Remove the corresponding elif branch below
+        #   3. Delete calamus/webkit_preview_6x.py
+        #   4. Update CI Dockerfiles to remove WebKit 6.0 packages
+        #   5. One atomic commit removes all traces (no scattered cleanup)
+        #
+        # This ABC pattern ensures each version is self-contained and isolated.
+        # See webkit_preview_base.py module docstring for full architecture details.
+        
         webkit_version = detect_webkit_version()
         if webkit_version is None:
             raise RuntimeError(

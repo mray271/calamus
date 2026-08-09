@@ -4,7 +4,32 @@ This module defines the interface that all WebKit version-specific implementatio
 must follow. It uses the Template Method pattern to provide shared logic while
 allowing subclasses to implement version-specific behavior.
 
-Each WebKit version (6.0, 4.1, etc.) has different:
+ARCHITECTURE:
+  Each WebKit version (6.0, 7.0, etc.) is a separate class:
+  - calamus/webkit_preview_6x.py (WebKit 6.0+)
+  - calamus/webkit_preview_7x.py (WebKit 7.0+) [future]
+  
+  All inherit from AbstractWebKitPreview and implement the same interface,
+  allowing drop-in replacement by version.
+
+LIFECYCLE:
+  When a new WebKit version arrives:
+    1. Create webkit_preview_Nx.py by copying the latest version
+    2. Update only the API calls that changed in that version
+    3. Leave the rest identical (inheritance takes care of it)
+    4. No conditional logic, no hasattr() checks
+    5. Each version is self-contained in one file
+  
+  When an old version reaches EOL:
+    1. Delete its file (webkit_preview_Nx.py)
+    2. Remove from version detection
+    3. Done. No scattered cleanup needed.
+  
+  This design eliminates the scattered version conditionals that plagued
+  the old preview.py (15+ hasattr() checks, 2 *args masking patterns).
+
+VERSION DIFFERENCES:
+  Each WebKit version may have different:
   - Signal parameter counts and types
   - API availability (methods that exist only in certain versions)
   - Signal locations (download-started moved between versions)
