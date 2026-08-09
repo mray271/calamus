@@ -270,8 +270,13 @@ class WebKitPreview(AbstractPreview):
         
         # Get UserContentManager and register message handler for tooltip
         self._user_content_manager = self._view.get_user_content_manager()
-        self._user_content_manager.register_script_message_handler("tooltip")
+        
+        # Connect signal BEFORE registering the handler (important!)
         self._user_content_manager.connect("script-message-received::tooltip", self._on_tooltip_message)
+        print("[TOOLTIP] Signal connected for 'script-message-received::tooltip'", flush=True)
+        
+        # Now register the handler
+        self._user_content_manager.register_script_message_handler("tooltip")
         print("[TOOLTIP] Message handler registered for 'tooltip'", flush=True)
         
         # Inject tooltip script into all web pages before they load
@@ -778,6 +783,18 @@ class WebKitPreview(AbstractPreview):
         script_source = """
 console.log('[TOOLTIP-JS] Script injected via UserContentManager');
 
+// Post a test message to verify script is running
+try {
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {
+    window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({
+      href: '[TOOLTIP-JS] Script initialization test',
+      state: 'test'
+    }));
+  }
+} catch(e) {
+  console.log('[TOOLTIP-JS] Error in test message:', e);
+}
+
 function attachTooltipsToLinks() {
   const links = document.querySelectorAll('a[href]');
   console.log(`[TOOLTIP-JS] attachTooltipsToLinks: found ${links.length} links`);
@@ -865,6 +882,7 @@ if (document.body) {
 console.log('[TOOLTIP-JS] Script initialization complete');
 """
         try:
+            print("[TOOLTIP] Creating UserScript...", flush=True)
             script = _WebKitModule.UserScript(
                 script_source,
                 _WebKitModule.UserContentInjectedFrames.ALL_FRAMES,
@@ -872,10 +890,13 @@ console.log('[TOOLTIP-JS] Script initialization complete');
                 None,  # allow_list
                 None,  # block_list
             )
+            print("[TOOLTIP] UserScript created successfully", flush=True)
             self._user_content_manager.add_script(script)
-            print("[TOOLTIP] UserScript added successfully", flush=True)
+            print("[TOOLTIP] UserScript added to UserContentManager", flush=True)
         except Exception as e:
-            print(f"[TOOLTIP] Error adding UserScript: {e}", flush=True)
+            print(f"[TOOLTIP] Error creating/adding UserScript: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
 
     def _on_load_changed(self, _webview: object, load_event: object) -> None:
         print(f"[TOOLTIP] _on_load_changed: load_event={load_event}, FINISHED={_WebKitModule.LoadEvent.FINISHED}", flush=True)
@@ -1036,11 +1057,6 @@ console.log('[TOOLTIP-JS] Script initialization complete');
         html_text = html_text.replace(
             "__PREVIEW_FONT_SCALE__", f"{self._zoom_level:.3f}"
         )
-        # Check if tooltip script is in HTML
-        if "[TOOLTIP-JS]" in html_text:
-            print("[TOOLTIP] Tooltip JavaScript is present in HTML", flush=True)
-        else:
-            print("[TOOLTIP] WARNING: Tooltip JavaScript NOT found in HTML", flush=True)
         
         # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
         # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
