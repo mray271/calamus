@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -31,6 +32,8 @@ from calamus.mermaid_support import (
     preprocess_with_cache,
 )
 from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
+
+_logger = logging.getLogger(__name__)
 
 try:
     gi.require_version("WebKit", "6.0")
@@ -345,18 +348,18 @@ class WebKitPreview(AbstractPreview):
         self._overlay.set_child(self._view)
         self._overlay.set_hexpand(True)
         self._overlay.set_vexpand(True)
-        print(f"Debug: Overlay created and configured")
+        _logger.info(f"[Tooltip] Overlay created and configured")
         
         # Add tooltip widget as overlay child (positioned absolutely)
         tooltip_widget = self._tooltip_manager.get_widget()
         tooltip_widget.set_halign(Gtk.Align.START)
         tooltip_widget.set_valign(Gtk.Align.END)
         self._overlay.add_overlay(tooltip_widget)
-        print(f"Debug: Tooltip widget added to overlay")
+        _logger.info(f"[Tooltip] Tooltip widget added to overlay")
         
         # Initially hide the tooltip
         self._tooltip_manager.hide()
-        print(f"Debug: Tooltip initially hidden")
+        _logger.info(f"[Tooltip] Tooltip initially hidden")
         
         # Start polling timer to check for link hover state changes
         self._hover_poll_id = GLib.timeout_add(100, self._poll_link_hover_state)
@@ -849,7 +852,7 @@ class WebKitPreview(AbstractPreview):
                 # WebKit2 4.1
                 self._view.run_javascript(js, None, self._on_hover_state_result, None)
         except Exception as e:
-            print(f"Debug: Polling error: {e}")
+            _logger.info(f"[Tooltip] Polling error: {e}")
         
         return True  # Keep polling
 
@@ -871,19 +874,19 @@ class WebKitPreview(AbstractPreview):
             
             # Debug: Print state changes
             if state or href:
-                print(f"Debug: Hover state - href={href}, state={state}")
+                _logger.info(f"[Tooltip] Hover state - href={href}, state={state}")
             
             # Show tooltip when entering a link, hide when leaving
             if state == "enter" and href:
-                print(f"Debug: Showing tooltip for {href}")
+                _logger.info(f"[Tooltip] Showing tooltip for {href}")
                 self._tooltip_manager.show(href, 0, 0)
                 if self._on_link_hover:
                     self._on_link_hover(href)
             elif state == "leave":
-                print(f"Debug: Hiding tooltip")
+                _logger.info(f"[Tooltip] Hiding tooltip")
                 self._tooltip_manager.hide()
         except Exception as e:
-            print(f"Debug: Result handling error: {e}")
+            _logger.info(f"[Tooltip] Result handling error: {e}")
 
     def update(self, markdown_text: str) -> None:
         self._last_markdown = markdown_text

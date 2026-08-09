@@ -5,12 +5,15 @@ compatibility and positioning reliability.
 """
 
 from abc import ABC, abstractmethod
+import logging
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw
+
+_logger = logging.getLogger(__name__)
 
 
 class AbstractLinkTooltip(ABC):
@@ -93,11 +96,6 @@ class LinkTooltipManager(AbstractLinkTooltip):
     font-size: 0.8125em;
 }
 
-#url-tooltip:disabled {
-    opacity: 0;
-    pointer-events: none;
-}
-
 @media (prefers-color-scheme: dark) {
     #url-tooltip {
         background-color: #24292e;
@@ -116,15 +114,14 @@ class LinkTooltipManager(AbstractLinkTooltip):
             x: X coordinate for positioning (relative to WebView).
             y: Y coordinate for positioning (relative to WebView).
         """
-        print(f"Debug LinkTooltip.show: url={url}, x={x}, y={y}")
+        _logger.info(f"[Tooltip] show() called: url={url}")
         self._label.set_text(url)
         self._widget.set_visible(True)
         self._visible = True
-        print(f"Debug LinkTooltip: widget visible = {self._widget.get_visible()}")
 
     def hide(self) -> None:
         """Hide the tooltip."""
-        print("Debug LinkTooltip.hide")
+        _logger.info(f"[Tooltip] hide() called")
         self._widget.set_visible(False)
         self._visible = False
 
