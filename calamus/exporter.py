@@ -96,6 +96,11 @@ class HtmlExporter(AbstractExporter):
 <meta charset=\"utf-8\">
 {mermaid_script}
 {mermaid_init_script}
+<style>
+  body {{ max-width: 800px; margin: 2em auto; padding: 0 1em; line-height: 1.6; }}
+  pre.mermaid {{ background: transparent; padding: 0; max-width: 100%; overflow-x: auto; }}
+  pre.mermaid svg {{ max-width: 100%; height: auto; }}
+</style>
 </head>
 <body>
 {body}
@@ -132,7 +137,16 @@ class PdfExporter(AbstractExporter):
 
         processed = preprocess_markdown_for_static_export(markdown_text)
         html_body = self._renderer.render(processed)
-        HTML(string=f"<html><body>{html_body}</body></html>").write_pdf(dest_path)
+        html_string = """<html>
+<head>
+<style>
+  body {{ max-width: 800px; margin: 2em auto; padding: 0 1em; }}
+  img {{ max-width: 100%; height: auto; }}
+</style>
+</head>
+<body>{body}</body>
+</html>""".format(body=html_body)
+        HTML(string=html_string).write_pdf(dest_path)
 
     def get_file_filter(self) -> Gtk.FileFilter:
         file_filter = Gtk.FileFilter()

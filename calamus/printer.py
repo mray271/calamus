@@ -57,7 +57,7 @@ class GtkPrinter(AbstractPrinter):
 
     def _build_html(self, markdown_text: str) -> str:
         body = self._renderer.render(markdown_text)
-        return """<html><head>{script}{init}</head><body>{body}</body></html>""".format(
+        return """<html><head>{script}{init}<style>pre.mermaid {{ background: transparent; padding: 0; max-width: 100%; overflow-x: auto; }} pre.mermaid svg {{ max-width: 100%; height: auto; }}</style></head><body>{body}</body></html>""".format(
             script=get_mermaid_script_tag(),
             init=get_mermaid_init_script(),
             body=body,

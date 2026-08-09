@@ -542,7 +542,8 @@ class MistuneRenderer(AbstractMarkdownRenderer):
         pattern = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL)
 
         def repl(match: re.Match[str]) -> str:
-            diagram_source = html.escape(match.group(1).strip())
+            diagram_source = match.group(1).strip()
+            diagram_source = html.escape(diagram_source)
             return f'\n<pre class="mermaid">{diagram_source}</pre>\n'
 
         return pattern.sub(repl, text)

@@ -215,7 +215,7 @@ def preprocess_with_cache(markdown_text: str, cache: MermaidCache) -> str:
         if svg is not None:
             encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
             return (
-                f'\n<img alt="Mermaid diagram" '
+                f'\n<img class="mermaid-diagram" alt="Mermaid diagram" '
                 f'src="data:image/svg+xml;base64,{encoded}" />\n'
             )
         escaped = html.escape(diagram_source)
@@ -239,6 +239,6 @@ def preprocess_markdown_for_static_export(markdown_text: str) -> str:
         diagram_source = match.group(1).strip()
         svg = renderer.render_to_svg(diagram_source) or ""
         encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
-        return f'\n<img alt="Mermaid diagram" src="data:image/svg+xml;base64,{encoded}" />\n'
+        return f'\n<img class="mermaid-diagram" alt="Mermaid diagram" src="data:image/svg+xml;base64,{encoded}" />\n'
 
     return pattern.sub(repl, markdown_text)
