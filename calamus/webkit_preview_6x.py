@@ -175,6 +175,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   sub, sup {{
     line-height: 0;
   }}
+  pre.mermaid {{
+    background: transparent;
+    padding: 0;
+    border: none;
+    display: flex;
+    justify-content: center;
+  }}
 </style>
 </head>
 <body>
