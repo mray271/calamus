@@ -74,60 +74,63 @@ class LinkTooltipManager:
     def _generate_tooltip_js(self) -> str:
         """Generate JavaScript code for handling link hover events.
         
+        Uses direct event attachment to link elements for maximum compatibility
+        and reliability across different WebKit versions.
+        
         Returns:
             JavaScript string with event listeners and tooltip logic.
         """
         js = """
   (function() {
     const tooltip = document.getElementById('url-tooltip');
-    
     if (!tooltip) return;
     
-    let currentLink = null;
-    
-    function showTooltip(link) {
-      const href = link.getAttribute('href');
-      if (!href) {
-        hideTooltip();
-        return;
-      }
+    function attachTooltipsToLinks() {
+      // Find all links and attach hover listeners directly
+      const links = document.querySelectorAll('a[href]');
       
-      tooltip.textContent = href;
-      tooltip.classList.add('visible');
-      currentLink = link;
+      links.forEach(link => {
+        link.addEventListener('mouseenter', function() {
+          const href = this.getAttribute('href');
+          if (href) {
+            tooltip.textContent = href;
+            tooltip.classList.add('visible');
+          }
+        }, false);
+        
+        link.addEventListener('mouseleave', function() {
+          tooltip.classList.remove('visible');
+        }, false);
+      });
     }
     
-    function hideTooltip() {
-      tooltip.classList.remove('visible');
-      currentLink = null;
+    // Attach listeners when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', attachTooltipsToLinks, false);
+    } else {
+      attachTooltipsToLinks();
     }
     
-    // Use event delegation with composedPath for better coverage
-    document.addEventListener('mouseover', function(event) {
-      const path = event.composedPath ? event.composedPath() : [event.target];
-      const link = path.find(el => el.tagName === 'A');
-      
-      if (link) {
-        showTooltip(link);
-      } else if (currentLink) {
-        hideTooltip();
+    // Re-attach listeners when content is dynamically updated (e.g., from Mermaid)
+    const observer = new MutationObserver(function(mutations) {
+      // Only re-attach if new links were added
+      const hasNewLinks = mutations.some(m => 
+        Array.from(m.addedNodes).some(n => 
+          n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
+        )
+      );
+      if (hasNewLinks) {
+        attachTooltipsToLinks();
       }
-    }, true);  // Use capture phase for better event handling
+    });
     
-    document.addEventListener('mouseout', function(event) {
-      const path = event.composedPath ? event.composedPath() : [event.target];
-      const link = path.find(el => el.tagName === 'A');
-      
-      if (link) {
-        hideTooltip();
-      }
-    }, true);  // Use capture phase
-    
-    // Ensure tooltip is hidden when mouse leaves document
-    document.addEventListener('mouseleave', hideTooltip, true);
-    
-    // Also hide when scrolling
-    document.addEventListener('scroll', hideTooltip, true);
+    // Watch for changes in the body
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
   })();
 """
         return js
