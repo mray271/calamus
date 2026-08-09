@@ -44,8 +44,9 @@ try:
 
     _WEBKIT_AVAILABLE = True
 except (ImportError, ValueError):
-    # WebKit2 4.1 uses GTK3 internally and cannot be loaded alongside GTK4.
-    # Install webkitgtk6.0 for the live preview to work.
+    # WebKit2 4.1 reached end-of-life (EOL) on Aug 31, 2023.
+    # Calamus now requires WebKit 6.0+. Install gir1.2-webkit2-6.0 and
+    # libwebkit2gtk-6.0-4 for the live preview to work.
     _WebKitModule = None
     _JavaScriptCoreModule = None
     _WEBKIT_AVAILABLE = False
@@ -245,7 +246,11 @@ class AbstractPreview(ABC):
 
 
 class WebKitPreview(AbstractPreview):
-    """Preview implementation backed by WebKit (6.0) or WebKit2 (4.1)."""
+    """Preview implementation backed by WebKit 6.0+.
+
+    Deprecated: Use calamus.webkit_preview_6x.WebKitPreview_6x instead.
+    This class is retained for backward compatibility only.
+    """
 
     _MIN_ZOOM = 0.5
     _MAX_ZOOM = 3.0
@@ -296,7 +301,8 @@ class WebKitPreview(AbstractPreview):
         # WebKit unless a handler sets the destination.
         # WebKit 6.0 moved download-started from WebContext to NetworkSession.
         # Try the WebView's own session first (most specific), then the module-
-        # level NetworkSession, then fall back to WebContext for WebKit2 4.1.
+        # WebKit 6.0+ uses NetworkSession for downloads.
+        # This is the primary implementation path after dropping WebKit 4.1 support.
         self._connect_download_signal(context)
         self._last_markdown: str = ""
         self._zoom_level = self._DEFAULT_ZOOM
@@ -609,7 +615,7 @@ class WebKitPreview(AbstractPreview):
         The signal location changed between WebKit versions:
           WebKit 6.0  — WebKitNetworkSession (via view.get_network_session()
                          or NetworkSession.get_default())
-          WebKit2 4.1 — WebKitWebContext
+          WebKit 6.0+ — NetworkSession.download-started signal
         """
         source = None
         if hasattr(self._view, "get_network_session"):
