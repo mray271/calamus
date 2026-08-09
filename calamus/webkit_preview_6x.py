@@ -9,6 +9,10 @@ Key features:
   - Direct hit_test_result in context menu (no event parameter)
   - JavaScriptCore.Value for tooltip messages
   - No hasattr() checks (all methods guaranteed to exist)
+
+Note: WebKit 6.0 imports are deferred to allow module import even when
+WebKit isn't installed. The class will fail to instantiate without it,
+but the module can be imported during test collection.
 """
 
 from __future__ import annotations
@@ -27,10 +31,11 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-gi.require_version("WebKit", "6.0")
-gi.require_version("JavaScriptCore", "6.0")
 
-from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, JavaScriptCore, WebKit
+# WebKit and JavaScriptCore imports are deferred to _ensure_webkit_imports()
+# This allows the module to be imported even when WebKit isn't available
+
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
 from calamus.link_tooltip import LinkTooltipManager
@@ -46,6 +51,24 @@ from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
 from calamus.webkit_preview_base import AbstractWebKitPreview
 
 _logger = logging.getLogger(__name__)
+
+# Module-level placeholders for deferred imports
+WebKit = None
+JavaScriptCore = None
+
+
+def _ensure_webkit_imports() -> None:
+    """Ensure WebKit and JavaScriptCore are imported and available."""
+    global WebKit, JavaScriptCore
+    if WebKit is not None:
+        return  # Already imported
+    gi.require_version("WebKit", "6.0")
+    gi.require_version("JavaScriptCore", "6.0")
+    from gi.repository import JavaScriptCore as _JSC
+    from gi.repository import WebKit as _WK
+
+    WebKit = _WK
+    JavaScriptCore = _JSC
 
 
 # Reuse these from preview module to avoid duplication
@@ -175,6 +198,9 @@ class WebKitPreview_6x(AbstractWebKitPreview):
 
     def _setup_webkit_context(self) -> None:
         """Initialize WebKit 6.0 context and WebView."""
+        # Ensure WebKit/JSC imports are available before using them
+        _ensure_webkit_imports()
+
         # Set up WebContext
         context = WebKit.WebContext.get_default()
         self._setup_sandbox(context)
