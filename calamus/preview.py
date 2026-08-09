@@ -343,15 +343,20 @@ class WebKitPreview(AbstractPreview):
         # Create overlay to layer tooltip widget on top of WebView
         self._overlay = Gtk.Overlay()
         self._overlay.set_child(self._view)
+        self._overlay.set_hexpand(True)
+        self._overlay.set_vexpand(True)
+        print(f"Debug: Overlay created and configured")
         
         # Add tooltip widget as overlay child (positioned absolutely)
         tooltip_widget = self._tooltip_manager.get_widget()
         tooltip_widget.set_halign(Gtk.Align.START)
         tooltip_widget.set_valign(Gtk.Align.END)
         self._overlay.add_overlay(tooltip_widget)
+        print(f"Debug: Tooltip widget added to overlay")
         
         # Initially hide the tooltip
         self._tooltip_manager.hide()
+        print(f"Debug: Tooltip initially hidden")
         
         # Start polling timer to check for link hover state changes
         self._hover_poll_id = GLib.timeout_add(100, self._poll_link_hover_state)

@@ -116,12 +116,15 @@ class LinkTooltipManager(AbstractLinkTooltip):
             x: X coordinate for positioning (relative to WebView).
             y: Y coordinate for positioning (relative to WebView).
         """
+        print(f"Debug LinkTooltip.show: url={url}, x={x}, y={y}")
         self._label.set_text(url)
         self._widget.set_visible(True)
         self._visible = True
+        print(f"Debug LinkTooltip: widget visible = {self._widget.get_visible()}")
 
     def hide(self) -> None:
         """Hide the tooltip."""
+        print("Debug LinkTooltip.hide")
         self._widget.set_visible(False)
         self._visible = False
 
