@@ -110,7 +110,7 @@ class EditorTab(AbstractTab):
         self.search_bar = Gtk.SearchBar()
         self.search_entry = Gtk.SearchEntry()
         self.editor: MarkdownEditor = MarkdownEditor()
-        
+
         # Directly instantiate WebKitPreview_6x (WebKit 6.0+)
         # If 4.1 support is needed in future, check version and instantiate accordingly
         webkit_version = detect_webkit_version()
@@ -118,17 +118,15 @@ class EditorTab(AbstractTab):
             raise RuntimeError(
                 "WebKit not available. Install webkitgtk6.0 or webkitgtk4.1"
             )
-        
+
         if webkit_version[0] >= 6:
-            self.preview: AbstractPreview = WebKitPreview_6x(
-                on_link_hover=on_open_path
-            )
+            self.preview: AbstractPreview = WebKitPreview_6x(on_link_hover=on_open_path)
         else:
             raise RuntimeError(
                 f"WebKit {webkit_version[0]}.{webkit_version[1]} not yet supported. "
                 "Use WebKit 6.0+"
             )
-        
+
         self._preview_timer_id: int | None = None
         self._loading: bool = False  # suppresses debounce re-render during load
         config = FileConfigProvider().load()

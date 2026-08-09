@@ -30,7 +30,7 @@ gi.require_version("Adw", "1")
 gi.require_version("WebKit", "6.0")
 gi.require_version("JavaScriptCore", "6.0")
 
-from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, WebKit, JavaScriptCore
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, JavaScriptCore, WebKit
 
 from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
 from calamus.link_tooltip import LinkTooltipManager
@@ -46,6 +46,7 @@ from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
 from calamus.webkit_preview_base import AbstractWebKitPreview
 
 _logger = logging.getLogger(__name__)
+
 
 # Reuse these from preview module to avoid duplication
 def _is_same_document_file_anchor(path: str, base_uri: str) -> bool:
@@ -234,7 +235,7 @@ class WebKitPreview_6x(AbstractWebKitPreview):
         if source is None:
             # Fallback to module-level default
             source = WebKit.NetworkSession.get_default()
-        
+
         if source is not None:
             source.connect("download-started", self._on_download_started)
 
@@ -250,7 +251,7 @@ class WebKitPreview_6x(AbstractWebKitPreview):
 
     def _validate_download_source(self, download: object) -> bool:
         """Validate that download belongs to this preview's WebView.
-        
+
         WebKit 6.0 has get_web_view() on downloads.
         """
         try:
@@ -359,9 +360,10 @@ box {
         if image_uri.startswith(("http://", "https://", "file://")):
             markdown_action = Gio.SimpleAction.new("copy-markdown", None)
             markdown_action.connect(
-                "activate", lambda *_: self._copy_to_clipboard(
+                "activate",
+                lambda *_: self._copy_to_clipboard(
                     self._uri_to_markdown_image(image_uri)
-                )
+                ),
             )
             self._context_menu_actions.append(markdown_action)
 
@@ -408,39 +410,40 @@ box {
         suggested = _default_save_filename(image_uri)
         dialog = Gtk.FileDialog.new()
         dialog.set_initial_name(suggested)
-        
+
         parent = self._view.get_root() if self._view else None
-        
+
         def handle_response(d: Gtk.FileDialog, r: object) -> None:
             try:
                 file = d.save_finish(r)
                 if not file:
                     return
-                
+
                 path = file.get_path()
-                
+
                 def _fetch(url: str = image_uri, dest: str = path) -> None:
                     try:
                         if url.startswith("data:"):
                             # Handle data: URIs
                             header, data_b64 = url.split(",", 1)
                             import base64
+
                             data = base64.b64decode(data_b64)
                         else:
                             # Fetch from network
                             with urllib.request.urlopen(url) as response:
                                 data = response.read()
-                        
+
                         with open(dest, "wb") as f:
                             f.write(data)
                     except Exception as e:
                         _logger.error(f"Failed to save image: {e}")
-                
+
                 # Run in background thread
                 threading.Thread(target=_fetch, daemon=True).start()
             except GLib.GError:
                 pass
-        
+
         dialog.save(parent, None, handle_response)
 
     def _uri_to_markdown_image(self, uri: str) -> str:
@@ -473,14 +476,15 @@ box {
         """Handle data: URIs by saving to temp file."""
         try:
             import base64
+
             header, data_b64 = uri.split(",", 1)
             data = base64.b64decode(data_b64)
-            
+
             # Create temp file
             fd, path = tempfile.mkstemp(suffix=".html")
             with os.fdopen(fd, "wb") as f:
                 f.write(data)
-            
+
             self._open_uri_externally(f"file://{path}")
         except Exception:
             pass
@@ -564,7 +568,7 @@ if (document.body) {
         *args: object,
     ) -> None:
         """Handle tooltip messages from JavaScript (WebKit 6.0 signature).
-        
+
         This receives a JavaScriptCore.Value which we extract via to_json().
         """
         try:
@@ -606,7 +610,7 @@ if (document.body) {
     def update(self, markdown_text: str) -> None:
         """Update preview with new markdown content."""
         self._last_markdown = markdown_text
-        
+
         # Run async rendering
         def worker() -> None:
             try:
@@ -615,19 +619,19 @@ if (document.body) {
                 GLib.idle_add(lambda: self._on_async_render_done(html))
             except Exception as e:
                 _logger.error(f"Render error: {e}")
-        
+
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_async_render_done(self, html: str) -> bool:
         """Handle async render completion."""
         dark = self._style_manager.get_dark()
         color_scheme = "dark" if dark else "light"
-        
+
         # Get Mermaid script and highlighting
         mermaid_script = get_mermaid_script_tag()
         highlight_css = get_highlight_css_tag()
         highlight_script = get_highlight_script_tag()
-        
+
         # Render full HTML
         full_html = _HTML_TEMPLATE.format(
             color_scheme=color_scheme,
@@ -636,7 +640,7 @@ if (document.body) {
             highlight_script=highlight_script,
             content=html,
         )
-        
+
         self._view.load_html(full_html, self._base_uri)
         return False
 
