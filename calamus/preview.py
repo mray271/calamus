@@ -314,13 +314,13 @@ class WebKitPreview(AbstractPreview):
         if hasattr(context, "set_sandbox_enabled"):
             context.set_sandbox_enabled(False)
         
-        # Create UserContentManager for JavaScript-to-Python communication
-        self._user_content_manager = _WebKitModule.UserContentManager()
+        # Create WebView
+        self._view = _WebKitModule.WebView()
+        
+        # Get UserContentManager and register message handler for tooltip
+        self._user_content_manager = self._view.get_user_content_manager()
         self._user_content_manager.register_script_message_handler("tooltip")
         self._user_content_manager.connect("script-message-received::tooltip", self._on_tooltip_message)
-        
-        # Create WebView with UserContentManager
-        self._view = _WebKitModule.WebView.new_with_user_content_manager(self._user_content_manager)
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
