@@ -1,185 +1,142 @@
-"""URL tooltip manager for displaying link destinations on hover in the preview pane."""
+"""Link tooltip manager for displaying URLs on hover.
 
-from __future__ import annotations
+Implements the LinkTooltipManager class using GTK widgets for maximum
+compatibility and positioning reliability.
+"""
+
+from abc import ABC, abstractmethod
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw
 
 
-class LinkTooltipManager:
-    """Manages URL tooltip styling and JavaScript injection for link preview.
+class AbstractLinkTooltip(ABC):
+    """Abstract base class for link tooltip implementations."""
+
+    @abstractmethod
+    def show(self, url: str, x: int, y: int) -> None:
+        """Show the tooltip at the given position with the specified URL."""
+        pass
+
+    @abstractmethod
+    def hide(self) -> None:
+        """Hide the tooltip."""
+        pass
+
+    @abstractmethod
+    def get_widget(self) -> Gtk.Widget:
+        """Return the tooltip widget."""
+        pass
+
+
+class LinkTooltipManager(AbstractLinkTooltip):
+    """Manages URL tooltip display using GTK widgets.
     
-    Encapsulates all tooltip logic including CSS generation, HTML structure,
-    and JavaScript event handlers. Respects light/dark color schemes.
+    The tooltip is a floating widget positioned at the bottom-left of the
+    preview pane. It uses GTK's native rendering, ensuring consistent
+    styling and reliable positioning.
     """
 
     def __init__(self) -> None:
-        """Initialize the tooltip manager."""
-        pass
+        """Initialize the link tooltip manager."""
+        self._widget = self._create_tooltip_widget()
+        self._visible = False
 
-    def _generate_tooltip_css(self) -> str:
-        """Generate CSS styles for the URL tooltip popup.
+    def _create_tooltip_widget(self) -> Gtk.Widget:
+        """Create the tooltip widget.
+        
+        Returns:
+            A GTK widget containing the tooltip box.
+        """
+        # Create a box to hold the tooltip
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.set_name("url-tooltip")
+        
+        # Add CSS styling
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(self._get_css().encode())
+        
+        context = box.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        
+        # Create label for URL text
+        self._label = Gtk.Label()
+        self._label.set_wrap(False)
+        self._label.set_ellipsize(3)  # END
+        self._label.set_margin_top(8)
+        self._label.set_margin_bottom(8)
+        self._label.set_margin_start(12)
+        self._label.set_margin_end(12)
+        self._label.add_css_class("monospace")
+        
+        box.append(self._label)
+        
+        return box
+
+    def _get_css(self) -> str:
+        """Generate CSS for the tooltip widget.
         
         Returns:
             CSS string with light and dark mode variants.
         """
-        css = """
-  /* URL Tooltip Styles */
-  #url-tooltip {{
-    position: absolute;
-    background: var(--tooltip-bg);
-    color: var(--tooltip-text);
-    padding: 8px 12px;
-    font-size: 0.8125em;
-    font-family: 'Courier New', monospace;
-    border-radius: 0 8px 0 0;
-    display: none;
-    z-index: 999999;
-    max-width: calc(100vw - 20px);
-    max-height: 3em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+        return """
+#url-tooltip {
+    background-color: #f6f8fa;
+    color: #1c1c1c;
+    border-top: 1px solid #e1e4e8;
+    border-right: 1px solid #e1e4e8;
+    border-radius: 0px 8px 0px 0px;
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
-    border-top: 1px solid var(--tooltip-border);
-    border-right: 1px solid var(--tooltip-border);
+    font-size: 0.8125em;
+}
+
+#url-tooltip:disabled {
+    opacity: 0;
     pointer-events: none;
-  }}
-  #url-tooltip.visible {{
-    display: block;
-  }}
-  :root {{
-    --tooltip-bg: #f6f8fa;
-    --tooltip-text: #1c1c1c;
-    --tooltip-border: #e1e4e8;
-  }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{
-      --tooltip-bg: #24292e;
-      --tooltip-text: #e1e4e8;
-      --tooltip-border: #30363d;
-    }}
-  }}
+}
+
+@media (prefers-color-scheme: dark) {
+    #url-tooltip {
+        background-color: #24292e;
+        color: #e1e4e8;
+        border-top-color: #30363d;
+        border-right-color: #30363d;
+    }
+}
 """
-        return css
 
-    def _generate_tooltip_html(self) -> str:
-        """Generate HTML structure for the tooltip element.
+    def show(self, url: str, x: int, y: int) -> None:
+        """Show the tooltip with the given URL at the specified position.
+        
+        Args:
+            url: The URL to display in the tooltip.
+            x: X coordinate for positioning (relative to WebView).
+            y: Y coordinate for positioning (relative to WebView).
+        """
+        self._label.set_text(url)
+        self._widget.set_visible(True)
+        self._visible = True
+
+    def hide(self) -> None:
+        """Hide the tooltip."""
+        self._widget.set_visible(False)
+        self._visible = False
+
+    def get_widget(self) -> Gtk.Widget:
+        """Return the tooltip widget.
         
         Returns:
-            HTML string containing the tooltip div.
+            The GTK widget for the tooltip.
         """
-        html = '<div id="url-tooltip"></div>'
-        return html
+        return self._widget
 
-    def _generate_tooltip_js(self) -> str:
-        """Generate JavaScript code for handling link hover events.
-        
-        Uses viewport-aware positioning to ensure tooltip appears at the
-        bottom of the visible area, not the absolute bottom of the page.
+    def is_visible(self) -> bool:
+        """Return whether the tooltip is currently visible.
         
         Returns:
-            JavaScript string with event listeners and tooltip logic.
+            True if the tooltip is visible, False otherwise.
         """
-        js = """
-  (function() {
-    const tooltip = document.getElementById('url-tooltip');
-    if (!tooltip) return;
-    
-    // Ensure tooltip is positioned at the visible viewport bottom
-    function positionTooltip() {
-      // Get the current scroll position and viewport height
-      const scrollTop = window.scrollY || window.pageYOffset;
-      const viewportHeight = window.innerHeight;
-      
-      // Calculate the absolute page position for the bottom of viewport
-      const bottomPosition = scrollTop + viewportHeight;
-      
-      // Position the tooltip at the bottom of what's currently visible
-      // By setting it in the document flow and using absolute positioning
-      tooltip.style.position = 'absolute';
-      tooltip.style.top = (bottomPosition - tooltip.offsetHeight) + 'px';
-      tooltip.style.left = '0px';
-      tooltip.style.width = 'auto';
-    }
-    
-    function attachTooltipsToLinks() {
-      // Find all links and attach hover listeners directly
-      const links = document.querySelectorAll('a[href]');
-      
-      links.forEach(link => {
-        link.addEventListener('mouseenter', function() {
-          const href = this.getAttribute('href');
-          if (href) {
-            tooltip.textContent = href;
-            tooltip.classList.add('visible');
-            positionTooltip();
-          }
-        }, false);
-        
-        link.addEventListener('mouseleave', function() {
-          tooltip.classList.remove('visible');
-        }, false);
-      });
-    }
-    
-    // Attach listeners when DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', attachTooltipsToLinks, false);
-    } else {
-      attachTooltipsToLinks();
-    }
-    
-    // Reposition on scroll
-    window.addEventListener('scroll', function() {
-      if (tooltip.classList.contains('visible')) {
-        positionTooltip();
-      }
-    }, false);
-    
-    // Reposition on resize
-    window.addEventListener('resize', function() {
-      if (tooltip.classList.contains('visible')) {
-        positionTooltip();
-      }
-    }, false);
-    
-    // Re-attach listeners when content is dynamically updated (e.g., from Mermaid)
-    const observer = new MutationObserver(function(mutations) {
-      // Only re-attach if new links were added
-      const hasNewLinks = mutations.some(m => 
-        Array.from(m.addedNodes).some(n => 
-          n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
-        )
-      );
-      if (hasNewLinks) {
-        attachTooltipsToLinks();
-      }
-    });
-    
-    // Watch for changes in the body
-    if (document.body) {
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
-    }
-  })();
-"""
-        return js
-
-    def get_tooltip_injection(self) -> dict[str, str]:
-        """Generate complete tooltip injection bundle.
-        
-        Returns a dictionary with 'css', 'html', and 'js' keys that
-        contain the complete tooltip implementation. This method provides
-        a clean public interface for injecting the tooltip into the preview.
-        
-        Returns:
-            Dictionary with keys:
-                - 'css': CSS styles to inject into <style> tag
-                - 'html': HTML to inject into <body>
-                - 'js': JavaScript to inject into <script> tag
-        """
-        return {
-            "css": self._generate_tooltip_css(),
-            "html": self._generate_tooltip_html(),
-            "js": self._generate_tooltip_js(),
-        }
+        return self._visible

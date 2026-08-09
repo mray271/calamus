@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 import shutil
 import tempfile
@@ -152,12 +153,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   sub {{ bottom: -0.3em; }}
   sup {{ top: -0.5em; }}
-{tooltip_css}
 </style>
 </head>
 <body>
 {body}
-{tooltip_html}
 <script>
   if (typeof mermaid !== 'undefined') {{
     mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
@@ -166,7 +165,54 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   if (typeof hljs !== 'undefined') {{
     hljs.highlightAll();
   }}
-{tooltip_js}
+  // Link hover detection via hidden element communication
+  (function() {{
+    // Create hidden element to communicate with Python
+    const hoverState = document.createElement('div');
+    hoverState.id = 'calamus-hover-state';
+    hoverState.style.display = 'none';
+    document.body.appendChild(hoverState);
+    
+    function attachTooltipsToLinks() {{
+      const links = document.querySelectorAll('a[href]');
+      links.forEach(link => {{
+        link.addEventListener('mouseenter', function() {{
+          const href = this.getAttribute('href');
+          if (href) {{
+            hoverState.textContent = href;
+            hoverState.className = 'enter';
+          }}
+        }}, false);
+        
+        link.addEventListener('mouseleave', function() {{
+          hoverState.textContent = '';
+          hoverState.className = 'leave';
+        }}, false);
+      }});
+    }}
+    
+    if (document.readyState === 'loading') {{
+      document.addEventListener('DOMContentLoaded', attachTooltipsToLinks, false);
+    }} else {{
+      attachTooltipsToLinks();
+    }}
+    
+    // Re-attach when content is dynamically added (Mermaid, etc)
+    const observer = new MutationObserver(function(mutations) {{
+      const hasNewLinks = mutations.some(m => 
+        Array.from(m.addedNodes).some(n => 
+          n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
+        )
+      );
+      if (hasNewLinks) {{
+        attachTooltipsToLinks();
+      }}
+    }});
+    
+    if (document.body) {{
+      observer.observe(document.body, {{ childList: true, subtree: true }});
+    }}
+  }})();
 </script>
 </body>
 </html>
@@ -293,6 +339,22 @@ class WebKitPreview(AbstractPreview):
         # Without this, rapid typing spawns unbounded Chromium processes,
         # exhausting memory and hanging the application.
         self._mmdc_semaphore = threading.Semaphore(1)
+        
+        # Create overlay to layer tooltip widget on top of WebView
+        self._overlay = Gtk.Overlay()
+        self._overlay.set_child(self._view)
+        
+        # Add tooltip widget as overlay child (positioned absolutely)
+        tooltip_widget = self._tooltip_manager.get_widget()
+        tooltip_widget.set_halign(Gtk.Align.START)
+        tooltip_widget.set_valign(Gtk.Align.END)
+        self._overlay.add_overlay(tooltip_widget)
+        
+        # Initially hide the tooltip
+        self._tooltip_manager.hide()
+        
+        # Start polling timer to check for link hover state changes
+        self._hover_poll_id = GLib.timeout_add(100, self._poll_link_hover_state)
 
     def set_file_path(self, path: str | None) -> None:
         """Update the base URI used for resolving relative links in the preview."""
@@ -726,6 +788,93 @@ class WebKitPreview(AbstractPreview):
         self._pending_scroll_restore_ratio = None
         self._restore_scroll_ratio(ratio)
 
+    def _on_user_message(self, _webview: object, message: object) -> bool:
+        """Handle messages from JavaScript about link hovers.
+        
+        The JavaScript in the rendered page sends messages when users
+        hover over or leave links. This handler shows/hides the tooltip.
+        """
+        try:
+            # Get the message parameters
+            if hasattr(message, "get_parameters"):
+                params = message.get_parameters()
+                if params is None:
+                    return False
+                
+                event = params.get_string("event") if hasattr(params, "get_string") else None
+                
+                if event == "enter":
+                    href = params.get_string("href") if hasattr(params, "get_string") else None
+                    if href:
+                        self._tooltip_manager.show(href, 0, 0)
+                        if self._on_link_hover:
+                            self._on_link_hover(href)
+                elif event == "leave":
+                    self._tooltip_manager.hide()
+        except Exception:
+            # Silently ignore malformed messages
+            pass
+        
+        return True
+
+    def _poll_link_hover_state(self) -> bool:
+        """Poll the hidden element to detect link hover state changes.
+        
+        This runs every 100ms to check if the hidden #calamus-hover-state
+        element has been updated by JavaScript, indicating a link hover event.
+        
+        Returns:
+            True to keep the timer running, False to stop.
+        """
+        try:
+            # Query the hidden state element
+            js = """
+(function() {
+  const state = document.getElementById('calamus-hover-state');
+  if (!state) return JSON.stringify({href: null, state: null});
+  return JSON.stringify({href: state.textContent, state: state.className});
+})();
+"""
+            if hasattr(self._view, "evaluate_javascript"):
+                # WebKit 6.0
+                self._view.evaluate_javascript(
+                    js, -1, None, self._on_hover_state_result, None, None, None
+                )
+            elif hasattr(self._view, "run_javascript"):
+                # WebKit2 4.1
+                self._view.run_javascript(js, None, self._on_hover_state_result, None)
+        except Exception:
+            pass
+        
+        return True  # Keep polling
+
+    def _on_hover_state_result(self, source_object: object, result: object) -> None:
+        """Handle the result of the link hover state query.
+        
+        Args:
+            source_object: The WebView that executed the JavaScript.
+            result: The result object from evaluate_javascript or run_javascript.
+        """
+        try:
+            js_result = self._finish_javascript(source_object, result)
+            if not js_result:
+                return
+            
+            data = json.loads(js_result)
+            href = data.get("href")
+            state = data.get("state")
+            
+            # Show tooltip when entering a link, hide when leaving
+            if state == "enter" and href:
+                self._tooltip_manager.show(href, 0, 0)
+                if self._on_link_hover:
+                    self._on_link_hover(href)
+            elif state == "leave":
+                self._tooltip_manager.hide()
+        except Exception:
+            # Silently ignore errors
+            pass
+
     def update(self, markdown_text: str) -> None:
         self._last_markdown = markdown_text
         dark = self._style_manager.get_dark()
@@ -809,7 +958,6 @@ class WebKitPreview(AbstractPreview):
     def _render_page(self, html_body: str, mermaid_script: str, dark: bool) -> None:
         color_scheme = "dark" if dark else "light"
         mermaid_theme = "dark" if dark else "default"
-        tooltip_injection = self._tooltip_manager.get_tooltip_injection()
         html_text = _HTML_TEMPLATE.format(
             body=html_body,
             mermaid_script=mermaid_script,
@@ -817,9 +965,6 @@ class WebKitPreview(AbstractPreview):
             mermaid_theme=mermaid_theme,
             highlight_css=get_highlight_css_tag(dark=dark),
             highlight_script=get_highlight_script_tag(),
-            tooltip_css=tooltip_injection["css"],
-            tooltip_html=tooltip_injection["html"],
-            tooltip_js=tooltip_injection["js"],
         )
         html_text = html_text.replace(
             "__PREVIEW_FONT_SCALE__", f"{self._zoom_level:.3f}"
@@ -845,7 +990,7 @@ class WebKitPreview(AbstractPreview):
             self._view.run_javascript(js, None, None, None)
 
     def get_widget(self) -> Gtk.Widget:
-        return self._view
+        return self._overlay
 
     def zoom_by(self, factor: float) -> None:
         if factor <= 0:
