@@ -168,88 +168,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   if (typeof hljs !== 'undefined') {{
     hljs.highlightAll();
   }}
-  // Link hover detection via WebKit message handlers
-  (function() {{
-    console.log('[TOOLTIP-JS] Tooltip IIFE started');
-    
-    function attachTooltipsToLinks() {{
-      const links = document.querySelectorAll('a[href]');
-      console.log(`[TOOLTIP-JS] attachTooltipsToLinks: found ${{links.length}} links`);
-      
-      links.forEach((link, idx) => {{
-        console.log(`[TOOLTIP-JS] Attaching listeners to link ${{idx}}: ${{link.href}}`);
-        
-        link.addEventListener('mouseenter', function() {{
-          const href = this.getAttribute('href');
-          console.log(`[TOOLTIP-JS] mouseenter on link: ${{href}}`);
-          
-          if (href) {{
-            console.log(`[TOOLTIP-JS] href exists: ${{href}}`);
-            if (window.webkit) {{
-              console.log('[TOOLTIP-JS] window.webkit exists');
-              if (window.webkit.messageHandlers) {{
-                console.log('[TOOLTIP-JS] window.webkit.messageHandlers exists');
-                if (window.webkit.messageHandlers.tooltip) {{
-                  console.log('[TOOLTIP-JS] window.webkit.messageHandlers.tooltip exists');
-                  window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({{
-                    href: href,
-                    state: 'enter'
-                  }}));
-                  console.log('[TOOLTIP-JS] postMessage sent for enter');
-                }} else {{
-                  console.log('[TOOLTIP-JS] window.webkit.messageHandlers.tooltip does NOT exist');
-                }}
-              }} else {{
-                console.log('[TOOLTIP-JS] window.webkit.messageHandlers does NOT exist');
-              }}
-            }} else {{
-              console.log('[TOOLTIP-JS] window.webkit does NOT exist');
-            }}
-          }} else {{
-            console.log('[TOOLTIP-JS] href is empty');
-          }}
-        }}, false);
-        
-        link.addEventListener('mouseleave', function() {{
-          console.log('[TOOLTIP-JS] mouseleave fired');
-          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {{
-            window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({{
-              href: '',
-              state: 'leave'
-            }}));
-            console.log('[TOOLTIP-JS] postMessage sent for leave');
-          }}
-        }}, false);
-      }});
-    }}
-    
-    // Attach immediately since this script runs at end of document
-    console.log('[TOOLTIP-JS] Calling attachTooltipsToLinks immediately');
-    attachTooltipsToLinks();
-    
-    // Re-attach when content is dynamically added (Mermaid, etc)
-    const observer = new MutationObserver(function(mutations) {{
-      console.log('[TOOLTIP-JS] MutationObserver fired');
-      const hasNewLinks = mutations.some(m => 
-        Array.from(m.addedNodes).some(n => 
-          n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
-        )
-      );
-      if (hasNewLinks) {{
-        console.log('[TOOLTIP-JS] New links detected, re-attaching');
-        attachTooltipsToLinks();
-      }}
-    }});
-    
-    if (document.body) {{
-      console.log('[TOOLTIP-JS] Setting up MutationObserver on document.body');
-      observer.observe(document.body, {{ childList: true, subtree: true }});
-    }} else {{
-      console.log('[TOOLTIP-JS] document.body does not exist');
-    }}
-    
-    console.log('[TOOLTIP-JS] Tooltip IIFE finished');
-  }})();
+  // Note: Tooltip hover detection is now injected via UserScript
+  // in _inject_tooltip_script() to ensure it has access to window.webkit
+
   }})();
 </script>
 </body>
@@ -352,6 +273,10 @@ class WebKitPreview(AbstractPreview):
         self._user_content_manager.register_script_message_handler("tooltip")
         self._user_content_manager.connect("script-message-received::tooltip", self._on_tooltip_message)
         print("[TOOLTIP] Message handler registered for 'tooltip'", flush=True)
+        
+        # Inject tooltip script into all web pages before they load
+        self._inject_tooltip_script()
+        print("[TOOLTIP] Tooltip script injected into UserContentManager", flush=True)
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
@@ -842,6 +767,115 @@ class WebKitPreview(AbstractPreview):
     ) -> None:
         if self._last_markdown:
             self.update(self._last_markdown)
+
+    def _inject_tooltip_script(self) -> None:
+        """Inject tooltip hover detection script into all web pages.
+        
+        This script is injected via UserContentManager.add_script() so it runs
+        in the WebView's JavaScript context and has access to window.webkit
+        message handlers.
+        """
+        script_source = """
+console.log('[TOOLTIP-JS] Script injected via UserContentManager');
+
+function attachTooltipsToLinks() {
+  const links = document.querySelectorAll('a[href]');
+  console.log(`[TOOLTIP-JS] attachTooltipsToLinks: found ${links.length} links`);
+  
+  links.forEach((link, idx) => {
+    console.log(`[TOOLTIP-JS] Attaching listeners to link ${idx}: ${link.href}`);
+    
+    link.addEventListener('mouseenter', function() {
+      const href = this.getAttribute('href');
+      console.log(`[TOOLTIP-JS] mouseenter on link: ${href}`);
+      
+      if (href) {
+        console.log(`[TOOLTIP-JS] href exists: ${href}`);
+        if (window.webkit) {
+          console.log('[TOOLTIP-JS] window.webkit exists');
+          if (window.webkit.messageHandlers) {
+            console.log('[TOOLTIP-JS] window.webkit.messageHandlers exists');
+            if (window.webkit.messageHandlers.tooltip) {
+              console.log('[TOOLTIP-JS] window.webkit.messageHandlers.tooltip exists');
+              window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({
+                href: href,
+                state: 'enter'
+              }));
+              console.log('[TOOLTIP-JS] postMessage sent for enter');
+            } else {
+              console.log('[TOOLTIP-JS] window.webkit.messageHandlers.tooltip does NOT exist');
+            }
+          } else {
+            console.log('[TOOLTIP-JS] window.webkit.messageHandlers does NOT exist');
+          }
+        } else {
+          console.log('[TOOLTIP-JS] window.webkit does NOT exist');
+        }
+      } else {
+        console.log('[TOOLTIP-JS] href is empty');
+      }
+    }, false);
+    
+    link.addEventListener('mouseleave', function() {
+      console.log('[TOOLTIP-JS] mouseleave fired');
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {
+        window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({
+          href: '',
+          state: 'leave'
+        }));
+        console.log('[TOOLTIP-JS] postMessage sent for leave');
+      }
+    }, false);
+  });
+}
+
+// Attach when DOM is ready
+if (document.readyState === 'loading') {
+  console.log('[TOOLTIP-JS] DOM still loading, waiting for DOMContentLoaded');
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('[TOOLTIP-JS] DOMContentLoaded fired');
+    attachTooltipsToLinks();
+  }, false);
+} else {
+  console.log('[TOOLTIP-JS] DOM already loaded, attaching immediately');
+  attachTooltipsToLinks();
+}
+
+// Re-attach when content is dynamically added (Mermaid, etc)
+const observer = new MutationObserver(function(mutations) {
+  console.log('[TOOLTIP-JS] MutationObserver fired');
+  const hasNewLinks = mutations.some(m => 
+    Array.from(m.addedNodes).some(n => 
+      n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
+    )
+  );
+  if (hasNewLinks) {
+    console.log('[TOOLTIP-JS] New links detected, re-attaching');
+    attachTooltipsToLinks();
+  }
+});
+
+if (document.body) {
+  console.log('[TOOLTIP-JS] Setting up MutationObserver on document.body');
+  observer.observe(document.body, { childList: true, subtree: true });
+} else {
+  console.log('[TOOLTIP-JS] document.body does not exist');
+}
+
+console.log('[TOOLTIP-JS] Script initialization complete');
+"""
+        try:
+            script = _WebKitModule.UserScript(
+                script_source,
+                _WebKitModule.UserContentInjectedFrames.ALL_FRAMES,
+                _WebKitModule.UserScriptInjectionTime.END_OF_DOCUMENT,
+                None,  # allow_list
+                None,  # block_list
+            )
+            self._user_content_manager.add_script(script)
+            print("[TOOLTIP] UserScript added successfully", flush=True)
+        except Exception as e:
+            print(f"[TOOLTIP] Error adding UserScript: {e}", flush=True)
 
     def _on_load_changed(self, _webview: object, load_event: object) -> None:
         print(f"[TOOLTIP] _on_load_changed: load_event={load_event}, FINISHED={_WebKitModule.LoadEvent.FINISHED}", flush=True)
