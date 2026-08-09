@@ -7,7 +7,7 @@ at runtime when new modules are added but not registered in the build config.
 
 Usage:
     python3 build-aux/check-meson-sources.py
-    
+
 Exit codes:
     0 - All modules are registered
     1 - Missing modules or meson.build parse error
