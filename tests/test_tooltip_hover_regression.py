@@ -49,10 +49,7 @@ class TestTooltipHoverRegressionPR79:
         preview._on_link_hover = mock_hover_callback
 
         # Create a tooltip message as it would come from JavaScript
-        tooltip_message = {
-            "href": "https://adst.bandcamp.com/",
-            "state": "enter"
-        }
+        tooltip_message = {"href": "https://adst.bandcamp.com/", "state": "enter"}
         json_string = json.dumps(tooltip_message)
 
         # Create a mock JavaScriptCore.Value that implements to_json()
@@ -73,10 +70,7 @@ class TestTooltipHoverRegressionPR79:
         preview = create_preview_with_mocked_webkit()
 
         # Create a tooltip message
-        tooltip_message = {
-            "href": "https://example.com/page",
-            "state": "enter"
-        }
+        tooltip_message = {"href": "https://example.com/page", "state": "enter"}
         json_string = json.dumps(tooltip_message)
 
         # Create mock JS value
@@ -85,6 +79,7 @@ class TestTooltipHoverRegressionPR79:
 
         # Call the handler
         from calamus.webkit_preview_6x import WebKitPreview_6x
+
         WebKitPreview_6x._on_tooltip_message(preview, MagicMock(), mock_js_value)
 
         # The tooltip manager should have been shown with the URL
@@ -99,10 +94,7 @@ class TestTooltipHoverRegressionPR79:
         preview = create_preview_with_mocked_webkit()
 
         # Create a tooltip leave message
-        tooltip_message = {
-            "href": "https://example.com/page",
-            "state": "leave"
-        }
+        tooltip_message = {"href": "https://example.com/page", "state": "leave"}
         json_string = json.dumps(tooltip_message)
 
         # Create mock JS value
@@ -111,6 +103,7 @@ class TestTooltipHoverRegressionPR79:
 
         # Call the handler
         from calamus.webkit_preview_6x import WebKitPreview_6x
+
         WebKitPreview_6x._on_tooltip_message(preview, MagicMock(), mock_js_value)
 
         # The tooltip manager should have been hidden
@@ -123,9 +116,7 @@ class TestTooltipHoverRegressionPR79:
         preview = create_preview_with_mocked_webkit()
 
         # Create a tooltip message without href
-        tooltip_message = {
-            "state": "enter"
-        }
+        tooltip_message = {"state": "enter"}
         json_string = json.dumps(tooltip_message)
 
         mock_js_value = MagicMock()
@@ -133,6 +124,7 @@ class TestTooltipHoverRegressionPR79:
 
         # Call the handler
         from calamus.webkit_preview_6x import WebKitPreview_6x
+
         WebKitPreview_6x._on_tooltip_message(preview, MagicMock(), mock_js_value)
 
         # Tooltip should not have been shown
@@ -148,6 +140,7 @@ class TestTooltipHoverRegressionPR79:
 
         # Should not raise an exception
         from calamus.webkit_preview_6x import WebKitPreview_6x
+
         WebKitPreview_6x._on_tooltip_message(preview, MagicMock(), mock_js_value)
 
         # Tooltip should not have been shown

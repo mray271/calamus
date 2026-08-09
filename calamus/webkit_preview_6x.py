@@ -389,7 +389,9 @@ box {
         save_action.connect("activate", lambda *_: self._save_image(image_uri))
         self._context_menu_actions.append(save_action)
 
-        save_item = WebKit.ContextMenuItem.new_from_gaction(save_action, "Save Image As...")
+        save_item = WebKit.ContextMenuItem.new_from_gaction(
+            save_action, "Save Image As..."
+        )
         context_menu.append(save_item)
 
         # Add "Copy Markdown Image" for http/https/file URLs
@@ -403,7 +405,9 @@ box {
             )
             self._context_menu_actions.append(markdown_action)
 
-            markdown_item = WebKit.ContextMenuItem.new_from_gaction(markdown_action, "Copy Markdown Image")
+            markdown_item = WebKit.ContextMenuItem.new_from_gaction(
+                markdown_action, "Copy Markdown Image"
+            )
             context_menu.append(markdown_item)
 
         return True
