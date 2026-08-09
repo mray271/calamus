@@ -20,6 +20,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
+from calamus.link_tooltip import LinkTooltipManager
 from calamus.mermaid_support import (
     MermaidCache,
     SubprocessMermaidRenderer,
@@ -151,10 +152,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   sub {{ bottom: -0.3em; }}
   sup {{ top: -0.5em; }}
+{tooltip_css}
 </style>
 </head>
 <body>
 {body}
+{tooltip_html}
 <script>
   if (typeof mermaid !== 'undefined') {{
     mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
@@ -163,6 +166,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   if (typeof hljs !== 'undefined') {{
     hljs.highlightAll();
   }}
+{tooltip_js}
 </script>
 </body>
 </html>
@@ -242,9 +246,12 @@ class WebKitPreview(AbstractPreview):
         self,
         renderer: AbstractMarkdownRenderer | None = None,
         on_open_path: Callable[[str], None] | None = None,
+        on_link_hover: Callable[[str], None] | None = None,
     ) -> None:
         self._renderer = renderer or MistuneRenderer()
         self._on_open_path = on_open_path
+        self._on_link_hover = on_link_hover
+        self._tooltip_manager = LinkTooltipManager()
         self._base_uri = "file:///"
         # Disable the bwrap/dbus-proxy sandbox — required when running inside
         # Docker where bubblewrap cannot create user namespaces.
@@ -802,6 +809,7 @@ class WebKitPreview(AbstractPreview):
     def _render_page(self, html_body: str, mermaid_script: str, dark: bool) -> None:
         color_scheme = "dark" if dark else "light"
         mermaid_theme = "dark" if dark else "default"
+        tooltip_injection = self._tooltip_manager.get_tooltip_injection()
         html_text = _HTML_TEMPLATE.format(
             body=html_body,
             mermaid_script=mermaid_script,
@@ -809,6 +817,9 @@ class WebKitPreview(AbstractPreview):
             mermaid_theme=mermaid_theme,
             highlight_css=get_highlight_css_tag(dark=dark),
             highlight_script=get_highlight_script_tag(),
+            tooltip_css=tooltip_injection["css"],
+            tooltip_html=tooltip_injection["html"],
+            tooltip_js=tooltip_injection["js"],
         )
         html_text = html_text.replace(
             "__PREVIEW_FONT_SCALE__", f"{self._zoom_level:.3f}"
@@ -978,8 +989,9 @@ class TextViewPreview(AbstractPreview):
 
 def create_preview(
     on_open_path: Callable[[str], None] | None = None,
+    on_link_hover: Callable[[str], None] | None = None,
 ) -> AbstractPreview:
     """Create the best preview implementation for the current system."""
     if _WEBKIT_AVAILABLE:
-        return WebKitPreview(on_open_path=on_open_path)
+        return WebKitPreview(on_open_path=on_open_path, on_link_hover=on_link_hover)
     return TextViewPreview()
