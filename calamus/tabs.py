@@ -15,7 +15,6 @@ from gi.repository import Adw, GLib, Gtk
 from calamus.editor import AbstractEditor, MarkdownEditor
 from calamus.preferences import FileConfigProvider
 from calamus.preview import AbstractPreview
-from calamus.webkit_preview_6x import WebKitPreview_6x
 from calamus.webkit_version import detect_webkit_version
 
 # Files larger than this will be refused with an error dialog rather than
@@ -120,6 +119,9 @@ class EditorTab(AbstractTab):
             )
 
         if webkit_version[0] >= 6:
+            # Import lazily to avoid requiring WebKit 6.0 at module load time
+            from calamus.webkit_preview_6x import WebKitPreview_6x
+
             self.preview: AbstractPreview = WebKitPreview_6x(on_link_hover=on_open_path)
         else:
             raise RuntimeError(
