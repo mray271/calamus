@@ -844,8 +844,10 @@ class WebKitPreview(AbstractPreview):
             self.update(self._last_markdown)
 
     def _on_load_changed(self, _webview: object, load_event: object) -> None:
+        print(f"[TOOLTIP] _on_load_changed: load_event={load_event}, FINISHED={_WebKitModule.LoadEvent.FINISHED}", flush=True)
         if load_event != _WebKitModule.LoadEvent.FINISHED:
             return
+        print("[TOOLTIP] Load finished event detected", flush=True)
         if self._pending_scroll_restore_ratio is None:
             return
         ratio = self._pending_scroll_restore_ratio
@@ -903,11 +905,13 @@ class WebKitPreview(AbstractPreview):
             pass
 
     def update(self, markdown_text: str) -> None:
+        print("[TOOLTIP] update() called with markdown", flush=True)
         self._last_markdown = markdown_text
         dark = self._style_manager.get_dark()
 
         if not self._mmdc_available:
             # No mmdc — use browser-side mermaid.js (instant, no subprocess).
+            print("[TOOLTIP] No mmdc available, using browser-side mermaid", flush=True)
             html_body = self._renderer.render(markdown_text)
             self._render_page(html_body, get_mermaid_script_tag(), dark)
             return
@@ -915,6 +919,7 @@ class WebKitPreview(AbstractPreview):
         # Fast path: render immediately using cached SVGs where available.
         # Uncached blocks fall back to browser-side mermaid.js until the
         # background thread produces their SVGs.
+        print("[TOOLTIP] Rendering with mermaid caching", flush=True)
         preprocessed = preprocess_with_cache(markdown_text, self._mermaid_cache)
         html_body = self._renderer.render_preprocessed(preprocessed)
         uncached = [
@@ -983,6 +988,7 @@ class WebKitPreview(AbstractPreview):
         self._render_page(html_body, "", self._style_manager.get_dark())
 
     def _render_page(self, html_body: str, mermaid_script: str, dark: bool) -> None:
+        print("[TOOLTIP] _render_page called", flush=True)
         color_scheme = "dark" if dark else "light"
         mermaid_theme = "dark" if dark else "default"
         html_text = _HTML_TEMPLATE.format(
@@ -996,10 +1002,18 @@ class WebKitPreview(AbstractPreview):
         html_text = html_text.replace(
             "__PREVIEW_FONT_SCALE__", f"{self._zoom_level:.3f}"
         )
+        # Check if tooltip script is in HTML
+        if "[TOOLTIP-JS]" in html_text:
+            print("[TOOLTIP] Tooltip JavaScript is present in HTML", flush=True)
+        else:
+            print("[TOOLTIP] WARNING: Tooltip JavaScript NOT found in HTML", flush=True)
+        
         # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
         # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
+        print("[TOOLTIP] _render_page: about to load HTML with load_bytes", flush=True)
         raw = GLib.Bytes.new(html_text.encode("utf-8"))
         self._view.load_bytes(raw, "text/html", "utf-8", self._base_uri)
+        print("[TOOLTIP] _render_page: load_bytes called", flush=True)
 
     def _scroll_to_anchor(self, anchor_id: str) -> None:
         """Scroll the preview to the element with the given id."""
