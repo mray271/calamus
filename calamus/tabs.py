@@ -232,7 +232,24 @@ class EditorTab(AbstractTab):
         self._paned.set_start_child(self._scroll_editor)
 
         self._scroll_preview = Gtk.ScrolledWindow()
+        self._scroll_preview.set_name("preview-scrolled-window")
+        # Make scrolled window propagate child's natural size
+        self._scroll_preview.set_has_frame(False)
         self._scroll_preview.set_child(self.preview.get_widget())
+        
+        # Apply CSS to make scroll window background transparent
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+#preview-scrolled-window {
+    background-color: transparent;
+}
+#preview-scrolled-window > * {
+    background-color: transparent;
+}
+        """)
+        context = self._scroll_preview.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        
         self._paned.set_end_child(self._scroll_preview)
 
         self.editor.get_buffer().connect("changed", self._on_buffer_changed)

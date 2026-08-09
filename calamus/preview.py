@@ -318,27 +318,22 @@ class WebKitPreview(AbstractPreview):
         # exhausting memory and hanging the application.
         self._mmdc_semaphore = threading.Semaphore(1)
         
-        # Create a container with WebView on top and tooltip footer on bottom
-        self._container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self._container.set_hexpand(True)
-        self._container.set_vexpand(True)
+        # Create an overlay to layer the footer on top of the WebView
+        # This avoids the need for a container that exposes its background
+        self._overlay = Gtk.Overlay()
+        self._overlay.set_child(self._view)  # WebView is the main child
         
-        # Add WebView (takes most of the space)
-        self._container.append(self._view)
-        
-        # Create a wrapper for the footer that can be hidden
+        # Create footer wrapper for positioning the tooltip
         self._footer_wrapper = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self._footer_wrapper.set_hexpand(False)
         self._footer_wrapper.set_vexpand(False)
         self._footer_wrapper.set_halign(Gtk.Align.START)
-        self._footer_wrapper.set_valign(Gtk.Align.START)
+        self._footer_wrapper.set_valign(Gtk.Align.END)  # Position at bottom
         self._footer_wrapper.set_spacing(0)
-        # Constrain width to prevent expanding to full width
-        self._footer_wrapper.set_size_request(420, -1)
         self._footer_wrapper.set_visible(False)  # Hide initially
         self._footer_wrapper.set_name("footer-wrapper")
         
-        # Make wrapper transparent so only the inner tooltip shows
+        # Make wrapper transparent
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(b"""
 #footer-wrapper {
@@ -354,8 +349,8 @@ class WebKitPreview(AbstractPreview):
         tooltip_widget = self._tooltip_manager.get_widget()
         self._footer_wrapper.append(tooltip_widget)
         
-        # Add wrapper to container
-        self._container.append(self._footer_wrapper)
+        # Add wrapper as an overlay child (positioned on top of WebView)
+        self._overlay.add_overlay(self._footer_wrapper)
 
     def set_file_path(self, path: str | None) -> None:
         """Update the base URI used for resolving relative links in the preview."""
@@ -1075,7 +1070,7 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             self._view.run_javascript(js, None, None, None)
 
     def get_widget(self) -> Gtk.Widget:
-        return self._container
+        return self._overlay
 
     def zoom_by(self, factor: float) -> None:
         if factor <= 0:
