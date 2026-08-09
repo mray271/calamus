@@ -23,9 +23,7 @@ class LinkTooltipManager:
         css = """
   /* URL Tooltip Styles */
   #url-tooltip {{
-    position: fixed;
-    bottom: 0;
-    left: 0;
+    position: absolute;
     background: var(--tooltip-bg);
     color: var(--tooltip-text);
     padding: 8px 12px;
@@ -33,7 +31,7 @@ class LinkTooltipManager:
     font-family: 'Courier New', monospace;
     border-radius: 0 8px 0 0;
     display: none;
-    z-index: 99999;
+    z-index: 999999;
     max-width: calc(100vw - 20px);
     max-height: 3em;
     white-space: nowrap;
@@ -74,7 +72,8 @@ class LinkTooltipManager:
     def _generate_tooltip_js(self) -> str:
         """Generate JavaScript code for handling link hover events.
         
-        Uses direct event attachment to link elements for maximum compatibility.
+        Uses viewport-aware positioning to ensure tooltip appears at the
+        bottom of the visible area, not the absolute bottom of the page.
         
         Returns:
             JavaScript string with event listeners and tooltip logic.
@@ -83,6 +82,23 @@ class LinkTooltipManager:
   (function() {
     const tooltip = document.getElementById('url-tooltip');
     if (!tooltip) return;
+    
+    // Ensure tooltip is positioned at the visible viewport bottom
+    function positionTooltip() {
+      // Get the current scroll position and viewport height
+      const scrollTop = window.scrollY || window.pageYOffset;
+      const viewportHeight = window.innerHeight;
+      
+      // Calculate the absolute page position for the bottom of viewport
+      const bottomPosition = scrollTop + viewportHeight;
+      
+      // Position the tooltip at the bottom of what's currently visible
+      // By setting it in the document flow and using absolute positioning
+      tooltip.style.position = 'absolute';
+      tooltip.style.top = (bottomPosition - tooltip.offsetHeight) + 'px';
+      tooltip.style.left = '0px';
+      tooltip.style.width = 'auto';
+    }
     
     function attachTooltipsToLinks() {
       // Find all links and attach hover listeners directly
@@ -94,6 +110,7 @@ class LinkTooltipManager:
           if (href) {
             tooltip.textContent = href;
             tooltip.classList.add('visible');
+            positionTooltip();
           }
         }, false);
         
@@ -109,6 +126,20 @@ class LinkTooltipManager:
     } else {
       attachTooltipsToLinks();
     }
+    
+    // Reposition on scroll
+    window.addEventListener('scroll', function() {
+      if (tooltip.classList.contains('visible')) {
+        positionTooltip();
+      }
+    }, false);
+    
+    // Reposition on resize
+    window.addEventListener('resize', function() {
+      if (tooltip.classList.contains('visible')) {
+        positionTooltip();
+      }
+    }, false);
     
     // Re-attach listeners when content is dynamically updated (e.g., from Mermaid)
     const observer = new MutationObserver(function(mutations) {
