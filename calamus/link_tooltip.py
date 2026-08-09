@@ -54,10 +54,11 @@ class LinkTooltipManager(AbstractLinkTooltip):
         Returns:
             A GTK widget containing the footer.
         """
-        # Create a simple box for testing
+        # Create a box for the footer (doesn't expand to full width)
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        box.set_hexpand(True)
+        box.set_hexpand(False)
         box.set_vexpand(False)
+        box.set_halign(Gtk.Align.START)
         box.set_size_request(-1, 32)
         box.set_name("url-tooltip-footer")
         
@@ -66,10 +67,11 @@ class LinkTooltipManager(AbstractLinkTooltip):
         
         # Create label for URL text
         self._label = Gtk.Label()
-        self._label.set_text("URL Footer")
+        self._label.set_text("")
         self._label.set_wrap(False)
-        self._label.set_hexpand(True)
+        self._label.set_hexpand(False)
         self._label.set_halign(Gtk.Align.START)
+        self._label.set_ellipsize(3)  # Ellipsize at end (END=3)
         
         box.append(self._label)
         
@@ -80,10 +82,8 @@ class LinkTooltipManager(AbstractLinkTooltip):
         style_manager = Adw.StyleManager.get_default()
         style_manager.connect("notify::dark", self._on_theme_changed)
         
-        # Make it visible by default
-        box.set_visible(True)
-        
-        _logger.info("[Tooltip] Footer widget created and visible")
+        # Hide by default - only show on hover
+        box.set_visible(False)
         
         return box
     
@@ -101,7 +101,9 @@ class LinkTooltipManager(AbstractLinkTooltip):
     background-color: #383838;
     color: @view_fg_color;
     border-top: 1px solid @borders;
-    padding: 8px 12px;
+    border-radius: 0 8px 0 0;
+    padding: 4px 12px;
+    max-width: 100%;
 }
             """
         else:
@@ -111,7 +113,9 @@ class LinkTooltipManager(AbstractLinkTooltip):
     background-color: #e8eaed;
     color: @view_fg_color;
     border-top: 1px solid @borders;
-    padding: 8px 12px;
+    border-radius: 0 8px 0 0;
+    padding: 4px 12px;
+    max-width: 100%;
 }
             """
         

@@ -46,6 +46,13 @@ except (ImportError, ValueError):
     _WebKitModule = None
     _WEBKIT_AVAILABLE = False
 
+# Also need JavaScriptCore for handling message results
+try:
+    gi.require_version("JavaScriptCore", "6.0")
+    from gi.repository import JavaScriptCore
+except (ImportError, ValueError):
+    JavaScriptCore = None
+
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
@@ -168,55 +175,52 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   if (typeof hljs !== 'undefined') {{
     hljs.highlightAll();
   }}
-  // Link hover detection via hidden element communication
-  (function() {
-    // Create hidden element to communicate with Python
-    const hoverState = document.createElement('div');
-    hoverState.id = 'calamus-hover-state';
-    hoverState.style.display = 'none';
-    document.body.appendChild(hoverState);
-    
-    function attachTooltipsToLinks() {
+  // Link hover detection via WebKit message handlers
+  (function() {{
+    function attachTooltipsToLinks() {{
       const links = document.querySelectorAll('a[href]');
       
-      links.forEach(link => {
-        link.addEventListener('mouseenter', function() {
+      links.forEach((link) => {{
+        link.addEventListener('mouseenter', function() {{
           const href = this.getAttribute('href');
-          if (href) {
-            hoverState.textContent = href;
-            hoverState.className = 'enter';
-          }
-        }, false);
+          if (href && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {{
+            window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({{
+              href: href,
+              state: 'enter'
+            }}));
+          }}
+        }}, false);
         
-        link.addEventListener('mouseleave', function() {
-          hoverState.textContent = '';
-          hoverState.className = 'leave';
-        }, false);
-      });
-    }
+        link.addEventListener('mouseleave', function() {{
+          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {{
+            window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({{
+              href: '',
+              state: 'leave'
+            }}));
+          }}
+        }}, false);
+      }});
+    }}
     
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', attachTooltipsToLinks, false);
-    } else {
-      attachTooltipsToLinks();
-    }
+    // Attach immediately since this script runs at end of document
+    attachTooltipsToLinks();
     
     // Re-attach when content is dynamically added (Mermaid, etc)
-    const observer = new MutationObserver(function(mutations) {
+    const observer = new MutationObserver(function(mutations) {{
       const hasNewLinks = mutations.some(m => 
         Array.from(m.addedNodes).some(n => 
           n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
         )
       );
-      if (hasNewLinks) {
+      if (hasNewLinks) {{
         attachTooltipsToLinks();
-      }
-    });
+      }}
+    }});
     
-    if (document.body) {
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-  })();
+    if (document.body) {{
+      observer.observe(document.body, {{ childList: true, subtree: true }});
+    }}
+  }})();
 </script>
 </body>
 </html>
@@ -303,12 +307,20 @@ class WebKitPreview(AbstractPreview):
         self._on_link_hover = on_link_hover
         self._tooltip_manager = LinkTooltipManager()
         self._base_uri = "file:///"
+        
         # Disable the bwrap/dbus-proxy sandbox — required when running inside
         # Docker where bubblewrap cannot create user namespaces.
         context = _WebKitModule.WebContext.get_default()
         if hasattr(context, "set_sandbox_enabled"):
             context.set_sandbox_enabled(False)
-        self._view = _WebKitModule.WebView()
+        
+        # Create UserContentManager for JavaScript-to-Python communication
+        self._user_content_manager = _WebKitModule.UserContentManager()
+        self._user_content_manager.register_script_message_handler("tooltip")
+        self._user_content_manager.connect("script-message-received::tooltip", self._on_tooltip_message)
+        
+        # Create WebView with UserContentManager
+        self._view = _WebKitModule.WebView.new_with_user_content_manager(self._user_content_manager)
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
@@ -352,14 +364,30 @@ class WebKitPreview(AbstractPreview):
         # Add WebView (takes most of the space)
         self._container.append(self._view)
         
-        # Add tooltip footer at bottom
-        tooltip_widget = self._tooltip_manager.get_widget()
-        tooltip_widget.set_hexpand(True)
-        self._container.append(tooltip_widget)
+        # Create a wrapper for the footer that can be hidden
+        self._footer_wrapper = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self._footer_wrapper.set_hexpand(False)
+        self._footer_wrapper.set_vexpand(False)
+        self._footer_wrapper.set_halign(Gtk.Align.START)
+        self._footer_wrapper.set_visible(False)  # Hide initially
+        self._footer_wrapper.set_name("footer-wrapper")
         
-        _logger.info(f"[Tooltip] Footer container and WebView set up")
-        # Start polling timer to check for link hover state changes
-        self._hover_poll_id = GLib.timeout_add(100, self._poll_link_hover_state)
+        # Add CSS to constrain footer wrapper width
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+#footer-wrapper {
+    min-width: 0;
+}
+        """)
+        context = self._footer_wrapper.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        
+        # Add tooltip footer to wrapper
+        tooltip_widget = self._tooltip_manager.get_widget()
+        self._footer_wrapper.append(tooltip_widget)
+        
+        # Add wrapper to container
+        self._container.append(self._footer_wrapper)
 
     def set_file_path(self, path: str | None) -> None:
         """Update the base URI used for resolving relative links in the preview."""
@@ -793,103 +821,43 @@ class WebKitPreview(AbstractPreview):
         self._pending_scroll_restore_ratio = None
         self._restore_scroll_ratio(ratio)
 
-    def _on_user_message(self, _webview: object, message: object) -> bool:
-        """Handle messages from JavaScript about link hovers.
+    def _on_tooltip_message(self, manager: object, js_message: object, *args) -> None:
+        """Handle messages from JavaScript link hover detection.
         
-        The JavaScript in the rendered page sends messages when users
-        hover over or leave links. This handler shows/hides the tooltip.
-        """
-        try:
-            # Get the message parameters
-            if hasattr(message, "get_parameters"):
-                params = message.get_parameters()
-                if params is None:
-                    return False
-                
-                event = params.get_string("event") if hasattr(params, "get_string") else None
-                
-                if event == "enter":
-                    href = params.get_string("href") if hasattr(params, "get_string") else None
-                    if href:
-                        self._tooltip_manager.show(href, 0, 0)
-                        if self._on_link_hover:
-                            self._on_link_hover(href)
-                elif event == "leave":
-                    self._tooltip_manager.hide()
-        except Exception:
-            # Silently ignore malformed messages
-            pass
-        
-        return True
-
-    def _poll_link_hover_state(self) -> bool:
-        """Poll the hidden element to detect link hover state changes.
-        
-        This runs every 100ms to check if the hidden #calamus-hover-state
-        element has been updated by JavaScript, indicating a link hover event.
-        
-        Returns:
-            True to keep the timer running, False to stop.
-        """
-        try:
-            # Query the hidden state element
-            js = """
-(function() {
-  const state = document.getElementById('calamus-hover-state');
-  if (!state) return JSON.stringify({href: null, state: null});
-  return JSON.stringify({href: state.textContent, state: state.className});
-})();
-"""
-            # WebKit 6.0: evaluate_javascript(script, length, world_name, source_uri, cancellable, callback, user_data)
-            self._view.evaluate_javascript(js, -1, None, None, None, self._on_hover_state_result, None)
-        except Exception as e:
-            _logger.error(f"[Tooltip] Polling error: {e}", exc_info=True)
-        
-        return True  # Keep polling
-
-    def _on_hover_state_result(self, source_object: object, result: object, user_data: object = None) -> None:
-        """Handle the result of the link hover state query.
+        JavaScript sends: {href: string, state: "enter" | "leave"}
         
         Args:
-            source_object: The WebView that executed the JavaScript.
-            result: The AsyncResult from evaluate_javascript.
-            user_data: Unused, required by callback signature.
+            manager: The UserContentManager that received the message.
+            js_message: The ScriptMessage containing the JavaScript data.
         """
         try:
-            # Use evaluate_javascript_finish for WebKit 6.0
-            if hasattr(source_object, "evaluate_javascript_finish"):
-                try:
-                    js_result = source_object.evaluate_javascript_finish(result)
-                except Exception as e:
-                    _logger.error(f"[Tooltip] JavaScript execution error: {e}")
+            # Extract the JSON message from JavaScript
+            if hasattr(js_message, "get_js_value"):
+                js_value = js_message.get_js_value()
+                if js_value is None:
                     return
+                json_str = js_value.to_string() if hasattr(js_value, "to_string") else str(js_value)
             else:
                 return
-            
-            if js_result is None:
-                return
-            
-            # Extract JSON string from result
-            json_str = js_result.to_string() if hasattr(js_result, "to_string") else str(js_result)
             
             if not json_str or json_str.strip() == "":
                 return
             
+            # Parse the message
             data = json.loads(json_str)
-            href = data.get("href")
-            state = data.get("state")
+            href = data.get("href", "")
+            state = data.get("state", "")
             
-            # Show tooltip when entering a link, hide when leaving
+            # Show or hide tooltip based on state
             if state == "enter" and href:
-                self._tooltip_manager.show(href)
+                self._tooltip_manager.show(href, 0, 0)
                 if self._on_link_hover:
                     self._on_link_hover(href)
             elif state == "leave":
                 self._tooltip_manager.hide()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            # Silently ignore malformed messages
             pass
-        except Exception as e:
-            _logger.error(f"[Tooltip] Result handling error: {e}", exc_info=True)
 
     def update(self, markdown_text: str) -> None:
         self._last_markdown = markdown_text
