@@ -60,6 +60,9 @@ class LinkTooltipManager(AbstractLinkTooltip):
         box.set_vexpand(False)
         box.set_halign(Gtk.Align.START)
         box.set_valign(Gtk.Align.START)
+        box.set_spacing(0)
+        # Constrain box width so it doesn't expand to fill parent
+        box.set_size_request(420, -1)
         box.set_name("url-tooltip-footer")
         
         # Store reference to update colors when theme changes
@@ -71,10 +74,10 @@ class LinkTooltipManager(AbstractLinkTooltip):
         self._label.set_wrap(False)
         self._label.set_hexpand(False)
         self._label.set_halign(Gtk.Align.START)
+        self._label.set_valign(Gtk.Align.CENTER)
         self._label.set_ellipsize(3)  # Ellipsize at end (END=3)
-        # Set max width to prevent expanding beyond 60% of typical screen width
-        # This allows the text to wrap to ellipsis when URLs are very long
-        self._label.set_size_request(400, -1)
+        # Don't set size_request on label - let it be naturally sized
+        # The box's size_request will constrain it
         
         box.append(self._label)
         

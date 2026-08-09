@@ -331,18 +331,12 @@ class WebKitPreview(AbstractPreview):
         self._footer_wrapper.set_hexpand(False)
         self._footer_wrapper.set_vexpand(False)
         self._footer_wrapper.set_halign(Gtk.Align.START)
+        self._footer_wrapper.set_valign(Gtk.Align.START)
+        self._footer_wrapper.set_spacing(0)
+        # Constrain width to prevent expanding to full width
+        self._footer_wrapper.set_size_request(420, -1)
         self._footer_wrapper.set_visible(False)  # Hide initially
         self._footer_wrapper.set_name("footer-wrapper")
-        
-        # Add CSS to constrain footer wrapper width
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(b"""
-#footer-wrapper {
-    min-width: 0;
-}
-        """)
-        context = self._footer_wrapper.get_style_context()
-        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         
         # Add tooltip footer to wrapper
         tooltip_widget = self._tooltip_manager.get_widget()
