@@ -343,26 +343,22 @@ class WebKitPreview(AbstractPreview):
         # exhausting memory and hanging the application.
         self._mmdc_semaphore = threading.Semaphore(1)
         
-        # Create overlay to layer tooltip widget on top of WebView
-        self._overlay = Gtk.Overlay()
-        self._overlay.set_child(self._view)
-        self._overlay.set_hexpand(True)
-        self._overlay.set_vexpand(True)
-        _logger.info(f"[Tooltip] Overlay created and configured")
+        # Create a container with WebView on top and tooltip footer on bottom
+        self._container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._container.set_hexpand(True)
+        self._container.set_vexpand(True)
         
-        # Add tooltip widget as overlay child (positioned absolutely)
+        # Add WebView (takes most of the space)
+        self._container.append(self._view)
+        
+        # Add tooltip footer at bottom
         tooltip_widget = self._tooltip_manager.get_widget()
-        tooltip_widget.set_halign(Gtk.Align.START)
-        tooltip_widget.set_valign(Gtk.Align.END)
-        self._overlay.add_overlay(tooltip_widget)
-        _logger.info(f"[Tooltip] Tooltip widget added to overlay")
+        tooltip_widget.set_hexpand(True)
+        self._container.append(tooltip_widget)
         
-        # Initially hide the tooltip
-        # TODO: Temporarily show for testing
-        self._tooltip_manager.show("https://example.com", 0, 0)
-        _logger.info(f"[Tooltip] Tooltip set to always-visible for testing")
-        _logger.info(f"[Tooltip] Tooltip initially hidden")
-        
+        # Initially hide the tooltip footer
+        self._tooltip_manager.hide()
+        _logger.info(f"[Tooltip] Footer container and WebView set up")
         # Start polling timer to check for link hover state changes
         self._hover_poll_id = GLib.timeout_add(100, self._poll_link_hover_state)
 
@@ -881,7 +877,7 @@ class WebKitPreview(AbstractPreview):
             # Show tooltip when entering a link, hide when leaving
             if state == "enter" and href:
                 _logger.info(f"[Tooltip] Showing tooltip for {href}")
-                self._tooltip_manager.show(href, 0, 0)
+                self._tooltip_manager.show(href)
                 if self._on_link_hover:
                     self._on_link_hover(href)
             elif state == "leave":
@@ -1005,7 +1001,7 @@ class WebKitPreview(AbstractPreview):
             self._view.run_javascript(js, None, None, None)
 
     def get_widget(self) -> Gtk.Widget:
-        return self._overlay
+        return self._container
 
     def zoom_by(self, factor: float) -> None:
         if factor <= 0:

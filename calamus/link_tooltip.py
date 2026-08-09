@@ -1,7 +1,7 @@
-"""Link tooltip manager for displaying URLs on hover.
+"""Link tooltip footer for displaying URLs on hover.
 
-Implements the LinkTooltipManager class using GTK widgets for maximum
-compatibility and positioning reliability.
+Implements a simple footer widget that displays the URL of the link
+currently being hovered over in the preview pane.
 """
 
 from abc import ABC, abstractmethod
@@ -20,8 +20,8 @@ class AbstractLinkTooltip(ABC):
     """Abstract base class for link tooltip implementations."""
 
     @abstractmethod
-    def show(self, url: str, x: int, y: int) -> None:
-        """Show the tooltip at the given position with the specified URL."""
+    def show(self, url: str) -> None:
+        """Show the tooltip with the given URL."""
         pass
 
     @abstractmethod
@@ -36,27 +36,28 @@ class AbstractLinkTooltip(ABC):
 
 
 class LinkTooltipManager(AbstractLinkTooltip):
-    """Manages URL tooltip display using GTK widgets.
+    """Manages URL tooltip display as a persistent footer widget.
     
-    The tooltip is a floating widget positioned at the bottom-left of the
-    preview pane. It uses GTK's native rendering, ensuring consistent
-    styling and reliable positioning.
+    The tooltip is a footer bar at the bottom of the preview pane that
+    displays the URL of the currently hovered link. It remains visible
+    at the bottom regardless of scrolling.
     """
 
     def __init__(self) -> None:
         """Initialize the link tooltip manager."""
-        self._widget = self._create_tooltip_widget()
+        self._widget = self._create_footer_widget()
         self._visible = False
 
-    def _create_tooltip_widget(self) -> Gtk.Widget:
-        """Create the tooltip widget.
+    def _create_footer_widget(self) -> Gtk.Widget:
+        """Create the footer widget.
         
         Returns:
-            A GTK widget containing the tooltip box.
+            A GTK widget containing the footer.
         """
-        # Create a box to hold the tooltip
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.set_name("url-tooltip")
+        # Create a box to hold the footer
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        box.set_name("url-tooltip-footer")
+        box.set_height_request(32)
         
         # Add CSS styling
         css_provider = Gtk.CssProvider()
@@ -69,50 +70,44 @@ class LinkTooltipManager(AbstractLinkTooltip):
         self._label = Gtk.Label()
         self._label.set_wrap(False)
         self._label.set_ellipsize(3)  # END
-        self._label.set_margin_top(8)
-        self._label.set_margin_bottom(8)
         self._label.set_margin_start(12)
         self._label.set_margin_end(12)
         self._label.add_css_class("monospace")
+        self._label.set_hexpand(True)
+        self._label.set_halign(Gtk.Align.START)
         
         box.append(self._label)
         
         return box
 
     def _get_css(self) -> str:
-        """Generate CSS for the tooltip widget.
+        """Generate CSS for the footer widget.
         
         Returns:
             CSS string with light and dark mode variants.
         """
         return """
-#url-tooltip {
+#url-tooltip-footer {
     background-color: #f6f8fa;
     color: #1c1c1c;
     border-top: 1px solid #e1e4e8;
-    border-right: 1px solid #e1e4e8;
-    border-radius: 0px 8px 0px 0px;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
     font-size: 0.8125em;
 }
 
 @media (prefers-color-scheme: dark) {
-    #url-tooltip {
+    #url-tooltip-footer {
         background-color: #24292e;
         color: #e1e4e8;
         border-top-color: #30363d;
-        border-right-color: #30363d;
     }
 }
 """
 
-    def show(self, url: str, x: int, y: int) -> None:
-        """Show the tooltip with the given URL at the specified position.
+    def show(self, url: str) -> None:
+        """Show the tooltip with the given URL.
         
         Args:
             url: The URL to display in the tooltip.
-            x: X coordinate for positioning (relative to WebView).
-            y: Y coordinate for positioning (relative to WebView).
         """
         _logger.info(f"[Tooltip] show() called: url={url}")
         self._label.set_text(url)
@@ -129,7 +124,7 @@ class LinkTooltipManager(AbstractLinkTooltip):
         """Return the tooltip widget.
         
         Returns:
-            The GTK widget for the tooltip.
+            The GTK widget for the footer.
         """
         return self._widget
 
