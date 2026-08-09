@@ -46,15 +46,15 @@ class LinkTooltipManager:
     display: block;
   }}
   :root {{
-    --tooltip-bg: #ffffff;
+    --tooltip-bg: #f6f8fa;
     --tooltip-text: #1c1c1c;
-    --tooltip-border: #d0d0d0;
+    --tooltip-border: #e1e4e8;
   }}
   @media (prefers-color-scheme: dark) {{
     :root {{
-      --tooltip-bg: #2d2d2d;
-      --tooltip-text: #e8e8e8;
-      --tooltip-border: #454545;
+      --tooltip-bg: #24292e;
+      --tooltip-text: #e1e4e8;
+      --tooltip-border: #30363d;
     }}
   }}
 """
