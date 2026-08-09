@@ -128,7 +128,7 @@ class EditorTab(AbstractTab):
         #
         # This ABC pattern ensures each version is self-contained and isolated.
         # See webkit_preview_base.py module docstring for full architecture details.
-        
+
         webkit_version = detect_webkit_version()
         if webkit_version is None:
             raise RuntimeError(

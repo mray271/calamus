@@ -8,7 +8,7 @@ ARCHITECTURE:
   Each WebKit version (6.0, 7.0, etc.) is a separate class:
   - calamus/webkit_preview_6x.py (WebKit 6.0+)
   - calamus/webkit_preview_7x.py (WebKit 7.0+) [future]
-  
+
   All inherit from AbstractWebKitPreview and implement the same interface,
   allowing drop-in replacement by version.
 
@@ -19,12 +19,12 @@ LIFECYCLE:
     3. Leave the rest identical (inheritance takes care of it)
     4. No conditional logic, no hasattr() checks
     5. Each version is self-contained in one file
-  
+
   When an old version reaches EOL:
     1. Delete its file (webkit_preview_Nx.py)
     2. Remove from version detection
     3. Done. No scattered cleanup needed.
-  
+
   This design eliminates the scattered version conditionals that plagued
   the old preview.py (15+ hasattr() checks, 2 *args masking patterns).
 
