@@ -24,8 +24,6 @@ class LinkTooltipManager:
   /* URL Tooltip Styles */
   #url-tooltip {{
     position: fixed;
-    bottom: 0;
-    left: 0;
     background: var(--tooltip-bg);
     color: var(--tooltip-text);
     padding: 8px 12px;
@@ -34,7 +32,7 @@ class LinkTooltipManager:
     border-radius: 0 8px 0 0;
     display: none;
     z-index: 99999;
-    max-width: 90vw;
+    max-width: calc(100vw - 20px);
     max-height: 3em;
     white-space: nowrap;
     overflow: hidden;
@@ -74,8 +72,8 @@ class LinkTooltipManager:
     def _generate_tooltip_js(self) -> str:
         """Generate JavaScript code for handling link hover events.
         
-        Uses direct event attachment to link elements for maximum compatibility
-        and reliability across different WebKit versions.
+        Positions the tooltip at the bottom of the visible viewport to ensure
+        it's always visible without requiring vertical scrolling.
         
         Returns:
             JavaScript string with event listeners and tooltip logic.
@@ -85,6 +83,19 @@ class LinkTooltipManager:
     const tooltip = document.getElementById('url-tooltip');
     if (!tooltip) return;
     
+    function positionTooltip() {
+      // Position tooltip at the bottom of the visible viewport
+      // Account for scrollbar width by using window.innerWidth - scrollbar
+      tooltip.style.left = '0px';
+      tooltip.style.bottom = '0px';
+      tooltip.style.width = 'auto';
+    }
+    
+    function updateTooltipText(href) {
+      tooltip.textContent = href;
+      positionTooltip();
+    }
+    
     function attachTooltipsToLinks() {
       // Find all links and attach hover listeners directly
       const links = document.querySelectorAll('a[href]');
@@ -93,7 +104,7 @@ class LinkTooltipManager:
         link.addEventListener('mouseenter', function() {
           const href = this.getAttribute('href');
           if (href) {
-            tooltip.textContent = href;
+            updateTooltipText(href);
             tooltip.classList.add('visible');
           }
         }, false);
@@ -106,10 +117,28 @@ class LinkTooltipManager:
     
     // Attach listeners when DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', attachTooltipsToLinks, false);
+      document.addEventListener('DOMContentLoaded', function() {
+        attachTooltipsToLinks();
+        positionTooltip();
+      }, false);
     } else {
       attachTooltipsToLinks();
+      positionTooltip();
     }
+    
+    // Re-position on scroll to keep tooltip visible
+    window.addEventListener('scroll', function() {
+      if (tooltip.classList.contains('visible')) {
+        positionTooltip();
+      }
+    }, false);
+    
+    // Re-position on window resize
+    window.addEventListener('resize', function() {
+      if (tooltip.classList.contains('visible')) {
+        positionTooltip();
+      }
+    }, false);
     
     // Re-attach listeners when content is dynamically updated (e.g., from Mermaid)
     const observer = new MutationObserver(function(mutations) {
