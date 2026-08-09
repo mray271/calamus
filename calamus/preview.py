@@ -1214,13 +1214,3 @@ class TextViewPreview(AbstractPreview):
             self._css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
-
-
-def create_preview(
-    on_open_path: Callable[[str], None] | None = None,
-    on_link_hover: Callable[[str], None] | None = None,
-) -> AbstractPreview:
-    """Create the best preview implementation for the current system."""
-    if _WEBKIT_AVAILABLE:
-        return WebKitPreview(on_open_path=on_open_path, on_link_hover=on_link_hover)
-    return TextViewPreview()
