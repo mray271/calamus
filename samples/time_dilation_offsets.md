@@ -123,6 +123,13 @@ xychart-beta
 | GM~☉~ | 1.32712440018 × 10²⁰ m³/s² |
 | 120,000 years in seconds | 3.7869 × 10¹² s |
 
-Planet semi-major axes, orbital velocities, GM, and radii from standard IAU/NASA values.  
-Oort Cloud object assumed at **50,000 AU**, radius **10 km**, density **500 kg/m³** (comet-like).  
-Proxima Centauri b: semi-major axis **0.0485 AU**, M~★~ = **0.1221 M~☉~**, planet mass **≈1.17 M~⊕~**, radius **≈1.04 R~⊕~** (rocky scaling), Proxima velocity relative to Sun **≈32.5 km/s** (radial −22.2 km/s + transverse ≈23.7 km/s from proper motion 3.85″/yr at 4.243 ly).
+* Planet semi-major axes, orbital velocities, GM, and radii from standard IAU/NASA values
+* Oort Cloud object assumed at **50,000 AU**
+  - radius **10 km**
+  - density **500 kg/m³** (comet-like).  
+* Proxima Centauri b
+  - semi-major axis **0.0485 AU**
+  - M~★~ = **0.1221 M~☉~**
+  - planet mass **≈1.17 M~⊕~**
+  - radius **≈1.04 R~⊕~** (rocky scaling)
+* Proxima velocity relative to Sun **≈32.5 km/s** (radial −22.2 km/s + transverse ≈23.7 km/s from proper motion 3.85″/yr at 4.243 ly).
