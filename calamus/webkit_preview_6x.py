@@ -182,8 +182,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   pre.mermaid svg {{
     display: inline-block;
-    max-width: 100%;
-    height: auto;
   }}
   img.mermaid-diagram {{
     display: block;
