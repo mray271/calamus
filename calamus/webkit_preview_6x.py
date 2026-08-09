@@ -179,8 +179,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     background: transparent;
     padding: 0;
     border: none;
-    display: flex;
-    justify-content: center;
+    text-align: center;
+  }}
+  pre.mermaid svg {{
+    display: inline-block;
+  }}
+  p img[alt="Mermaid diagram"] {{
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
   }}
 </style>
 </head>

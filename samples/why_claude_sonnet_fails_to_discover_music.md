@@ -85,7 +85,6 @@ graph TD
 ```
 
 ### Top 5 Reasons for Failure
-
 ```mermaid
 %%{init: {'mindmap': {'useMaxWidth': false},
   'theme': 'base', 'themeVariables': {
@@ -130,7 +129,7 @@ mindmap
       Did not try 5+ query variations
       Deflected to user for hints
 ```
-
+</div>
 ---
 
 ## The Misdiagnosis: Perception vs. Reality
@@ -223,7 +222,7 @@ to unknown connected artists`"]
 
 ## Core Principle Added
 
-> **Assume the artist is findable. The query is always the variable — not the subject's discoverability.**
+**Assume the artist is findable. The query is always the variable — not the subject's discoverability.**
 
 ---
 
