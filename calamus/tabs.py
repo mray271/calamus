@@ -123,7 +123,7 @@ class EditorTab(AbstractTab):
         #   1. Remove from detect_webkit_version() completely
         #   2. Remove the corresponding elif branch below
         #   3. Delete calamus/webkit_preview_6x.py
-        #   4. Update CI to remove WebKit 6.0 packages
+        #   4. Update CI Dockerfiles to remove WebKit 6.0 packages
         #   5. One atomic commit removes all traces (no scattered cleanup)
         #
         # This ABC pattern ensures each version is self-contained and isolated.
@@ -132,11 +132,10 @@ class EditorTab(AbstractTab):
         webkit_version = detect_webkit_version()
         if webkit_version is None:
             raise RuntimeError(
-                "WebKit not available. Calamus requires WebKit 6.0+.\n"
-                "Install WebKit development packages:\n"
-                "  - Ubuntu/Debian: sudo apt install gir1.2-webkit2-4.1 libwebkit2gtk-4.1-0\n"
-                "  - Fedora: sudo dnf install webkit2gtk\n"
-                "  - openSUSE: sudo zypper install typelib-1_0-WebKit2-4_1"
+                "WebKit not available. Install WebKit 6.0+ packages:\n"
+                "  - Ubuntu/Debian: sudo apt install gir1.2-webkit2-6.0 libwebkit2gtk-6.0-4\n"
+                "  - Fedora: sudo dnf install webkit2gtk6.0\n"
+                "  - openSUSE: sudo zypper install typelib-1_0-WebKit2-4_1 libwebkit2gtk3-6_0-4"
             )
 
         if webkit_version[0] >= 6:
@@ -150,7 +149,10 @@ class EditorTab(AbstractTab):
                 f"WebKit {webkit_version[0]}.{webkit_version[1]} is no longer supported.\n"
                 f"WebKit 4.1 reached end-of-life on Aug 31, 2023 and no longer receives "
                 f"security updates.\n"
-                f"Please upgrade to WebKit 6.0+."
+                f"Please upgrade to WebKit 6.0+:\n"
+                f"  - Ubuntu/Debian: sudo apt install gir1.2-webkit2-6.0 libwebkit2gtk-6.0-4\n"
+                f"  - Fedora: sudo dnf install webkit2gtk6.0\n"
+                f"  - openSUSE: sudo zypper install typelib-1_0-WebKit2-4_1 libwebkit2gtk3-6_0-4"
             )
 
         self._preview_timer_id: int | None = None
