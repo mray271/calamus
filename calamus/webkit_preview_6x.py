@@ -184,7 +184,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   pre.mermaid svg {{
     display: inline-block;
   }}
-  p img[alt="Mermaid diagram"] {{
+  img.mermaid-diagram {{
     display: block;
     margin-left: auto;
     margin-right: auto;
