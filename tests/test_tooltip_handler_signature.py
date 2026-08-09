@@ -7,12 +7,20 @@ import pytest
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-gi.require_version("WebKit", "6.0")
 
-from gi.repository import GLib, WebKit
+try:
+    gi.require_version("WebKit", "6.0")
+    from gi.repository import GLib, WebKit
+    WEBKIT_AVAILABLE = True
+except ValueError:
+    WEBKIT_AVAILABLE = False
 
 from calamus.preview import WebKitPreview
 
+# Skip all tests in this module if WebKit is not available
+pytestmark = pytest.mark.skipif(
+    not WEBKIT_AVAILABLE, reason="WebKit 6.0 not available"
+)
 
 def test_tooltip_handler_with_mock_gvariant():
     """Test the tooltip handler with a mocked GVariant message."""
@@ -69,7 +77,6 @@ def test_tooltip_handler_with_mock_gvariant():
         import traceback
 
         traceback.print_exc()
-
 
 def test_signal_signature_detection():
     """Detect the actual signal signature by inspecting the UserContentManager."""
