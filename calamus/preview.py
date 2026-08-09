@@ -38,6 +38,7 @@ _logger = logging.getLogger(__name__)
 try:
     gi.require_version("WebKit", "6.0")
     from gi.repository import WebKit as _WebKitModule
+
     gi.require_version("JavaScriptCore", "6.0")
     from gi.repository import JavaScriptCore as _JavaScriptCoreModule
 
@@ -261,26 +262,28 @@ class WebKitPreview(AbstractPreview):
         self._on_link_hover = on_link_hover
         self._tooltip_manager = LinkTooltipManager()
         self._base_uri = "file:///"
-        
+
         # Disable the bwrap/dbus-proxy sandbox — required when running inside
         # Docker where bubblewrap cannot create user namespaces.
         context = _WebKitModule.WebContext.get_default()
         if hasattr(context, "set_sandbox_enabled"):
             context.set_sandbox_enabled(False)
-        
+
         # Create WebView
         self._view = _WebKitModule.WebView()
-        
+
         # Get UserContentManager and register message handler for tooltip
         self._user_content_manager = self._view.get_user_content_manager()
-        
+
         # Connect signal BEFORE registering the handler (critical to avoid race conditions)
         # Per PyGObject WebKit-6.0 API docs, the signal passes a JavaScriptCore.Value
-        self._user_content_manager.connect("script-message-received::tooltip", self._on_tooltip_message)
-        
+        self._user_content_manager.connect(
+            "script-message-received::tooltip", self._on_tooltip_message
+        )
+
         # Now register the handler
         self._user_content_manager.register_script_message_handler("tooltip")
-        
+
         # Inject tooltip script into all web pages before they load
         self._inject_tooltip_script()
         self._view.set_hexpand(True)
@@ -317,12 +320,12 @@ class WebKitPreview(AbstractPreview):
         # Without this, rapid typing spawns unbounded Chromium processes,
         # exhausting memory and hanging the application.
         self._mmdc_semaphore = threading.Semaphore(1)
-        
+
         # Create an overlay to layer the footer on top of the WebView
         # This avoids the need for a container that exposes its background
         self._overlay = Gtk.Overlay()
         self._overlay.set_child(self._view)  # WebView is the main child
-        
+
         # Create footer wrapper for positioning the tooltip
         self._footer_wrapper = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self._footer_wrapper.set_hexpand(False)
@@ -332,7 +335,7 @@ class WebKitPreview(AbstractPreview):
         self._footer_wrapper.set_spacing(0)
         self._footer_wrapper.set_visible(False)  # Hide initially
         self._footer_wrapper.set_name("footer-wrapper")
-        
+
         # Make wrapper transparent
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(b"""
@@ -344,11 +347,11 @@ class WebKitPreview(AbstractPreview):
         """)
         context = self._footer_wrapper.get_style_context()
         context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        
+
         # Add tooltip footer to wrapper
         tooltip_widget = self._tooltip_manager.get_widget()
         self._footer_wrapper.append(tooltip_widget)
-        
+
         # Add wrapper as an overlay child (positioned on top of WebView)
         self._overlay.add_overlay(self._footer_wrapper)
 
@@ -777,7 +780,7 @@ class WebKitPreview(AbstractPreview):
 
     def _inject_tooltip_script(self) -> None:
         """Inject tooltip hover detection script into all web pages.
-        
+
         This script is injected via UserContentManager.add_script() so it runs
         in the WebView's JavaScript context and has access to window.webkit
         message handlers.
@@ -894,6 +897,7 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             self._user_content_manager.add_script(script)
         except Exception as e:
             import traceback
+
             traceback.print_exc()
 
     def _on_load_changed(self, _webview: object, load_event: object) -> None:
@@ -907,12 +911,12 @@ console.log('[TOOLTIP-JS] Script initialization complete');
 
     def _on_tooltip_message(self, manager: object, js_value: object, *args) -> None:
         """Handle messages from JavaScript link hover detection.
-        
+
         Per official PyGObject WebKit-6.0 API docs:
         https://api.pygobject.gnome.org/WebKit-6.0/class-UserContentManager.html#signal-UserContentManager.script-message-received
-        
+
         Signal parameters: manager (UserContentManager), value (JavaScriptCore.Value)
-        
+
         Args:
             manager: The UserContentManager that received the message.
             js_value: The JavaScriptCore.Value containing the JavaScript data.
@@ -922,22 +926,22 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             # to_json(indent) returns a JSON-encoded string representation
             if not hasattr(js_value, "to_json"):
                 return
-            
+
             # to_json(indent) - indent=0 means no indentation
             json_encoded = js_value.to_json(0)
-            
+
             if not json_encoded or json_encoded.strip() == "":
                 return
-            
+
             # to_json() returns a JSON-encoded string, so we need to parse it twice:
             # First parse extracts the JSON string itself
             # Second parse converts the JSON string to the actual object
             json_str = json.loads(json_encoded)
             data = json.loads(json_str)
-            
+
             href = data.get("href", "")
             state = data.get("state", "")
-            
+
             # Show or hide tooltip based on state
             if state == "enter" and href and not href.startswith("[TOOLTIP"):
                 self._tooltip_manager.show(href)
@@ -1048,7 +1052,7 @@ console.log('[TOOLTIP-JS] Script initialization complete');
         html_text = html_text.replace(
             "__PREVIEW_FONT_SCALE__", f"{self._zoom_level:.3f}"
         )
-        
+
         # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
         # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
         raw = GLib.Bytes.new(html_text.encode("utf-8"))

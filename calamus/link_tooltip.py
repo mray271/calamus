@@ -4,21 +4,21 @@ Implements a simple footer widget that displays the URL of the link
 currently being hovered over in the preview pane.
 """
 
-from abc import ABC, abstractmethod
 import logging
+from abc import ABC, abstractmethod
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw
+from gi.repository import Adw, Gtk
 
 _logger = logging.getLogger(__name__)
 
 
 class AbstractLinkTooltip(ABC):
     """Abstract base class for link tooltip implementations.
-    
+
     Defines the interface for tooltip widgets that display URLs on hover.
     Subclasses should implement styling, visibility, and content management.
     """
@@ -26,7 +26,7 @@ class AbstractLinkTooltip(ABC):
     @abstractmethod
     def set_content(self, content: str) -> None:
         """Display content in the tooltip.
-        
+
         Args:
             content: The content to display (typically a URL).
         """
@@ -34,7 +34,7 @@ class AbstractLinkTooltip(ABC):
     @abstractmethod
     def set_visible(self, visible: bool) -> None:
         """Set tooltip visibility state.
-        
+
         Args:
             visible: True to show the tooltip, False to hide it.
         """
@@ -42,7 +42,7 @@ class AbstractLinkTooltip(ABC):
     @abstractmethod
     def is_visible(self) -> bool:
         """Check if tooltip is currently visible.
-        
+
         Returns:
             True if the tooltip is visible, False otherwise.
         """
@@ -50,7 +50,7 @@ class AbstractLinkTooltip(ABC):
     @abstractmethod
     def update_styling(self) -> None:
         """Apply styling based on current theme.
-        
+
         Subclasses should update colors, fonts, and other styling
         according to the active theme (light/dark mode).
         """
@@ -58,7 +58,7 @@ class AbstractLinkTooltip(ABC):
     @abstractmethod
     def on_theme_changed(self, style_manager: object, param: object) -> None:
         """Handle theme change events.
-        
+
         Args:
             style_manager: The Adwaita StyleManager that changed.
             param: The parameter that changed.
@@ -67,7 +67,7 @@ class AbstractLinkTooltip(ABC):
     @abstractmethod
     def refresh_layout(self) -> None:
         """Refresh the widget layout and redraw.
-        
+
         Subclasses should call queue_resize() and queue_draw()
         to force layout recalculation and redrawing.
         """
@@ -75,17 +75,17 @@ class AbstractLinkTooltip(ABC):
     @abstractmethod
     def get_widget(self) -> Gtk.Widget:
         """Return the tooltip widget.
-        
+
         Returns:
             The GTK widget for the tooltip.
         """
 
     def show(self, url: str) -> None:
         """Show the tooltip with the given URL.
-        
+
         Default implementation calls set_content(), set_visible(),
         and refresh_layout(). Override to customize behavior.
-        
+
         Args:
             url: The URL to display in the tooltip.
         """
@@ -96,7 +96,7 @@ class AbstractLinkTooltip(ABC):
 
     def hide(self) -> None:
         """Hide the tooltip.
-        
+
         Default implementation calls set_visible() and refresh_layout().
         Override to customize behavior.
         """
@@ -107,7 +107,7 @@ class AbstractLinkTooltip(ABC):
 
 class LinkTooltipManager(AbstractLinkTooltip):
     """Manages URL tooltip display as a persistent footer widget.
-    
+
     The tooltip is a footer bar at the bottom of the preview pane that
     displays the URL of the currently hovered link. It remains visible
     at the bottom regardless of scrolling.
@@ -123,7 +123,7 @@ class LinkTooltipManager(AbstractLinkTooltip):
 
     def _create_footer_widget(self) -> Gtk.Widget:
         """Create the footer widget.
-        
+
         Returns:
             A GTK widget containing the footer.
         """
@@ -136,10 +136,10 @@ class LinkTooltipManager(AbstractLinkTooltip):
         box.set_spacing(0)
         # Don't constrain width - let it size to content
         box.set_name("url-tooltip-footer")
-        
+
         # Store reference to update colors when theme changes
         self._footer_box = box
-        
+
         # Create label for URL text
         self._label = Gtk.Label()
         self._label.set_text("")
@@ -148,49 +148,49 @@ class LinkTooltipManager(AbstractLinkTooltip):
         self._label.set_halign(Gtk.Align.START)
         self._label.set_valign(Gtk.Align.CENTER)
         self._label.set_ellipsize(3)  # Ellipsize at end (END=3)
-        
+
         box.append(self._label)
-        
+
         # Apply initial styling
         self.update_styling()
-        
+
         # Hide by default - only show on hover
         box.set_visible(False)
-        
+
         return box
-    
+
     def set_content(self, content: str) -> None:
         """Display content in the tooltip.
-        
+
         Args:
             content: The URL text to display.
         """
         self._label.set_text(content)
-    
+
     def set_visible(self, visible: bool) -> None:
         """Set tooltip visibility state.
-        
+
         Args:
             visible: True to show the tooltip, False to hide it.
         """
         self._widget.set_visible(visible)
         self._visible = visible
-    
+
     def is_visible(self) -> bool:
         """Check if tooltip is currently visible.
-        
+
         Returns:
             True if the tooltip is visible, False otherwise.
         """
         return self._visible
-    
+
     def update_styling(self) -> None:
         """Apply styling based on current theme."""
         style_manager = Adw.StyleManager.get_default()
         is_dark = style_manager.get_dark()
-        
+
         css_provider = Gtk.CssProvider()
-        
+
         if is_dark:
             # Dark mode: muted gray (not bright white)
             css = b"""
@@ -217,23 +217,25 @@ class LinkTooltipManager(AbstractLinkTooltip):
     min-height: 0;
 }
             """
-        
+
         css_provider.load_from_data(css)
-        
+
         context = self._footer_box.get_style_context()
         context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        
-        _logger.info(f"[Tooltip] Updated styling for {'dark' if is_dark else 'light'} mode")
-    
+
+        _logger.info(
+            f"[Tooltip] Updated styling for {'dark' if is_dark else 'light'} mode"
+        )
+
     def on_theme_changed(self, style_manager: object, param: object) -> None:
         """Handle theme change events.
-        
+
         Args:
             style_manager: The Adwaita StyleManager that changed.
             param: The parameter that changed.
         """
         self.update_styling()
-    
+
     def refresh_layout(self) -> None:
         """Refresh the widget layout and redraw."""
         self._widget.queue_resize()
@@ -241,7 +243,7 @@ class LinkTooltipManager(AbstractLinkTooltip):
 
     def get_widget(self) -> Gtk.Widget:
         """Return the tooltip widget.
-        
+
         Returns:
             The GTK widget for the footer.
         """
