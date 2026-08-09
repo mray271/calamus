@@ -886,7 +886,7 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             script = _WebKitModule.UserScript(
                 script_source,
                 _WebKitModule.UserContentInjectedFrames.ALL_FRAMES,
-                _WebKitModule.UserScriptInjectionTime.END_OF_DOCUMENT,
+                _WebKitModule.UserScriptInjectionTime.END,  # END not END_OF_DOCUMENT
                 None,  # allow_list
                 None,  # block_list
             )
@@ -916,20 +916,30 @@ console.log('[TOOLTIP-JS] Script initialization complete');
         
         Args:
             manager: The UserContentManager that received the message.
-            js_message: The ScriptMessage containing the JavaScript data.
+            js_message: The UserMessage containing the JavaScript data.
         """
         print("[TOOLTIP] _on_tooltip_message called", flush=True)
         try:
-            # Extract the JSON message from JavaScript
-            if hasattr(js_message, "get_js_value"):
-                js_value = js_message.get_js_value()
-                if js_value is None:
-                    print("[TOOLTIP] js_value is None", flush=True)
+            # Extract the message parameters from UserMessage
+            if hasattr(js_message, "get_parameters"):
+                params = js_message.get_parameters()
+                print(f"[TOOLTIP] params type: {type(params)}, params: {params}", flush=True)
+                if params is None:
+                    print("[TOOLTIP] params is None", flush=True)
                     return
-                json_str = js_value.to_string() if hasattr(js_value, "to_string") else str(js_value)
+                
+                # Try to get the message data
+                # UserMessage.get_parameters() returns a GVariant
+                if hasattr(params, "get_string"):
+                    json_str = params.get_string()
+                elif hasattr(params, "to_string"):
+                    json_str = params.to_string()
+                else:
+                    json_str = str(params)
+                
                 print(f"[TOOLTIP] Received message: {json_str}", flush=True)
             else:
-                print("[TOOLTIP] js_message has no get_js_value method", flush=True)
+                print("[TOOLTIP] js_message has no get_parameters method", flush=True)
                 return
             
             if not json_str or json_str.strip() == "":
@@ -943,7 +953,7 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             print(f"[TOOLTIP] Parsed: href='{href}', state='{state}'", flush=True)
             
             # Show or hide tooltip based on state
-            if state == "enter" and href:
+            if state == "enter" and href and not href.startswith("[TOOLTIP"):
                 print(f"[TOOLTIP] Showing tooltip for href: {href}", flush=True)
                 self._tooltip_manager.show(href, 0, 0)
                 self._footer_wrapper.set_visible(True)
@@ -955,6 +965,8 @@ console.log('[TOOLTIP-JS] Script initialization complete');
                 self._tooltip_manager.hide()
                 self._footer_wrapper.set_visible(False)
                 print("[TOOLTIP] Footer wrapper hidden", flush=True)
+            elif href.startswith("[TOOLTIP"):
+                print(f"[TOOLTIP] Received test message from script: {href}", flush=True)
         except (json.JSONDecodeError, AttributeError, TypeError) as e:
             print(f"[TOOLTIP] Exception: {e}", flush=True)
             pass
