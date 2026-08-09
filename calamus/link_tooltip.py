@@ -28,32 +28,34 @@ class LinkTooltipManager:
     left: 0;
     background: var(--tooltip-bg);
     color: var(--tooltip-text);
-    padding: 6px 10px;
-    font-size: 0.875em;
-    font-family: monospace;
+    padding: 8px 12px;
+    font-size: 0.8125em;
+    font-family: 'Courier New', monospace;
     border-radius: 0 8px 0 0;
     display: none;
-    z-index: 10000;
+    z-index: 99999;
     max-width: 90vw;
+    max-height: 3em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
     border-top: 1px solid var(--tooltip-border);
     border-right: 1px solid var(--tooltip-border);
+    pointer-events: none;
   }}
   #url-tooltip.visible {{
     display: block;
   }}
   :root {{
     --tooltip-bg: #ffffff;
-    --tooltip-text: #000000;
+    --tooltip-text: #1c1c1c;
     --tooltip-border: #d0d0d0;
   }}
   @media (prefers-color-scheme: dark) {{
     :root {{
       --tooltip-bg: #2d2d2d;
-      --tooltip-text: #e0e0e0;
+      --tooltip-text: #e8e8e8;
       --tooltip-border: #454545;
     }}
   }}
@@ -81,11 +83,10 @@ class LinkTooltipManager:
     
     if (!tooltip) return;
     
-    // Track the current link being hovered
     let currentLink = null;
     
     function showTooltip(link) {
-      const href = link.getAttribute('href') || '';
+      const href = link.getAttribute('href');
       if (!href) {
         hideTooltip();
         return;
@@ -101,23 +102,32 @@ class LinkTooltipManager:
       currentLink = null;
     }
     
-    // Delegate event listeners to all anchor tags
+    // Use event delegation with composedPath for better coverage
     document.addEventListener('mouseover', function(event) {
-      if (event.target.tagName === 'A') {
-        showTooltip(event.target);
-      } else if (currentLink && !event.target.closest('a')) {
+      const path = event.composedPath ? event.composedPath() : [event.target];
+      const link = path.find(el => el.tagName === 'A');
+      
+      if (link) {
+        showTooltip(link);
+      } else if (currentLink) {
         hideTooltip();
       }
-    });
+    }, true);  // Use capture phase for better event handling
     
     document.addEventListener('mouseout', function(event) {
-      if (event.target.tagName === 'A') {
+      const path = event.composedPath ? event.composedPath() : [event.target];
+      const link = path.find(el => el.tagName === 'A');
+      
+      if (link) {
         hideTooltip();
       }
-    });
+    }, true);  // Use capture phase
     
-    // Hide tooltip when leaving the document
-    document.addEventListener('mouseleave', hideTooltip);
+    // Ensure tooltip is hidden when mouse leaves document
+    document.addEventListener('mouseleave', hideTooltip, true);
+    
+    // Also hide when scrolling
+    document.addEventListener('scroll', hideTooltip, true);
   })();
 """
         return js
