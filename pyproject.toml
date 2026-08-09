@@ -66,6 +66,8 @@ omit = [
     "calamus/printer.py",
     "calamus/highlight_support.py",
     "calamus/search_dialogs.py",
+    "calamus/preferences.py",
+    "calamus/webkit_preview_6x.py",
 ]
 
 [tool.pytest.ini_options]
