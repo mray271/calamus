@@ -52,6 +52,32 @@ Any use of `subprocess.run()`, `subprocess.Popen()`, or `os.system()` in the
 
 CI will fail your PR automatically if an unapproved subprocess call is detected.
 
+## Adding New Python Modules
+
+When adding a new Python module to the `calamus/` package:
+
+1. **Add to `meson.build`**: Register the module in the `python.install_sources()` call in `meson.build`, maintaining **alphabetical order**.
+   
+   ```meson
+   python.install_sources(
+     [
+       'calamus/__init__.py',
+       'calamus/new_module.py',  # ← Add here, alphabetically sorted
+       ...
+     ],
+     subdir: 'calamus',
+   )
+   ```
+   
+   **Why**: Without this, the module will not be installed when using `meson install`, causing `ModuleNotFoundError` at runtime.
+
+2. **Verify**: Run the validation script locally:
+   ```bash
+   python3 build-aux/check-meson-sources.py
+   ```
+   
+   This will be checked automatically in CI (Build workflow).
+
 ## Code Style
 
 All Python code must pass both [black](https://black.readthedocs.io/) and

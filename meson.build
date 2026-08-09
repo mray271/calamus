@@ -17,6 +17,11 @@ python = import('python').find_installation('python3')
 
 # ── Python package ────────────────────────────────────────────────────────────
 # Install all .py modules to <python-site-packages>/calamus/
+#
+# IMPORTANT: Every new Python module added to calamus/ MUST be registered below
+# in alphabetical order. Modules not listed here will not be installed, causing
+# ModuleNotFoundError at runtime. Validation: run build-aux/check-meson-sources.py
+# See CONTRIBUTING.md for details.
 python.install_sources(
   [
     'calamus/__init__.py',
