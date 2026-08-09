@@ -54,55 +54,77 @@ class LinkTooltipManager(AbstractLinkTooltip):
         Returns:
             A GTK widget containing the footer.
         """
-        # Create a box to hold the footer
+        # Create a simple box for testing
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        box.set_hexpand(True)
+        box.set_vexpand(False)
+        box.set_size_request(-1, 32)
         box.set_name("url-tooltip-footer")
-        box.set_height_request(32)
         
-        # Add CSS styling
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(self._get_css().encode())
-        
-        context = box.get_style_context()
-        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        # Store reference to update colors when theme changes
+        self._footer_box = box
         
         # Create label for URL text
         self._label = Gtk.Label()
+        self._label.set_text("URL Footer")
         self._label.set_wrap(False)
-        self._label.set_ellipsize(3)  # END
-        self._label.set_margin_start(12)
-        self._label.set_margin_end(12)
-        self._label.add_css_class("monospace")
         self._label.set_hexpand(True)
         self._label.set_halign(Gtk.Align.START)
         
         box.append(self._label)
         
-        return box
-
-    def _get_css(self) -> str:
-        """Generate CSS for the footer widget.
+        # Apply initial styling
+        self._update_footer_styling()
         
-        Returns:
-            CSS string with light and dark mode variants.
-        """
-        return """
+        # Listen for theme changes
+        style_manager = Adw.StyleManager.get_default()
+        style_manager.connect("notify::dark", self._on_theme_changed)
+        
+        # Make it visible by default
+        box.set_visible(True)
+        
+        _logger.info("[Tooltip] Footer widget created and visible")
+        
+        return box
+    
+    def _update_footer_styling(self) -> None:
+        """Update footer styling based on current theme."""
+        style_manager = Adw.StyleManager.get_default()
+        is_dark = style_manager.get_dark()
+        
+        css_provider = Gtk.CssProvider()
+        
+        if is_dark:
+            # Dark mode: slightly lighter than black
+            css = b"""
 #url-tooltip-footer {
-    background-color: #f6f8fa;
-    color: #1c1c1c;
-    border-top: 1px solid #e1e4e8;
-    font-size: 0.8125em;
+    background-color: #383838;
+    color: @view_fg_color;
+    border-top: 1px solid @borders;
+    padding: 8px 12px;
 }
-
-@media (prefers-color-scheme: dark) {
-    #url-tooltip-footer {
-        background-color: #24292e;
-        color: #e1e4e8;
-        border-top-color: #30363d;
-    }
+            """
+        else:
+            # Light mode: slightly darker than white
+            css = b"""
+#url-tooltip-footer {
+    background-color: #e8eaed;
+    color: @view_fg_color;
+    border-top: 1px solid @borders;
+    padding: 8px 12px;
 }
-"""
-
+            """
+        
+        css_provider.load_from_data(css)
+        
+        context = self._footer_box.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        
+        _logger.info(f"[Tooltip] Updated styling for {'dark' if is_dark else 'light'} mode")
+    
+    def _on_theme_changed(self, style_manager, param) -> None:
+        """Handle theme change events."""
+        self._update_footer_styling()
     def show(self, url: str) -> None:
         """Show the tooltip with the given URL.
         

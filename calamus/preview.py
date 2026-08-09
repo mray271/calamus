@@ -169,53 +169,54 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     hljs.highlightAll();
   }}
   // Link hover detection via hidden element communication
-  (function() {{
+  (function() {
     // Create hidden element to communicate with Python
     const hoverState = document.createElement('div');
     hoverState.id = 'calamus-hover-state';
     hoverState.style.display = 'none';
     document.body.appendChild(hoverState);
     
-    function attachTooltipsToLinks() {{
+    function attachTooltipsToLinks() {
       const links = document.querySelectorAll('a[href]');
-      links.forEach(link => {{
-        link.addEventListener('mouseenter', function() {{
+      
+      links.forEach(link => {
+        link.addEventListener('mouseenter', function() {
           const href = this.getAttribute('href');
-          if (href) {{
+          if (href) {
             hoverState.textContent = href;
             hoverState.className = 'enter';
-          }}
-        }}, false);
+          }
+        }, false);
         
-        link.addEventListener('mouseleave', function() {{
+        link.addEventListener('mouseleave', function() {
           hoverState.textContent = '';
           hoverState.className = 'leave';
-        }}, false);
-      }});
-    }}
+        }, false);
+      });
+    }
     
-    if (document.readyState === 'loading') {{
+    if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', attachTooltipsToLinks, false);
-    }} else {{
+    } else {
       attachTooltipsToLinks();
-    }}
+    }
     
     // Re-attach when content is dynamically added (Mermaid, etc)
-    const observer = new MutationObserver(function(mutations) {{
+    const observer = new MutationObserver(function(mutations) {
       const hasNewLinks = mutations.some(m => 
         Array.from(m.addedNodes).some(n => 
           n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
         )
       );
-      if (hasNewLinks) {{
+      if (hasNewLinks) {
         attachTooltipsToLinks();
-      }}
-    }});
+      }
+    });
     
-    if (document.body) {{
-      observer.observe(document.body, {{ childList: true, subtree: true }});
-    }}
-  }})();
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+  })();
 </script>
 </body>
 </html>
@@ -356,8 +357,6 @@ class WebKitPreview(AbstractPreview):
         tooltip_widget.set_hexpand(True)
         self._container.append(tooltip_widget)
         
-        # Initially hide the tooltip footer
-        self._tooltip_manager.hide()
         _logger.info(f"[Tooltip] Footer container and WebView set up")
         # Start polling timer to check for link hover state changes
         self._hover_poll_id = GLib.timeout_add(100, self._poll_link_hover_state)
@@ -841,50 +840,56 @@ class WebKitPreview(AbstractPreview):
   return JSON.stringify({href: state.textContent, state: state.className});
 })();
 """
-            if hasattr(self._view, "evaluate_javascript"):
-                # WebKit 6.0
-                self._view.evaluate_javascript(
-                    js, -1, None, self._on_hover_state_result, None, None, None
-                )
-            elif hasattr(self._view, "run_javascript"):
-                # WebKit2 4.1
-                self._view.run_javascript(js, None, self._on_hover_state_result, None)
+            # WebKit 6.0: evaluate_javascript(script, length, world_name, source_uri, cancellable, callback, user_data)
+            self._view.evaluate_javascript(js, -1, None, None, None, self._on_hover_state_result, None)
         except Exception as e:
-            _logger.info(f"[Tooltip] Polling error: {e}")
+            _logger.error(f"[Tooltip] Polling error: {e}", exc_info=True)
         
         return True  # Keep polling
 
-    def _on_hover_state_result(self, source_object: object, result: object) -> None:
+    def _on_hover_state_result(self, source_object: object, result: object, user_data: object = None) -> None:
         """Handle the result of the link hover state query.
         
         Args:
             source_object: The WebView that executed the JavaScript.
-            result: The result object from evaluate_javascript or run_javascript.
+            result: The AsyncResult from evaluate_javascript.
+            user_data: Unused, required by callback signature.
         """
         try:
-            js_result = self._finish_javascript(source_object, result)
-            if not js_result:
+            # Use evaluate_javascript_finish for WebKit 6.0
+            if hasattr(source_object, "evaluate_javascript_finish"):
+                try:
+                    js_result = source_object.evaluate_javascript_finish(result)
+                except Exception as e:
+                    _logger.error(f"[Tooltip] JavaScript execution error: {e}")
+                    return
+            else:
                 return
             
-            data = json.loads(js_result)
+            if js_result is None:
+                return
+            
+            # Extract JSON string from result
+            json_str = js_result.to_string() if hasattr(js_result, "to_string") else str(js_result)
+            
+            if not json_str or json_str.strip() == "":
+                return
+            
+            data = json.loads(json_str)
             href = data.get("href")
             state = data.get("state")
             
-            # Debug: Print state changes
-            if state or href:
-                _logger.info(f"[Tooltip] Hover state - href={href}, state={state}")
-            
             # Show tooltip when entering a link, hide when leaving
             if state == "enter" and href:
-                _logger.info(f"[Tooltip] Showing tooltip for {href}")
                 self._tooltip_manager.show(href)
                 if self._on_link_hover:
                     self._on_link_hover(href)
             elif state == "leave":
-                _logger.info(f"[Tooltip] Hiding tooltip")
                 self._tooltip_manager.hide()
+        except json.JSONDecodeError:
+            pass
         except Exception as e:
-            _logger.info(f"[Tooltip] Result handling error: {e}")
+            _logger.error(f"[Tooltip] Result handling error: {e}", exc_info=True)
 
     def update(self, markdown_text: str) -> None:
         self._last_markdown = markdown_text
