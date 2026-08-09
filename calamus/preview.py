@@ -358,7 +358,9 @@ class WebKitPreview(AbstractPreview):
         _logger.info(f"[Tooltip] Tooltip widget added to overlay")
         
         # Initially hide the tooltip
-        self._tooltip_manager.hide()
+        # TODO: Temporarily show for testing
+        self._tooltip_manager.show("https://example.com", 0, 0)
+        _logger.info(f"[Tooltip] Tooltip set to always-visible for testing")
         _logger.info(f"[Tooltip] Tooltip initially hidden")
         
         # Start polling timer to check for link hover state changes
