@@ -843,8 +843,8 @@ class WebKitPreview(AbstractPreview):
             elif hasattr(self._view, "run_javascript"):
                 # WebKit2 4.1
                 self._view.run_javascript(js, None, self._on_hover_state_result, None)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Debug: Polling error: {e}")
         
         return True  # Keep polling
 
@@ -864,16 +864,21 @@ class WebKitPreview(AbstractPreview):
             href = data.get("href")
             state = data.get("state")
             
+            # Debug: Print state changes
+            if state or href:
+                print(f"Debug: Hover state - href={href}, state={state}")
+            
             # Show tooltip when entering a link, hide when leaving
             if state == "enter" and href:
+                print(f"Debug: Showing tooltip for {href}")
                 self._tooltip_manager.show(href, 0, 0)
                 if self._on_link_hover:
                     self._on_link_hover(href)
             elif state == "leave":
+                print(f"Debug: Hiding tooltip")
                 self._tooltip_manager.hide()
-        except Exception:
-            # Silently ignore errors
-            pass
+        except Exception as e:
+            print(f"Debug: Result handling error: {e}")
 
     def update(self, markdown_text: str) -> None:
         self._last_markdown = markdown_text
