@@ -6,6 +6,7 @@ FROM fedora:44
 RUN dnf install -y \
     python3 python3-gobject python3-cairo \
     gtk4 libadwaita gtksourceview5 \
+    webkit2gtk6.0 \
     gobject-introspection gcc \
     xorg-x11-server-Xvfb dbus-daemon dbus-tools \
     curl git \

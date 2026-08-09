@@ -14,7 +14,8 @@ from gi.repository import Adw, GLib, Gtk
 
 from calamus.editor import AbstractEditor, MarkdownEditor
 from calamus.preferences import FileConfigProvider
-from calamus.preview import AbstractPreview, create_preview
+from calamus.preview import AbstractPreview
+from calamus.webkit_version import detect_webkit_version
 
 # Files larger than this will be refused with an error dialog rather than
 # loaded.  Markdown syntax highlighting and live preview rendering become
@@ -108,7 +109,52 @@ class EditorTab(AbstractTab):
         self.search_bar = Gtk.SearchBar()
         self.search_entry = Gtk.SearchEntry()
         self.editor: MarkdownEditor = MarkdownEditor()
-        self.preview: AbstractPreview = create_preview(on_open_path=on_open_path)
+
+        # WebKit version detection and instantiation.
+        # Pattern allows clean version management and EOL deprecation.
+        #
+        # To support a new WebKit version (e.g., 7.0):
+        #   1. Create calamus/webkit_preview_7x.py (copy 6x, update changed APIs)
+        #   2. Update detect_webkit_version() to try 7.0 first
+        #   3. Add: elif webkit_version[0] >= 7 branch below
+        #   4. Add warning in detect_webkit_version() for deprecated versions
+        #
+        # To remove support for EOL version (e.g., when 6.0 reaches EOL):
+        #   1. Remove from detect_webkit_version() completely
+        #   2. Remove the corresponding elif branch below
+        #   3. Delete calamus/webkit_preview_6x.py
+        #   4. Update CI Dockerfiles to remove WebKit 6.0 packages
+        #   5. One atomic commit removes all traces (no scattered cleanup)
+        #
+        # This ABC pattern ensures each version is self-contained and isolated.
+        # See webkit_preview_base.py module docstring for full architecture details.
+
+        webkit_version = detect_webkit_version()
+        if webkit_version is None:
+            raise RuntimeError(
+                "WebKit not available. Install WebKit 6.0+ packages:\n"
+                "  - Ubuntu/Debian: sudo apt install gir1.2-webkit2-6.0 libwebkit2gtk-6.0-4\n"
+                "  - Fedora: sudo dnf install webkit2gtk6.0\n"
+                "  - openSUSE: sudo zypper install typelib-1_0-WebKit2-4_1 libwebkit2gtk3-6_0-4"
+            )
+
+        if webkit_version[0] >= 6:
+            # Import lazily to avoid requiring WebKit 6.0 at module load time
+            from calamus.webkit_preview_6x import WebKitPreview_6x
+
+            self.preview: AbstractPreview = WebKitPreview_6x(on_link_hover=on_open_path)
+        else:
+            # WebKit 4.1 reached end-of-life on Aug 31, 2023
+            raise RuntimeError(
+                f"WebKit {webkit_version[0]}.{webkit_version[1]} is no longer supported.\n"
+                f"WebKit 4.1 reached end-of-life on Aug 31, 2023 and no longer receives "
+                f"security updates.\n"
+                f"Please upgrade to WebKit 6.0+:\n"
+                f"  - Ubuntu/Debian: sudo apt install gir1.2-webkit2-6.0 libwebkit2gtk-6.0-4\n"
+                f"  - Fedora: sudo dnf install webkit2gtk6.0\n"
+                f"  - openSUSE: sudo zypper install typelib-1_0-WebKit2-4_1 libwebkit2gtk3-6_0-4"
+            )
+
         self._preview_timer_id: int | None = None
         self._loading: bool = False  # suppresses debounce re-render during load
         config = FileConfigProvider().load()
@@ -232,7 +278,24 @@ class EditorTab(AbstractTab):
         self._paned.set_start_child(self._scroll_editor)
 
         self._scroll_preview = Gtk.ScrolledWindow()
+        self._scroll_preview.set_name("preview-scrolled-window")
+        # Make scrolled window propagate child's natural size
+        self._scroll_preview.set_has_frame(False)
         self._scroll_preview.set_child(self.preview.get_widget())
+
+        # Apply CSS to make scroll window background transparent
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+#preview-scrolled-window {
+    background-color: transparent;
+}
+#preview-scrolled-window > * {
+    background-color: transparent;
+}
+        """)
+        context = self._scroll_preview.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
         self._paned.set_end_child(self._scroll_preview)
 
         self.editor.get_buffer().connect("changed", self._on_buffer_changed)

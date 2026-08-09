@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "calamus"
-version = "0.7.0"
+version = "0.8.0"
 description = "A GTK4 Markdown editor for GNOME"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
@@ -66,6 +66,8 @@ omit = [
     "calamus/printer.py",
     "calamus/highlight_support.py",
     "calamus/search_dialogs.py",
+    "calamus/preferences.py",
+    "calamus/webkit_preview_6x.py",
 ]
 
 [tool.pytest.ini_options]

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import json
+import logging
 import os
 import shutil
 import tempfile
@@ -20,6 +22,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from calamus.highlight_support import get_highlight_css_tag, get_highlight_script_tag
+from calamus.link_tooltip import LinkTooltipManager
 from calamus.mermaid_support import (
     MermaidCache,
     SubprocessMermaidRenderer,
@@ -30,15 +33,22 @@ from calamus.mermaid_support import (
 )
 from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
 
+_logger = logging.getLogger(__name__)
+
 try:
     gi.require_version("WebKit", "6.0")
     from gi.repository import WebKit as _WebKitModule
 
+    gi.require_version("JavaScriptCore", "6.0")
+    from gi.repository import JavaScriptCore as _JavaScriptCoreModule
+
     _WEBKIT_AVAILABLE = True
 except (ImportError, ValueError):
-    # WebKit2 4.1 uses GTK3 internally and cannot be loaded alongside GTK4.
-    # Install webkitgtk6.0 for the live preview to work.
+    # WebKit2 4.1 reached end-of-life (EOL) on Aug 31, 2023.
+    # Calamus now requires WebKit 6.0+. Install gir1.2-webkit2-6.0 and
+    # libwebkit2gtk-6.0-4 for the live preview to work.
     _WebKitModule = None
+    _JavaScriptCoreModule = None
     _WEBKIT_AVAILABLE = False
 
 
@@ -163,6 +173,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   if (typeof hljs !== 'undefined') {{
     hljs.highlightAll();
   }}
+  // Note: Tooltip hover detection is now injected via UserScript
+  // in _inject_tooltip_script() to ensure it has access to window.webkit
+
+  }})();
 </script>
 </body>
 </html>
@@ -232,7 +246,11 @@ class AbstractPreview(ABC):
 
 
 class WebKitPreview(AbstractPreview):
-    """Preview implementation backed by WebKit (6.0) or WebKit2 (4.1)."""
+    """Preview implementation backed by WebKit 6.0+.
+
+    Deprecated: Use calamus.webkit_preview_6x.WebKitPreview_6x instead.
+    This class is retained for backward compatibility only.
+    """
 
     _MIN_ZOOM = 0.5
     _MAX_ZOOM = 3.0
@@ -242,16 +260,37 @@ class WebKitPreview(AbstractPreview):
         self,
         renderer: AbstractMarkdownRenderer | None = None,
         on_open_path: Callable[[str], None] | None = None,
+        on_link_hover: Callable[[str], None] | None = None,
     ) -> None:
         self._renderer = renderer or MistuneRenderer()
         self._on_open_path = on_open_path
+        self._on_link_hover = on_link_hover
+        self._tooltip_manager = LinkTooltipManager()
         self._base_uri = "file:///"
+
         # Disable the bwrap/dbus-proxy sandbox — required when running inside
         # Docker where bubblewrap cannot create user namespaces.
         context = _WebKitModule.WebContext.get_default()
         if hasattr(context, "set_sandbox_enabled"):
             context.set_sandbox_enabled(False)
+
+        # Create WebView
         self._view = _WebKitModule.WebView()
+
+        # Get UserContentManager and register message handler for tooltip
+        self._user_content_manager = self._view.get_user_content_manager()
+
+        # Connect signal BEFORE registering the handler (critical to avoid race conditions)
+        # Per PyGObject WebKit-6.0 API docs, the signal passes a JavaScriptCore.Value
+        self._user_content_manager.connect(
+            "script-message-received::tooltip", self._on_tooltip_message
+        )
+
+        # Now register the handler
+        self._user_content_manager.register_script_message_handler("tooltip")
+
+        # Inject tooltip script into all web pages before they load
+        self._inject_tooltip_script()
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
@@ -262,7 +301,8 @@ class WebKitPreview(AbstractPreview):
         # WebKit unless a handler sets the destination.
         # WebKit 6.0 moved download-started from WebContext to NetworkSession.
         # Try the WebView's own session first (most specific), then the module-
-        # level NetworkSession, then fall back to WebContext for WebKit2 4.1.
+        # WebKit 6.0+ uses NetworkSession for downloads.
+        # This is the primary implementation path after dropping WebKit 4.1 support.
         self._connect_download_signal(context)
         self._last_markdown: str = ""
         self._zoom_level = self._DEFAULT_ZOOM
@@ -286,6 +326,40 @@ class WebKitPreview(AbstractPreview):
         # Without this, rapid typing spawns unbounded Chromium processes,
         # exhausting memory and hanging the application.
         self._mmdc_semaphore = threading.Semaphore(1)
+
+        # Create an overlay to layer the footer on top of the WebView
+        # This avoids the need for a container that exposes its background
+        self._overlay = Gtk.Overlay()
+        self._overlay.set_child(self._view)  # WebView is the main child
+
+        # Create footer wrapper for positioning the tooltip
+        self._footer_wrapper = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self._footer_wrapper.set_hexpand(False)
+        self._footer_wrapper.set_vexpand(False)
+        self._footer_wrapper.set_halign(Gtk.Align.START)
+        self._footer_wrapper.set_valign(Gtk.Align.END)  # Position at bottom
+        self._footer_wrapper.set_spacing(0)
+        self._footer_wrapper.set_visible(False)  # Hide initially
+        self._footer_wrapper.set_name("footer-wrapper")
+
+        # Make wrapper transparent
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+#footer-wrapper {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+}
+        """)
+        context = self._footer_wrapper.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+        # Add tooltip footer to wrapper
+        tooltip_widget = self._tooltip_manager.get_widget()
+        self._footer_wrapper.append(tooltip_widget)
+
+        # Add wrapper as an overlay child (positioned on top of WebView)
+        self._overlay.add_overlay(self._footer_wrapper)
 
     def set_file_path(self, path: str | None) -> None:
         """Update the base URI used for resolving relative links in the preview."""
@@ -541,7 +615,7 @@ class WebKitPreview(AbstractPreview):
         The signal location changed between WebKit versions:
           WebKit 6.0  — WebKitNetworkSession (via view.get_network_session()
                          or NetworkSession.get_default())
-          WebKit2 4.1 — WebKitWebContext
+          WebKit 6.0+ — NetworkSession.download-started signal
         """
         source = None
         if hasattr(self._view, "get_network_session"):
@@ -710,6 +784,128 @@ class WebKitPreview(AbstractPreview):
         if self._last_markdown:
             self.update(self._last_markdown)
 
+    def _inject_tooltip_script(self) -> None:
+        """Inject tooltip hover detection script into all web pages.
+
+        This script is injected via UserContentManager.add_script() so it runs
+        in the WebView's JavaScript context and has access to window.webkit
+        message handlers.
+        """
+        script_source = """
+console.log('[TOOLTIP-JS] Script injected via UserContentManager');
+
+// Post a test message to verify script is running
+try {
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {
+    window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({
+      href: '[TOOLTIP-JS] Script initialization test',
+      state: 'test'
+    }));
+  }
+} catch(e) {
+  console.log('[TOOLTIP-JS] Error in test message:', e);
+}
+
+function attachTooltipsToLinks() {
+  const links = document.querySelectorAll('a[href]');
+  console.log(`[TOOLTIP-JS] attachTooltipsToLinks: found ${links.length} links`);
+  
+  links.forEach((link, idx) => {
+    console.log(`[TOOLTIP-JS] Attaching listeners to link ${idx}: ${link.href}`);
+    
+    link.addEventListener('mouseenter', function() {
+      const href = this.getAttribute('href');
+      console.log(`[TOOLTIP-JS] mouseenter on link: ${href}`);
+      
+      if (href) {
+        console.log(`[TOOLTIP-JS] href exists: ${href}`);
+        if (window.webkit) {
+          console.log('[TOOLTIP-JS] window.webkit exists');
+          if (window.webkit.messageHandlers) {
+            console.log('[TOOLTIP-JS] window.webkit.messageHandlers exists');
+            if (window.webkit.messageHandlers.tooltip) {
+              console.log('[TOOLTIP-JS] window.webkit.messageHandlers.tooltip exists');
+              window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({
+                href: href,
+                state: 'enter'
+              }));
+              console.log('[TOOLTIP-JS] postMessage sent for enter');
+            } else {
+              console.log('[TOOLTIP-JS] window.webkit.messageHandlers.tooltip does NOT exist');
+            }
+          } else {
+            console.log('[TOOLTIP-JS] window.webkit.messageHandlers does NOT exist');
+          }
+        } else {
+          console.log('[TOOLTIP-JS] window.webkit does NOT exist');
+        }
+      } else {
+        console.log('[TOOLTIP-JS] href is empty');
+      }
+    }, false);
+    
+    link.addEventListener('mouseleave', function() {
+      console.log('[TOOLTIP-JS] mouseleave fired');
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {
+        window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({
+          href: '',
+          state: 'leave'
+        }));
+        console.log('[TOOLTIP-JS] postMessage sent for leave');
+      }
+    }, false);
+  });
+}
+
+// Attach when DOM is ready
+if (document.readyState === 'loading') {
+  console.log('[TOOLTIP-JS] DOM still loading, waiting for DOMContentLoaded');
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('[TOOLTIP-JS] DOMContentLoaded fired');
+    attachTooltipsToLinks();
+  }, false);
+} else {
+  console.log('[TOOLTIP-JS] DOM already loaded, attaching immediately');
+  attachTooltipsToLinks();
+}
+
+// Re-attach when content is dynamically added (Mermaid, etc)
+const observer = new MutationObserver(function(mutations) {
+  console.log('[TOOLTIP-JS] MutationObserver fired');
+  const hasNewLinks = mutations.some(m => 
+    Array.from(m.addedNodes).some(n => 
+      n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
+    )
+  );
+  if (hasNewLinks) {
+    console.log('[TOOLTIP-JS] New links detected, re-attaching');
+    attachTooltipsToLinks();
+  }
+});
+
+if (document.body) {
+  console.log('[TOOLTIP-JS] Setting up MutationObserver on document.body');
+  observer.observe(document.body, { childList: true, subtree: true });
+} else {
+  console.log('[TOOLTIP-JS] document.body does not exist');
+}
+
+console.log('[TOOLTIP-JS] Script initialization complete');
+"""
+        try:
+            script = _WebKitModule.UserScript(
+                script_source,
+                _WebKitModule.UserContentInjectedFrames.ALL_FRAMES,
+                _WebKitModule.UserScriptInjectionTime.END,  # END not END_OF_DOCUMENT
+                None,  # allow_list
+                None,  # block_list
+            )
+            self._user_content_manager.add_script(script)
+        except Exception as e:
+            import traceback
+
+            traceback.print_exc()
+
     def _on_load_changed(self, _webview: object, load_event: object) -> None:
         if load_event != _WebKitModule.LoadEvent.FINISHED:
             return
@@ -718,6 +914,55 @@ class WebKitPreview(AbstractPreview):
         ratio = self._pending_scroll_restore_ratio
         self._pending_scroll_restore_ratio = None
         self._restore_scroll_ratio(ratio)
+
+    def _on_tooltip_message(self, manager: object, js_value: object, *args) -> None:
+        """Handle messages from JavaScript link hover detection.
+
+        Per official PyGObject WebKit-6.0 API docs:
+        https://api.pygobject.gnome.org/WebKit-6.0/class-UserContentManager.html#signal-UserContentManager.script-message-received
+
+        Signal parameters: manager (UserContentManager), value (JavaScriptCore.Value)
+
+        Args:
+            manager: The UserContentManager that received the message.
+            js_value: The JavaScriptCore.Value containing the JavaScript data.
+        """
+        try:
+            # js_value is a JavaScriptCore.Value
+            # to_json(indent) returns a JSON-encoded string representation
+            if not hasattr(js_value, "to_json"):
+                return
+
+            # to_json(indent) - indent=0 means no indentation
+            json_encoded = js_value.to_json(0)
+
+            if not json_encoded or json_encoded.strip() == "":
+                return
+
+            # to_json() returns a JSON-encoded string, so we need to parse it twice:
+            # First parse extracts the JSON string itself
+            # Second parse converts the JSON string to the actual object
+            json_str = json.loads(json_encoded)
+            data = json.loads(json_str)
+
+            href = data.get("href", "")
+            state = data.get("state", "")
+
+            # Show or hide tooltip based on state
+            if state == "enter" and href and not href.startswith("[TOOLTIP"):
+                self._tooltip_manager.show(href)
+                self._footer_wrapper.set_visible(True)
+                self._footer_wrapper.queue_resize()
+                self._footer_wrapper.queue_draw()
+                if self._on_link_hover:
+                    self._on_link_hover(href)
+            elif state == "leave":
+                self._tooltip_manager.hide()
+                self._footer_wrapper.set_visible(False)
+                self._footer_wrapper.queue_resize()
+                self._footer_wrapper.queue_draw()
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            pass
 
     def update(self, markdown_text: str) -> None:
         self._last_markdown = markdown_text
@@ -813,6 +1058,7 @@ class WebKitPreview(AbstractPreview):
         html_text = html_text.replace(
             "__PREVIEW_FONT_SCALE__", f"{self._zoom_level:.3f}"
         )
+
         # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
         # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
         raw = GLib.Bytes.new(html_text.encode("utf-8"))
@@ -834,7 +1080,7 @@ class WebKitPreview(AbstractPreview):
             self._view.run_javascript(js, None, None, None)
 
     def get_widget(self) -> Gtk.Widget:
-        return self._view
+        return self._overlay
 
     def zoom_by(self, factor: float) -> None:
         if factor <= 0:
@@ -974,12 +1220,3 @@ class TextViewPreview(AbstractPreview):
             self._css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
-
-
-def create_preview(
-    on_open_path: Callable[[str], None] | None = None,
-) -> AbstractPreview:
-    """Create the best preview implementation for the current system."""
-    if _WEBKIT_AVAILABLE:
-        return WebKitPreview(on_open_path=on_open_path)
-    return TextViewPreview()

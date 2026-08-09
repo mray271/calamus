@@ -26,6 +26,8 @@ jobs:
           cache-dependency-glob: "uv.lock"
       - name: Set up Python
         run: uv python install 3.11
+      - name: Check meson.build module registration
+        run: python3 build-aux/check-meson-sources.py
       - name: Build package
         run: uv build
       - name: Verify artifacts
