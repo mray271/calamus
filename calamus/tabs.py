@@ -111,11 +111,14 @@ class EditorTab(AbstractTab):
         self.editor: MarkdownEditor = MarkdownEditor()
 
         # Directly instantiate WebKitPreview_6x (WebKit 6.0+)
-        # If 4.1 support is needed in future, check version and instantiate accordingly
+        # WebKit 4.1 reached end-of-life (EOL) on Aug 31, 2023
         webkit_version = detect_webkit_version()
         if webkit_version is None:
             raise RuntimeError(
-                "WebKit not available. Install webkitgtk6.0 or webkitgtk4.1"
+                "WebKit not available. Install WebKit 6.0+ packages:\n"
+                "  - Ubuntu/Debian: sudo apt install gir1.2-webkit2-6.0 libwebkit2gtk-6.0-4\n"
+                "  - Fedora: sudo dnf install webkit2gtk6.0\n"
+                "  - openSUSE: sudo zypper install typelib-1_0-WebKit2-4_1 libwebkit2gtk3-6_0-4"
             )
 
         if webkit_version[0] >= 6:
@@ -124,9 +127,15 @@ class EditorTab(AbstractTab):
 
             self.preview: AbstractPreview = WebKitPreview_6x(on_link_hover=on_open_path)
         else:
+            # WebKit 4.1 reached end-of-life on Aug 31, 2023
             raise RuntimeError(
-                f"WebKit {webkit_version[0]}.{webkit_version[1]} not yet supported. "
-                "Use WebKit 6.0+"
+                f"WebKit {webkit_version[0]}.{webkit_version[1]} is no longer supported.\n"
+                f"WebKit 4.1 reached end-of-life on Aug 31, 2023 and no longer receives "
+                f"security updates.\n"
+                f"Please upgrade to WebKit 6.0+:\n"
+                f"  - Ubuntu/Debian: sudo apt install gir1.2-webkit2-6.0 libwebkit2gtk-6.0-4\n"
+                f"  - Fedora: sudo dnf install webkit2gtk6.0\n"
+                f"  - openSUSE: sudo zypper install typelib-1_0-WebKit2-4_1 libwebkit2gtk3-6_0-4"
             )
 
         self._preview_timer_id: int | None = None

@@ -2,6 +2,10 @@
 
 Simple helper to detect which WebKit version is available.
 Used for direct instantiation of appropriate preview classes.
+
+Current support:
+  - WebKit 6.0+ (fully supported)
+  - WebKit 4.1 (EOL as of Aug 31, 2023 - graceful degradation only)
 """
 
 import logging
@@ -25,6 +29,10 @@ def detect_webkit_version() -> tuple[int, int] | None:
 
     try:
         gi.require_version("WebKit", "4.1")
+        _logger.warning(
+            "WebKit 4.1 detected but is EOL (end-of-life as of Aug 31, 2023). "
+            "Please upgrade to WebKit 6.0+ for ongoing support and security updates."
+        )
         return (4, 1)
     except ValueError:
         pass
