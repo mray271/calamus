@@ -109,6 +109,8 @@ class LinkTooltipManager(AbstractLinkTooltip):
     border-top: 1px solid @borders;
     border-radius: 0 8px 0 0;
     padding: 2px 12px;
+    min-width: 0;
+    min-height: 0;
 }
             """
         else:
@@ -120,6 +122,8 @@ class LinkTooltipManager(AbstractLinkTooltip):
     border-top: 1px solid @borders;
     border-radius: 0 8px 0 0;
     padding: 2px 12px;
+    min-width: 0;
+    min-height: 0;
 }
             """
         
@@ -142,12 +146,16 @@ class LinkTooltipManager(AbstractLinkTooltip):
         _logger.info(f"[Tooltip] show() called: url={url}")
         self._label.set_text(url)
         self._widget.set_visible(True)
+        self._widget.queue_resize()
+        self._widget.queue_draw()
         self._visible = True
 
     def hide(self) -> None:
         """Hide the tooltip."""
         _logger.info(f"[Tooltip] hide() called")
         self._widget.set_visible(False)
+        self._widget.queue_resize()
+        self._widget.queue_draw()
         self._visible = False
 
     def get_widget(self) -> Gtk.Widget:

@@ -947,11 +947,15 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             if state == "enter" and href and not href.startswith("[TOOLTIP"):
                 self._tooltip_manager.show(href)
                 self._footer_wrapper.set_visible(True)
+                self._footer_wrapper.queue_resize()
+                self._footer_wrapper.queue_draw()
                 if self._on_link_hover:
                     self._on_link_hover(href)
             elif state == "leave":
                 self._tooltip_manager.hide()
                 self._footer_wrapper.set_visible(False)
+                self._footer_wrapper.queue_resize()
+                self._footer_wrapper.queue_draw()
         except (json.JSONDecodeError, AttributeError, TypeError):
             pass
 
