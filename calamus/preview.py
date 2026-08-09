@@ -338,6 +338,18 @@ class WebKitPreview(AbstractPreview):
         self._footer_wrapper.set_visible(False)  # Hide initially
         self._footer_wrapper.set_name("footer-wrapper")
         
+        # Make wrapper transparent so only the inner tooltip shows
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+#footer-wrapper {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+}
+        """)
+        context = self._footer_wrapper.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        
         # Add tooltip footer to wrapper
         tooltip_widget = self._tooltip_manager.get_widget()
         self._footer_wrapper.append(tooltip_widget)
