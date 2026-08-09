@@ -155,7 +155,6 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   pre {{
     overflow: auto;
     padding: 1ex;
-    border: 1px solid;
     border-radius: 3px;
   }}
   code {{
