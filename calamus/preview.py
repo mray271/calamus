@@ -46,13 +46,6 @@ except (ImportError, ValueError):
     _WebKitModule = None
     _WEBKIT_AVAILABLE = False
 
-# Also need JavaScriptCore for handling message results
-try:
-    gi.require_version("JavaScriptCore", "6.0")
-    from gi.repository import JavaScriptCore
-except (ImportError, ValueError):
-    JavaScriptCore = None
-
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
 <html>
@@ -177,49 +170,86 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   // Link hover detection via WebKit message handlers
   (function() {{
+    console.log('[TOOLTIP-JS] Tooltip IIFE started');
+    
     function attachTooltipsToLinks() {{
       const links = document.querySelectorAll('a[href]');
+      console.log(`[TOOLTIP-JS] attachTooltipsToLinks: found ${{links.length}} links`);
       
-      links.forEach((link) => {{
+      links.forEach((link, idx) => {{
+        console.log(`[TOOLTIP-JS] Attaching listeners to link ${{idx}}: ${{link.href}}`);
+        
         link.addEventListener('mouseenter', function() {{
           const href = this.getAttribute('href');
-          if (href && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {{
-            window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({{
-              href: href,
-              state: 'enter'
-            }}));
+          console.log(`[TOOLTIP-JS] mouseenter on link: ${{href}}`);
+          
+          if (href) {{
+            console.log(`[TOOLTIP-JS] href exists: ${{href}}`);
+            if (window.webkit) {{
+              console.log('[TOOLTIP-JS] window.webkit exists');
+              if (window.webkit.messageHandlers) {{
+                console.log('[TOOLTIP-JS] window.webkit.messageHandlers exists');
+                if (window.webkit.messageHandlers.tooltip) {{
+                  console.log('[TOOLTIP-JS] window.webkit.messageHandlers.tooltip exists');
+                  window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({{
+                    href: href,
+                    state: 'enter'
+                  }}));
+                  console.log('[TOOLTIP-JS] postMessage sent for enter');
+                }} else {{
+                  console.log('[TOOLTIP-JS] window.webkit.messageHandlers.tooltip does NOT exist');
+                }}
+              }} else {{
+                console.log('[TOOLTIP-JS] window.webkit.messageHandlers does NOT exist');
+              }}
+            }} else {{
+              console.log('[TOOLTIP-JS] window.webkit does NOT exist');
+            }}
+          }} else {{
+            console.log('[TOOLTIP-JS] href is empty');
           }}
         }}, false);
         
         link.addEventListener('mouseleave', function() {{
+          console.log('[TOOLTIP-JS] mouseleave fired');
           if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tooltip) {{
             window.webkit.messageHandlers.tooltip.postMessage(JSON.stringify({{
               href: '',
               state: 'leave'
             }}));
+            console.log('[TOOLTIP-JS] postMessage sent for leave');
           }}
         }}, false);
       }});
     }}
     
     // Attach immediately since this script runs at end of document
+    console.log('[TOOLTIP-JS] Calling attachTooltipsToLinks immediately');
     attachTooltipsToLinks();
     
     // Re-attach when content is dynamically added (Mermaid, etc)
     const observer = new MutationObserver(function(mutations) {{
+      console.log('[TOOLTIP-JS] MutationObserver fired');
       const hasNewLinks = mutations.some(m => 
         Array.from(m.addedNodes).some(n => 
           n.nodeName === 'A' || (n.querySelectorAll && n.querySelectorAll('a').length > 0)
         )
       );
       if (hasNewLinks) {{
+        console.log('[TOOLTIP-JS] New links detected, re-attaching');
         attachTooltipsToLinks();
       }}
     }});
     
     if (document.body) {{
+      console.log('[TOOLTIP-JS] Setting up MutationObserver on document.body');
       observer.observe(document.body, {{ childList: true, subtree: true }});
+    }} else {{
+      console.log('[TOOLTIP-JS] document.body does not exist');
     }}
+    
+    console.log('[TOOLTIP-JS] Tooltip IIFE finished');
+  }})();
   }})();
 </script>
 </body>
@@ -321,6 +351,7 @@ class WebKitPreview(AbstractPreview):
         self._user_content_manager = self._view.get_user_content_manager()
         self._user_content_manager.register_script_message_handler("tooltip")
         self._user_content_manager.connect("script-message-received::tooltip", self._on_tooltip_message)
+        print("[TOOLTIP] Message handler registered for 'tooltip'", flush=True)
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
@@ -830,33 +861,45 @@ class WebKitPreview(AbstractPreview):
             manager: The UserContentManager that received the message.
             js_message: The ScriptMessage containing the JavaScript data.
         """
+        print("[TOOLTIP] _on_tooltip_message called", flush=True)
         try:
             # Extract the JSON message from JavaScript
             if hasattr(js_message, "get_js_value"):
                 js_value = js_message.get_js_value()
                 if js_value is None:
+                    print("[TOOLTIP] js_value is None", flush=True)
                     return
                 json_str = js_value.to_string() if hasattr(js_value, "to_string") else str(js_value)
+                print(f"[TOOLTIP] Received message: {json_str}", flush=True)
             else:
+                print("[TOOLTIP] js_message has no get_js_value method", flush=True)
                 return
             
             if not json_str or json_str.strip() == "":
+                print("[TOOLTIP] json_str is empty", flush=True)
                 return
             
             # Parse the message
             data = json.loads(json_str)
             href = data.get("href", "")
             state = data.get("state", "")
+            print(f"[TOOLTIP] Parsed: href='{href}', state='{state}'", flush=True)
             
             # Show or hide tooltip based on state
             if state == "enter" and href:
+                print(f"[TOOLTIP] Showing tooltip for href: {href}", flush=True)
                 self._tooltip_manager.show(href, 0, 0)
+                self._footer_wrapper.set_visible(True)
+                print("[TOOLTIP] Footer wrapper set visible", flush=True)
                 if self._on_link_hover:
                     self._on_link_hover(href)
             elif state == "leave":
+                print("[TOOLTIP] Hiding tooltip", flush=True)
                 self._tooltip_manager.hide()
-        except (json.JSONDecodeError, AttributeError, TypeError):
-            # Silently ignore malformed messages
+                self._footer_wrapper.set_visible(False)
+                print("[TOOLTIP] Footer wrapper hidden", flush=True)
+        except (json.JSONDecodeError, AttributeError, TypeError) as e:
+            print(f"[TOOLTIP] Exception: {e}", flush=True)
             pass
 
     def update(self, markdown_text: str) -> None:
