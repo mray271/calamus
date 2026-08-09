@@ -52,6 +52,26 @@ Any use of `subprocess.run()`, `subprocess.Popen()`, or `os.system()` in the
 
 CI will fail your PR automatically if an unapproved subprocess call is detected.
 
+## WebKit2GTK and PyGObject API Documentation
+
+When working with WebKit2GTK 6.0 and PyGObject bindings, **always consult the 
+official PyGObject API documentation**, not older C API docs or generic WebKit 
+tutorials:
+
+- **[PyGObject WebKit-6.0 API Reference](https://api.pygobject.gnome.org/WebKit-6.0/)** — Official source of truth for Python bindings in this project
+- **Key differences in WebKit2GTK 6.0**:
+  - `script-message-received` signal passes `JavaScriptCore.Value` (not `WebKitJavascriptResult`)
+  - Use `value.to_json(indent)` to extract JSON from messages (e.g., `value.to_json(0)`)
+  - `UserMessage.get_parameters()` returns a `GLib.Variant` if used in Web Process Extensions
+- **Related namespaces**:
+  - [PyGObject JavaScriptCore-6.0 API Reference](https://api.pygobject.gnome.org/JavaScriptCore-6.0/) — for `JavaScriptCore.Value` methods
+  - [PyGObject Gtk-4.0 API Reference](https://api.pygobject.gnome.org/Gtk-4.0/) — for GTK4 widgets
+
+**Why this matters**: The C API documentation and old WebKit tutorials describe 
+deprecated APIs. PyGObject introspection creates Python-specific bindings that 
+differ significantly. Trial-and-error debugging wastes time when the official 
+docs have the answers.
+
 ## Adding New Python Modules
 
 When adding a new Python module to the `calamus/` package:

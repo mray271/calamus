@@ -38,12 +38,15 @@ _logger = logging.getLogger(__name__)
 try:
     gi.require_version("WebKit", "6.0")
     from gi.repository import WebKit as _WebKitModule
+    gi.require_version("JavaScriptCore", "6.0")
+    from gi.repository import JavaScriptCore as _JavaScriptCoreModule
 
     _WEBKIT_AVAILABLE = True
 except (ImportError, ValueError):
     # WebKit2 4.1 uses GTK3 internally and cannot be loaded alongside GTK4.
     # Install webkitgtk6.0 for the live preview to work.
     _WebKitModule = None
+    _JavaScriptCoreModule = None
     _WEBKIT_AVAILABLE = False
 
 
@@ -271,17 +274,15 @@ class WebKitPreview(AbstractPreview):
         # Get UserContentManager and register message handler for tooltip
         self._user_content_manager = self._view.get_user_content_manager()
         
-        # Connect signal BEFORE registering the handler (important!)
+        # Connect signal BEFORE registering the handler (critical to avoid race conditions)
+        # Per PyGObject WebKit-6.0 API docs, the signal passes a JavaScriptCore.Value
         self._user_content_manager.connect("script-message-received::tooltip", self._on_tooltip_message)
-        print("[TOOLTIP] Signal connected for 'script-message-received::tooltip'", flush=True)
         
         # Now register the handler
         self._user_content_manager.register_script_message_handler("tooltip")
-        print("[TOOLTIP] Message handler registered for 'tooltip'", flush=True)
         
         # Inject tooltip script into all web pages before they load
         self._inject_tooltip_script()
-        print("[TOOLTIP] Tooltip script injected into UserContentManager", flush=True)
         self._view.set_hexpand(True)
         self._view.set_vexpand(True)
         self._view.connect("decide-policy", self._on_decide_policy)
@@ -882,7 +883,6 @@ if (document.body) {
 console.log('[TOOLTIP-JS] Script initialization complete');
 """
         try:
-            print("[TOOLTIP] Creating UserScript...", flush=True)
             script = _WebKitModule.UserScript(
                 script_source,
                 _WebKitModule.UserContentInjectedFrames.ALL_FRAMES,
@@ -890,95 +890,71 @@ console.log('[TOOLTIP-JS] Script initialization complete');
                 None,  # allow_list
                 None,  # block_list
             )
-            print("[TOOLTIP] UserScript created successfully", flush=True)
             self._user_content_manager.add_script(script)
-            print("[TOOLTIP] UserScript added to UserContentManager", flush=True)
         except Exception as e:
-            print(f"[TOOLTIP] Error creating/adding UserScript: {e}", flush=True)
             import traceback
             traceback.print_exc()
 
     def _on_load_changed(self, _webview: object, load_event: object) -> None:
-        print(f"[TOOLTIP] _on_load_changed: load_event={load_event}, FINISHED={_WebKitModule.LoadEvent.FINISHED}", flush=True)
         if load_event != _WebKitModule.LoadEvent.FINISHED:
             return
-        print("[TOOLTIP] Load finished event detected", flush=True)
         if self._pending_scroll_restore_ratio is None:
             return
         ratio = self._pending_scroll_restore_ratio
         self._pending_scroll_restore_ratio = None
         self._restore_scroll_ratio(ratio)
 
-    def _on_tooltip_message(self, manager: object, js_message: object, *args) -> None:
+    def _on_tooltip_message(self, manager: object, js_value: object, *args) -> None:
         """Handle messages from JavaScript link hover detection.
         
-        JavaScript sends: {href: string, state: "enter" | "leave"}
+        Per official PyGObject WebKit-6.0 API docs:
+        https://api.pygobject.gnome.org/WebKit-6.0/class-UserContentManager.html#signal-UserContentManager.script-message-received
+        
+        Signal parameters: manager (UserContentManager), value (JavaScriptCore.Value)
         
         Args:
             manager: The UserContentManager that received the message.
-            js_message: The UserMessage containing the JavaScript data.
+            js_value: The JavaScriptCore.Value containing the JavaScript data.
         """
-        print("[TOOLTIP] _on_tooltip_message called", flush=True)
         try:
-            # Extract the message parameters from UserMessage
-            if hasattr(js_message, "get_parameters"):
-                params = js_message.get_parameters()
-                print(f"[TOOLTIP] params type: {type(params)}, params: {params}", flush=True)
-                if params is None:
-                    print("[TOOLTIP] params is None", flush=True)
-                    return
-                
-                # Try to get the message data
-                # UserMessage.get_parameters() returns a GVariant
-                if hasattr(params, "get_string"):
-                    json_str = params.get_string()
-                elif hasattr(params, "to_string"):
-                    json_str = params.to_string()
-                else:
-                    json_str = str(params)
-                
-                print(f"[TOOLTIP] Received message: {json_str}", flush=True)
-            else:
-                print("[TOOLTIP] js_message has no get_parameters method", flush=True)
+            # js_value is a JavaScriptCore.Value
+            # to_json(indent) returns a JSON-encoded string representation
+            if not hasattr(js_value, "to_json"):
                 return
             
-            if not json_str or json_str.strip() == "":
-                print("[TOOLTIP] json_str is empty", flush=True)
+            # to_json(indent) - indent=0 means no indentation
+            json_encoded = js_value.to_json(0)
+            
+            if not json_encoded or json_encoded.strip() == "":
                 return
             
-            # Parse the message
+            # to_json() returns a JSON-encoded string, so we need to parse it twice:
+            # First parse extracts the JSON string itself
+            # Second parse converts the JSON string to the actual object
+            json_str = json.loads(json_encoded)
             data = json.loads(json_str)
+            
             href = data.get("href", "")
             state = data.get("state", "")
-            print(f"[TOOLTIP] Parsed: href='{href}', state='{state}'", flush=True)
             
             # Show or hide tooltip based on state
             if state == "enter" and href and not href.startswith("[TOOLTIP"):
-                print(f"[TOOLTIP] Showing tooltip for href: {href}", flush=True)
-                self._tooltip_manager.show(href, 0, 0)
+                self._tooltip_manager.show(href)
                 self._footer_wrapper.set_visible(True)
-                print("[TOOLTIP] Footer wrapper set visible", flush=True)
                 if self._on_link_hover:
                     self._on_link_hover(href)
             elif state == "leave":
-                print("[TOOLTIP] Hiding tooltip", flush=True)
                 self._tooltip_manager.hide()
                 self._footer_wrapper.set_visible(False)
-                print("[TOOLTIP] Footer wrapper hidden", flush=True)
-            elif href.startswith("[TOOLTIP"):
-                print(f"[TOOLTIP] Received test message from script: {href}", flush=True)
-        except (json.JSONDecodeError, AttributeError, TypeError) as e:
-            print(f"[TOOLTIP] Exception: {e}", flush=True)
+        except (json.JSONDecodeError, AttributeError, TypeError):
             pass
 
     def update(self, markdown_text: str) -> None:
-        print("[TOOLTIP] update() called with markdown", flush=True)
         self._last_markdown = markdown_text
         dark = self._style_manager.get_dark()
 
         if not self._mmdc_available:
             # No mmdc — use browser-side mermaid.js (instant, no subprocess).
-            print("[TOOLTIP] No mmdc available, using browser-side mermaid", flush=True)
             html_body = self._renderer.render(markdown_text)
             self._render_page(html_body, get_mermaid_script_tag(), dark)
             return
@@ -986,7 +962,6 @@ console.log('[TOOLTIP-JS] Script initialization complete');
         # Fast path: render immediately using cached SVGs where available.
         # Uncached blocks fall back to browser-side mermaid.js until the
         # background thread produces their SVGs.
-        print("[TOOLTIP] Rendering with mermaid caching", flush=True)
         preprocessed = preprocess_with_cache(markdown_text, self._mermaid_cache)
         html_body = self._renderer.render_preprocessed(preprocessed)
         uncached = [
@@ -1055,7 +1030,6 @@ console.log('[TOOLTIP-JS] Script initialization complete');
         self._render_page(html_body, "", self._style_manager.get_dark())
 
     def _render_page(self, html_body: str, mermaid_script: str, dark: bool) -> None:
-        print("[TOOLTIP] _render_page called", flush=True)
         color_scheme = "dark" if dark else "light"
         mermaid_theme = "dark" if dark else "default"
         html_text = _HTML_TEMPLATE.format(
@@ -1072,10 +1046,8 @@ console.log('[TOOLTIP-JS] Script initialization complete');
         
         # Use load_bytes (not load_html) to prevent Latin-1 charset sniffing
         # that would corrupt multi-byte UTF-8 characters (e.g. ⊕, ★, −, ″).
-        print("[TOOLTIP] _render_page: about to load HTML with load_bytes", flush=True)
         raw = GLib.Bytes.new(html_text.encode("utf-8"))
         self._view.load_bytes(raw, "text/html", "utf-8", self._base_uri)
-        print("[TOOLTIP] _render_page: load_bytes called", flush=True)
 
     def _scroll_to_anchor(self, anchor_id: str) -> None:
         """Scroll the preview to the element with the given id."""

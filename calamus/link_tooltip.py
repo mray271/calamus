@@ -135,7 +135,6 @@ class LinkTooltipManager(AbstractLinkTooltip):
         Args:
             url: The URL to display in the tooltip.
         """
-        print(f"[TOOLTIP] LinkTooltipManager.show() called: url={url}", flush=True)
         _logger.info(f"[Tooltip] show() called: url={url}")
         self._label.set_text(url)
         self._widget.set_visible(True)
@@ -143,7 +142,6 @@ class LinkTooltipManager(AbstractLinkTooltip):
 
     def hide(self) -> None:
         """Hide the tooltip."""
-        print("[TOOLTIP] LinkTooltipManager.hide() called", flush=True)
         _logger.info(f"[Tooltip] hide() called")
         self._widget.set_visible(False)
         self._visible = False
