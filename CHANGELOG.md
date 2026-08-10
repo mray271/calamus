@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Find and Replace/Find dialogs now route Enter to the correct default action and keep Replace/Find aligned with Search Backward.
+- Restored preview image right-click menu behavior in the WebKit 6.x path, including working Open Link/Open Image actions and scheme-correct URL/file routing.
+- Restored preview scroll-position preservation across re-renders in the WebKit 6.x path so updates no longer snap to top.
+- Added reliable image clipboard copy for preview context menu in WebKit 6.x, including Linux CLIPBOARD and PRIMARY selections.
+
+### Added
+- Preview loading indicator overlay ("Rendering preview...") in WebKit 6.x with theme-aware semi-transparent background for long render operations.
 
 ## [0.7.0] - 2026-08-03
 

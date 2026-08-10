@@ -1,5 +1,6 @@
 """Tests for WebKit 6.0 preview implementation."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -124,3 +125,243 @@ class TestIsSameDocumentFileAnchor:
         assert webkit_preview_6x._is_same_document_file_anchor(
             "/home/user/./doc.md", base_uri
         )
+
+
+class _FakeContextMenu:
+    def __init__(self):
+        self._items = []
+        self.appended = []
+        self.removed = []
+
+    def get_items(self):
+        return self._items
+
+    def append(self, item):
+        self.appended.append(item)
+
+    def remove(self, item):
+        self.removed.append(item)
+
+
+class _FakeHitTest:
+    def __init__(self, is_image, uri):
+        self._is_image = is_image
+        self._uri = uri
+
+    def context_is_image(self):
+        return self._is_image
+
+    def get_image_uri(self):
+        return self._uri
+
+
+def test_on_context_menu_returns_false_for_image(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._context_menu_actions = []
+    preview._save_image = lambda *_: None
+    preview._copy_image = lambda *_: None
+    preview._copy_to_clipboard = lambda *_: None
+    preview._uri_to_markdown_image = lambda *_: "![img](x)"
+
+    fake_webkit = SimpleNamespace(
+        ContextMenuAction=SimpleNamespace(
+            COPY_IMAGE_URL_TO_CLIPBOARD=1,
+            DOWNLOAD_IMAGE_TO_DISK=2,
+        ),
+        ContextMenuItem=SimpleNamespace(
+            new_from_gaction=lambda action, label: (action, label)
+        ),
+    )
+    monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
+
+    monkeypatch.setattr(
+        webkit_preview_6x.Gio.SimpleAction,
+        "new",
+        lambda *_: MagicMock(),
+    )
+
+    menu = _FakeContextMenu()
+    hit = _FakeHitTest(True, "file:///tmp/image.png")
+
+    handled = webkit_preview_6x.WebKitPreview_6x._on_context_menu(
+        preview, None, menu, hit
+    )
+
+    assert handled is False
+    assert len(menu.appended) == 3
+
+
+def test_copy_image_file_uri_uses_texture_loader():
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    loaded_paths = []
+    preview._set_clipboard_texture = lambda path: loaded_paths.append(path)
+
+    webkit_preview_6x.WebKitPreview_6x._copy_image(
+        preview, "file:///tmp/my%20image.png"
+    )
+
+    assert loaded_paths == ["/tmp/my image.png"]
+
+
+def test_set_clipboard_texture_sets_png_content(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+
+    clipboard = MagicMock()
+    primary_clipboard = MagicMock()
+    display = SimpleNamespace(
+        get_clipboard=lambda: clipboard,
+        get_primary_clipboard=lambda: primary_clipboard,
+    )
+    monkeypatch.setattr(webkit_preview_6x.Gdk.Display, "get_default", lambda: display)
+
+    texture = SimpleNamespace(save_to_png_bytes=lambda: b"PNGDATA")
+    monkeypatch.setattr(
+        webkit_preview_6x.Gdk.Texture, "new_from_filename", lambda _path: texture
+    )
+
+    providers = []
+    monkeypatch.setattr(
+        webkit_preview_6x.Gdk.ContentProvider,
+        "new_for_bytes",
+        lambda mime, data: providers.append((mime, data)) or ("provider", mime),
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._set_clipboard_texture(preview, "/tmp/image.png")
+
+    assert providers == [("image/png", b"PNGDATA")]
+    clipboard.set_content.assert_called_once_with(("provider", "image/png"))
+    primary_clipboard.set_content.assert_called_once_with(("provider", "image/png"))
+
+
+def test_on_create_web_view_opens_uri_externally():
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    opened = []
+    preview._open_uri_externally = lambda uri: opened.append(uri)
+
+    nav_action = SimpleNamespace(
+        get_request=lambda: SimpleNamespace(
+            get_uri=lambda: "https://example.com/photo.jpg"
+        )
+    )
+
+    result = webkit_preview_6x.WebKitPreview_6x._on_create_web_view(
+        preview, None, nav_action
+    )
+
+    assert result is None
+    assert opened == ["https://example.com/photo.jpg"]
+
+
+def test_open_uri_externally_launches_default_without_callback(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._on_open_path = None
+    preview._open_data_uri_externally = MagicMock()
+
+    launched = []
+    monkeypatch.setattr(
+        webkit_preview_6x.Gio,
+        "AppInfo",
+        SimpleNamespace(launch_default_for_uri=lambda uri, _ctx: launched.append(uri)),
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._open_uri_externally(
+        preview, "https://example.com/resource"
+    )
+
+    assert launched == ["https://example.com/resource"]
+    preview._open_data_uri_externally.assert_not_called()
+
+
+def test_open_uri_externally_file_uri_uses_default_launcher(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._on_open_path = MagicMock()
+    preview._open_data_uri_externally = MagicMock()
+
+    launched = []
+    monkeypatch.setattr(
+        webkit_preview_6x.Gio,
+        "AppInfo",
+        SimpleNamespace(launch_default_for_uri=lambda uri, _ctx: launched.append(uri)),
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._open_uri_externally(
+        preview, "file:///tmp/example.md#section"
+    )
+
+    assert launched == ["file:///tmp/example.md#section"]
+    preview._on_open_path.assert_not_called()
+    preview._open_data_uri_externally.assert_not_called()
+
+
+def test_open_uri_externally_http_does_not_use_file_callback(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    opened_paths = []
+    preview._on_open_path = lambda path: opened_paths.append(path)
+    preview._open_data_uri_externally = MagicMock()
+
+    launched = []
+    monkeypatch.setattr(
+        webkit_preview_6x.Gio,
+        "AppInfo",
+        SimpleNamespace(launch_default_for_uri=lambda uri, _ctx: launched.append(uri)),
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._open_uri_externally(
+        preview, "https://example.com/resource"
+    )
+
+    assert opened_paths == []
+    assert launched == ["https://example.com/resource"]
+
+
+def test_on_decide_policy_allows_same_document_file_anchor(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._base_uri = "file:///tmp/example.md"
+    preview._open_uri_externally = MagicMock()
+
+    fake_webkit = SimpleNamespace(
+        PolicyDecisionType=SimpleNamespace(NAVIGATION_ACTION=1),
+        NavigationType=SimpleNamespace(LINK_CLICKED=2),
+    )
+    monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
+
+    decision = MagicMock()
+    decision.get_navigation_action.return_value = SimpleNamespace(
+        get_request=lambda: SimpleNamespace(
+            get_uri=lambda: "file:///tmp/example.md#h1"
+        ),
+        get_navigation_type=lambda: fake_webkit.NavigationType.LINK_CLICKED,
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._on_decide_policy(
+        preview, None, decision, fake_webkit.PolicyDecisionType.NAVIGATION_ACTION
+    )
+
+    decision.ignore.assert_not_called()
+    preview._open_uri_externally.assert_not_called()
+
+
+def test_on_decide_policy_file_link_uses_open_path_callback(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._base_uri = "file:///tmp/current.md"
+    opened_paths = []
+    preview._on_open_path = lambda path: opened_paths.append(path)
+
+    fake_webkit = SimpleNamespace(
+        PolicyDecisionType=SimpleNamespace(NAVIGATION_ACTION=1),
+        NavigationType=SimpleNamespace(LINK_CLICKED=2),
+    )
+    monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
+
+    decision = MagicMock()
+    decision.get_navigation_action.return_value = SimpleNamespace(
+        get_request=lambda: SimpleNamespace(get_uri=lambda: "file:///tmp/other.md#h1"),
+        get_navigation_type=lambda: fake_webkit.NavigationType.LINK_CLICKED,
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._on_decide_policy(
+        preview, None, decision, fake_webkit.PolicyDecisionType.NAVIGATION_ACTION
+    )
+
+    decision.ignore.assert_called_once()
+    assert opened_paths == ["/tmp/other.md"]

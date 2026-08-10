@@ -142,7 +142,7 @@ class EditorTab(AbstractTab):
             # Import lazily to avoid requiring WebKit 6.0 at module load time
             from calamus.webkit_preview_6x import WebKitPreview_6x
 
-            self.preview: AbstractPreview = WebKitPreview_6x(on_link_hover=on_open_path)
+            self.preview: AbstractPreview = WebKitPreview_6x(on_open_path=on_open_path)
         else:
             # WebKit 4.1 reached end-of-life on Aug 31, 2023
             raise RuntimeError(

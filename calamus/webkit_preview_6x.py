@@ -17,6 +17,7 @@ but the module can be imported during test collection.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -206,6 +207,8 @@ class WebKitPreview_6x(AbstractWebKitPreview):
       - No feature detection (all APIs guaranteed in 6.0+)
     """
 
+    _LOADING_INDICATOR_DELAY_MS = 200
+
     def _setup_webkit_context(self) -> None:
         """Initialize WebKit 6.0 context and WebView."""
         # Ensure WebKit/JSC imports are available before using them
@@ -254,9 +257,12 @@ class WebKitPreview_6x(AbstractWebKitPreview):
         self._mermaid_cache = MermaidCache()
         self._mmdc_available: bool = SubprocessMermaidRenderer().is_available()
         self._render_generation: int = 0
+        self._render_spinner_timeout_id: int | None = None
+        self._has_rendered_content: bool = False
 
         # Footer widget setup
         self._setup_footer_widget()
+        self._setup_loading_overlay()
 
     def _setup_sandbox(self, context: object) -> None:
         """Configure WebKit 6.0 sandbox (disable for Docker environments)."""
@@ -326,6 +332,76 @@ box {
         # Add to overlay
         self._overlay.add_overlay(self._footer_wrapper)
 
+    def _setup_loading_overlay(self) -> None:
+        """Create and configure the loading overlay shown during render work."""
+        self._loading_overlay = Gtk.Box.new(Gtk.Orientation.VERTICAL, 6)
+        self._loading_overlay.set_halign(Gtk.Align.CENTER)
+        self._loading_overlay.set_valign(Gtk.Align.CENTER)
+        self._loading_overlay.set_visible(False)
+        self._loading_overlay.set_name("preview-loading-overlay")
+
+        css_provider = Gtk.CssProvider.new()
+        css_provider.load_from_data(b"""
+#preview-loading-overlay {
+  background-color: alpha(@theme_bg_color, 0.82);
+  border: 1px solid alpha(@theme_fg_color, 0.18);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+        """)
+        style_context = self._loading_overlay.get_style_context()
+        style_context.add_provider(
+            css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        self._loading_spinner = Gtk.Spinner.new()
+        self._loading_overlay.append(self._loading_spinner)
+
+        label = Gtk.Label.new("Rendering preview...")
+        self._loading_overlay.append(label)
+
+        self._overlay.add_overlay(self._loading_overlay)
+
+    def _set_loading_visible(self, visible: bool) -> None:
+        """Show/hide loading overlay and spinner."""
+        if visible:
+            self._loading_spinner.start()
+            self._loading_overlay.set_visible(True)
+        else:
+            self._loading_spinner.stop()
+            self._loading_overlay.set_visible(False)
+
+    def _clear_loading_spinner_timeout(self) -> None:
+        """Cancel any pending delayed-show timeout for the loading overlay."""
+        if self._render_spinner_timeout_id is None:
+            return
+        GLib.source_remove(self._render_spinner_timeout_id)
+        self._render_spinner_timeout_id = None
+
+    def _show_loading_if_current_generation(self, generation: int) -> bool:
+        """Delayed callback to show loading overlay only for latest render."""
+        self._render_spinner_timeout_id = None
+        if generation != self._render_generation:
+            return False
+        self._set_loading_visible(True)
+        return False
+
+    def _begin_render_loading(self, generation: int) -> None:
+        """Start loading indicator flow for a render generation."""
+        self._clear_loading_spinner_timeout()
+        if not self._has_rendered_content:
+            self._set_loading_visible(True)
+            return
+        self._render_spinner_timeout_id = GLib.timeout_add(
+            self._LOADING_INDICATOR_DELAY_MS,
+            lambda: self._show_loading_if_current_generation(generation),
+        )
+
+    def _end_render_loading(self) -> None:
+        """Stop loading indicator after render is complete or fails."""
+        self._clear_loading_spinner_timeout()
+        self._set_loading_visible(False)
+
     def _on_decide_policy(
         self,
         _webview: object,
@@ -334,27 +410,43 @@ box {
     ) -> None:
         """Intercept WebKit navigation to prevent preview from navigating away."""
         if decision_type != WebKit.PolicyDecisionType.NAVIGATION_ACTION:
+            decision.use()
             return
 
         action = decision.get_navigation_action()
         request = action.get_request()
         uri = request.get_uri()
 
-        # Allow file:// anchors to same document
+        # Allow in-page anchors to be handled by WebKit.
         if uri.startswith("#"):
             return
 
-        # Check for same-document navigation
-        if _is_same_document_file_anchor(uri, self._base_uri):
-            return
+        # Allow file:// same-document anchors.
+        if uri.startswith("file://"):
+            raw_path = unquote(uri[len("file://") :])
+            path, _, fragment = raw_path.partition("#")
+            if fragment and _is_same_document_file_anchor(path, self._base_uri):
+                return
 
         # Ignore non-link navigation
         if action.get_navigation_type() != WebKit.NavigationType.LINK_CLICKED:
+            decision.use()
             return
 
-        # Block navigation, open URI externally instead
-        decision.ignore()
-        self._open_uri_externally(uri)
+        if uri.startswith("file://"):
+            raw_path = unquote(uri[len("file://") :])
+            path, _, _fragment = raw_path.partition("#")
+            decision.ignore()
+            if self._on_open_path is not None:
+                self._on_open_path(path)
+        elif uri.startswith(("http://", "https://")):
+            decision.ignore()
+            try:
+                Gio.AppInfo.launch_default_for_uri(uri, None)
+            except GLib.Error:
+                pass
+        else:
+            decision.ignore()
 
     def _on_context_menu(
         self,
@@ -377,12 +469,27 @@ box {
             WebKit.ContextMenuAction.COPY_IMAGE_URL_TO_CLIPBOARD,
             WebKit.ContextMenuAction.DOWNLOAD_IMAGE_TO_DISK,
         }
+        copy_image_action = getattr(
+            WebKit.ContextMenuAction, "COPY_IMAGE_TO_CLIPBOARD", None
+        )
+        if copy_image_action is not None:
+            _remove.add(copy_image_action)
         for item in list(context_menu.get_items()):
             if hasattr(item, "get_stock_action") and item.get_stock_action() in _remove:
                 context_menu.remove(item)
 
         # Clear and add custom actions
         self._context_menu_actions = []
+
+        # Add "Copy Image" action
+        copy_image_action = Gio.SimpleAction.new("copy-image", None)
+        copy_image_action.connect("activate", lambda *_: self._copy_image(image_uri))
+        self._context_menu_actions.append(copy_image_action)
+
+        copy_image_item = WebKit.ContextMenuItem.new_from_gaction(
+            copy_image_action, "Copy Image"
+        )
+        context_menu.append(copy_image_item)
 
         # Add "Save Image As..." action
         save_action = Gio.SimpleAction.new("save-image", None)
@@ -410,7 +517,7 @@ box {
             )
             context_menu.append(markdown_item)
 
-        return True
+        return False
 
     def _on_download_started(self, _context: object, download: object) -> None:
         """Handle download-started signal (WebKit 6.0)."""
@@ -498,19 +605,102 @@ box {
         """Copy text to clipboard."""
         try:
             display = Gdk.Display.get_default()
+            if display is None:
+                return
             provider = Gdk.ContentProvider.new_for_value(GObject.Value(str, text))
             display.get_clipboard().set_content(provider)
         except Exception:
             pass
 
-    def _on_create_web_view(self, *args: object) -> object | None:
+    def _copy_image(self, image_uri: str) -> None:
+        """Copy image data from *image_uri* into the system clipboard."""
+        if image_uri.startswith("file://"):
+            path = unquote(urlparse(image_uri).path)
+            self._set_clipboard_texture(path)
+            return
+
+        if image_uri.startswith("data:"):
+            try:
+                header, _, data_part = image_uri.partition(",")
+                raw = (
+                    base64.b64decode(data_part)
+                    if ";base64" in header
+                    else unquote(data_part).encode("utf-8")
+                )
+                suffix = ".svg" if "image/svg+xml" in header else ".img"
+                self._set_clipboard_texture_from_bytes(raw, suffix)
+            except Exception:
+                pass
+            return
+
+        def _fetch_and_copy() -> None:
+            try:
+                req = urllib.request.Request(
+                    image_uri,
+                    headers={
+                        "User-Agent": (
+                            "Mozilla/5.0 (X11; Linux x86_64) "
+                            "Gecko/20100101 Firefox/128.0"
+                        )
+                    },
+                )
+                with urllib.request.urlopen(req) as response:
+                    raw = response.read()
+                parsed = urlparse(image_uri)
+                ext = os.path.splitext(parsed.path)[1] or ".img"
+                GLib.idle_add(
+                    lambda b=raw, s=ext: self._set_clipboard_texture_from_bytes(b, s)
+                    or False
+                )
+            except Exception:
+                pass
+
+        threading.Thread(target=_fetch_and_copy, daemon=True).start()
+
+    def _set_clipboard_texture_from_bytes(self, raw: bytes, suffix: str) -> None:
+        try:
+            fd, path = tempfile.mkstemp(suffix=suffix)
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(raw)
+            self._set_clipboard_texture(path)
+        except Exception:
+            pass
+
+    def _set_clipboard_texture(self, path: str) -> None:
+        try:
+            display = Gdk.Display.get_default()
+            if display is None:
+                return
+            texture = Gdk.Texture.new_from_filename(path)
+            png_bytes = texture.save_to_png_bytes()
+            provider = Gdk.ContentProvider.new_for_bytes("image/png", png_bytes)
+            display.get_clipboard().set_content(provider)
+            primary = display.get_primary_clipboard()
+            if primary is not None:
+                primary.set_content(provider)
+        except Exception as exc:
+            _logger.error("Failed to copy image to clipboard: %s", exc)
+
+    def _on_create_web_view(
+        self, _webview: object, navigation_action: object
+    ) -> object | None:
         """Handle link opening in new window/tab."""
+        try:
+            uri = navigation_action.get_request().get_uri()
+        except Exception:
+            return None
+        self._open_uri_externally(uri)
         return None
 
     def _open_uri_externally(self, uri: str) -> None:
         """Open URI in external application."""
-        if self._on_open_path:
-            self._on_open_path(uri)
+        if uri.startswith("data:"):
+            self._open_data_uri_externally(uri)
+            return
+        try:
+            Gio.AppInfo.launch_default_for_uri(uri, None)
+        except GLib.Error:
+            pass
 
     def _open_data_uri_externally(self, uri: str) -> None:
         """Handle data: URIs by saving to temp file."""
@@ -599,7 +789,13 @@ if (document.body) {
 
     def _on_load_changed(self, _webview: object, load_event: object) -> None:
         """Handle page load completion."""
-        pass
+        if load_event == WebKit.LoadEvent.FINISHED:
+            if self._pending_scroll_restore_ratio is not None:
+                ratio = self._pending_scroll_restore_ratio
+                self._pending_scroll_restore_ratio = None
+                self._restore_scroll_ratio(ratio)
+            self._has_rendered_content = True
+            self._end_render_loading()
 
     def _on_tooltip_message(
         self,
@@ -648,20 +844,44 @@ if (document.body) {
     def update(self, markdown_text: str) -> None:
         """Update preview with new markdown content."""
         self._last_markdown = markdown_text
+        self._render_generation += 1
+        generation = self._render_generation
+        self._begin_render_loading(generation)
+        self._capture_scroll_ratio(
+            lambda ratio: self._start_async_render(markdown_text, generation, ratio)
+        )
+
+    def _start_async_render(
+        self, markdown_text: str, generation: int, scroll_ratio: float | None
+    ) -> None:
+        """Start async render worker after capturing the current scroll ratio."""
+        if generation != self._render_generation:
+            return
 
         # Run async rendering
         def worker() -> None:
             try:
                 renderer = self._renderer or MistuneRenderer()
                 html = renderer.render(markdown_text)
-                GLib.idle_add(lambda: self._on_async_render_done(html))
+                GLib.idle_add(
+                    lambda g=generation, h=html, r=scroll_ratio: self._on_async_render_done(
+                        g, h, r
+                    )
+                )
             except Exception as e:
                 _logger.error(f"Render error: {e}")
+                GLib.idle_add(lambda g=generation: self._on_async_render_failed(g))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_async_render_done(self, html: str) -> bool:
+    def _on_async_render_done(
+        self, generation: int, html: str, scroll_ratio: float | None
+    ) -> bool:
         """Handle async render completion."""
+        if generation != self._render_generation:
+            return False
+        self._pending_scroll_restore_ratio = scroll_ratio
+
         dark = self._style_manager.get_dark()
         color_scheme = "dark" if dark else "light"
 
@@ -681,6 +901,78 @@ if (document.body) {
 
         self._view.load_html(full_html, self._base_uri)
         return False
+
+    def _on_async_render_failed(self, generation: int) -> bool:
+        """Handle async render failure for current generation."""
+        if generation == self._render_generation:
+            self._end_render_loading()
+        return False
+
+    def _capture_scroll_ratio(self, callback: Callable[[float | None], None]) -> None:
+        """Capture normalized vertical scroll ratio before triggering re-render."""
+        js = """
+            (() => {
+              const maxY = Math.max(
+                1,
+                document.documentElement.scrollHeight - window.innerHeight
+              );
+              const y = Math.max(0, window.scrollY || window.pageYOffset || 0);
+              return y / maxY;
+            })();
+        """
+        if hasattr(self._view, "evaluate_javascript"):
+            self._view.evaluate_javascript(
+                js,
+                -1,
+                None,
+                None,
+                None,
+                self._on_capture_scroll_ratio_done,
+                callback,
+            )
+            return
+        callback(None)
+
+    def _on_capture_scroll_ratio_done(
+        self,
+        webview: object,
+        result: object,
+        callback: Callable[[float | None], None],
+    ) -> None:
+        """Finish evaluate_javascript callback and pass extracted ratio onward."""
+        callback(self._extract_scroll_ratio(webview, result))
+
+    def _extract_scroll_ratio(self, webview: object, result: object) -> float | None:
+        """Extract scroll ratio from JavaScript result object."""
+        js_result = self._finish_javascript(webview, result)
+        if js_result is None:
+            return None
+        if hasattr(js_result, "is_number") and js_result.is_number():
+            return max(0.0, min(1.0, float(js_result.to_double())))
+        return None
+
+    def _finish_javascript(self, webview: object, result: object) -> object | None:
+        """Finish an evaluate_javascript operation, handling errors safely."""
+        if hasattr(webview, "evaluate_javascript_finish"):
+            try:
+                return webview.evaluate_javascript_finish(result)
+            except GLib.Error:
+                return None
+        return None
+
+    def _restore_scroll_ratio(self, ratio: float | None) -> None:
+        """Restore vertical scroll position from normalized ratio."""
+        if ratio is None:
+            return
+        safe_ratio = max(0.0, min(1.0, ratio))
+        js = (
+            "(() => {"
+            "const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);"
+            f"window.scrollTo(0, maxY * {safe_ratio:.6f});"
+            "})();"
+        )
+        if hasattr(self._view, "evaluate_javascript"):
+            self._view.evaluate_javascript(js, -1, None, None, None, None, None)
 
     def get_widget(self) -> Gtk.Widget:
         """Return the root widget."""
