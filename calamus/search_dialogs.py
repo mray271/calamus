@@ -203,6 +203,41 @@ def _wire_entry_history_recall(
     entry.add_controller(key_controller)
 
 
+def _wire_entry_activate(entry: Gtk.Entry, callback: Callable[[], None]) -> None:
+    """Wire Enter on an entry to invoke the provided action callback."""
+    entry.connect("activate", lambda _e: callback())
+
+
+def _activate_dialog_default(dialog: Gtk.Window) -> None:
+    """Trigger the dialog's default button, if one is configured."""
+    default_widget = dialog.get_default_widget()
+    if isinstance(default_widget, Gtk.Button):
+        default_widget.emit("clicked")
+
+
+def _wire_default_action_enter(dialog: Gtk.Window) -> None:
+    """Route plain Enter to the dialog's default widget, if any."""
+    key_controller = Gtk.EventControllerKey.new()
+    key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+
+    def on_key_pressed(
+        _ctrl: Gtk.EventControllerKey,
+        keyval: int,
+        _keycode: int,
+        _modifiers: int,
+    ) -> bool:
+        from gi.repository import Gdk
+
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            _activate_dialog_default(dialog)
+            return True
+        return False
+
+    key_controller.connect("key-pressed", on_key_pressed)
+    dialog.add_controller(key_controller)
+    setattr(dialog, "_default_enter_controller", key_controller)
+
+
 def _wire_keep_dialog_title(
     dialog: Adw.Window,
     base_title: str,
@@ -271,6 +306,7 @@ class FindDialog(FindDialogLogic, Adw.Window):
         _wire_entry_history_recall(
             self._find_entry, self._state.history_prev, self._state.history_next
         )
+        _wire_entry_activate(self._find_entry, self.handle_find)
         content_box.append(self._find_entry)
 
         options_box, self._checks = _build_options_box(self._state)
@@ -284,10 +320,14 @@ class FindDialog(FindDialogLogic, Adw.Window):
         cancel_btn.connect("clicked", lambda _b: self.close())
         find_btn = Gtk.Button(label="Find")
         find_btn.add_css_class("suggested-action")
+        find_btn.set_receives_default(True)
         find_btn.connect("clicked", lambda _b: self.handle_find())
         btn_box.append(cancel_btn)
         btn_box.append(find_btn)
         content_box.append(btn_box)
+
+        _wire_default_action_enter(self)
+        self.set_default_widget(find_btn)
 
         toolbar_view.set_content(content_box)
         self.set_content(toolbar_view)
@@ -351,6 +391,7 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         _wire_entry_history_recall(
             self._find_entry, self._state.history_prev, self._state.history_next
         )
+        _wire_entry_activate(self._find_entry, self.handle_replace)
         content_box.append(self._find_entry)
 
         replace_label = Gtk.Label(
@@ -364,6 +405,7 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
             self._state.replace_history_prev,
             self._state.replace_history_next,
         )
+        _wire_entry_activate(self._replace_entry, self.handle_replace)
         content_box.append(self._replace_entry)
 
         options_box, self._checks = _build_options_box(self._state)
@@ -389,6 +431,7 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         btn_box.set_halign(Gtk.Align.END)
         action_btns: list[Gtk.Button] = []
+        replace_btn: Gtk.Button | None = None
         for label, callback in [
             ("Cancel", lambda _b: self.close()),
             ("Find", lambda _b: self.handle_find()),
@@ -397,12 +440,18 @@ class ReplaceDialog(ReplaceDialogLogic, Adw.Window):
         ]:
             btn = Gtk.Button(label=label)
             btn.connect("clicked", callback)
-            if label == "Replace & Find":
+            if label == "Replace":
                 btn.add_css_class("suggested-action")
+                btn.set_receives_default(True)
+                replace_btn = btn
             btn_box.append(btn)
             if label != "Cancel":
                 action_btns.append(btn)
         content_box.append(btn_box)
+
+        _wire_default_action_enter(self)
+        if replace_btn is not None:
+            self.set_default_widget(replace_btn)
 
         toolbar_view.set_content(content_box)
         self.set_content(toolbar_view)
