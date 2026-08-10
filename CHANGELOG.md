@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restored preview image right-click menu behavior in the WebKit 6.x path, including working Open Link/Open Image actions and scheme-correct URL/file routing.
 - Restored preview scroll-position preservation across re-renders in the WebKit 6.x path so updates no longer snap to top.
 - Added reliable image clipboard copy for preview context menu in WebKit 6.x, including Linux CLIPBOARD and PRIMARY selections.
+- Restored SVG-specific image opening behavior in WebKit 6.x (`data:image/svg+xml` opens in Calamus `ImageViewerWindow`; other image types open via system viewer).
+- Fixed WebKit 6.x `Save Image As...` and `Copy Image` handling for Mermaid/SVG `data:` URIs so text content is preserved through round-trip save/copy flows.
+- Updated Mermaid CLI rendering config to avoid `foreignObject` labels in generated SVG output, improving compatibility with Inkscape, office suites, and non-browser image viewers.
 
 ### Added
 - Preview loading indicator overlay ("Rendering preview...") in WebKit 6.x with theme-aware semi-transparent background for long render operations.

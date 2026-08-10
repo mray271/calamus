@@ -1,11 +1,25 @@
 """Tests for WebKit 6.0 preview implementation."""
 
+import base64
+import re
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
+from urllib.parse import quote
 
 import pytest
 
 from calamus import webkit_preview_6x
+from calamus.mermaid_support import SubprocessMermaidRenderer
+
+MERMAID_SVG_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures" / "mermaid_sample.svg"
+)
+SAMPLE_DOC_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "samples"
+    / "why_claude_sonnet_fails_to_discover_music.md"
+)
 
 
 class TestWebKitPreview6x:
@@ -86,6 +100,104 @@ class TestDefaultSaveFilename:
         uri = "data:application/unknown;base64,xyz"
         filename = webkit_preview_6x._default_save_filename(uri)
         assert filename == "download"
+
+
+class TestDataUriDecode:
+    def test_decodes_base64_svg_and_preserves_text(self):
+        svg = "<svg><text>Mermaid Label</text></svg>".encode("utf-8")
+        uri = f"data:image/svg+xml;base64,{base64.b64encode(svg).decode('ascii')}"
+        mime, raw = webkit_preview_6x._decode_data_uri_bytes(uri)
+        assert mime == "image/svg+xml"
+        assert b"Mermaid Label" in raw
+
+    def test_decodes_urlencoded_svg_and_preserves_text(self):
+        svg = "<svg><text>Node A</text></svg>"
+        uri = f"data:image/svg+xml,{quote(svg)}"
+        mime, raw = webkit_preview_6x._decode_data_uri_bytes(uri)
+        assert mime == "image/svg+xml"
+        assert b"Node A" in raw
+
+
+def test_write_image_uri_to_path_saves_svg_text(tmp_path):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    svg = "<svg><text>Mermaid Label</text></svg>"
+    uri = f"data:image/svg+xml,{quote(svg)}"
+    dest = tmp_path / "saved.svg"
+
+    webkit_preview_6x.WebKitPreview_6x._write_image_uri_to_path(preview, uri, str(dest))
+
+    saved = dest.read_bytes()
+    assert b"Mermaid Label" in saved
+
+
+def test_write_image_uri_to_path_roundtrip_mermaid_svg_fixture_urlencoded(tmp_path):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    svg_text = MERMAID_SVG_FIXTURE.read_text(encoding="utf-8")
+    uri = f"data:image/svg+xml,{quote(svg_text)}"
+    dest = tmp_path / "saved-mermaid-url.svg"
+
+    webkit_preview_6x.WebKitPreview_6x._write_image_uri_to_path(preview, uri, str(dest))
+
+    saved = dest.read_text(encoding="utf-8")
+    assert "Start Node" in saved
+    assert "End Node" in saved
+    assert "Mermaid Note: This text should survive Save Image As round-trip." in saved
+
+
+def test_write_image_uri_to_path_roundtrip_mermaid_svg_fixture_base64(tmp_path):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    svg_raw = MERMAID_SVG_FIXTURE.read_bytes()
+    uri = f"data:image/svg+xml;base64,{base64.b64encode(svg_raw).decode('ascii')}"
+    dest = tmp_path / "saved-mermaid-b64.svg"
+
+    webkit_preview_6x.WebKitPreview_6x._write_image_uri_to_path(preview, uri, str(dest))
+
+    saved_raw = dest.read_bytes()
+    assert b"Start Node" in saved_raw
+    assert b"End Node" in saved_raw
+    assert (
+        b"Mermaid Note: This text should survive Save Image As round-trip." in saved_raw
+    )
+
+
+@pytest.mark.skipif(
+    not SubprocessMermaidRenderer().is_available(), reason="mmdc not installed"
+)
+def test_save_roundtrip_uses_sample_original_flawed_mermaid_block(tmp_path):
+    from calamus.renderer import MistuneRenderer
+
+    markdown = SAMPLE_DOC_PATH.read_text(encoding="utf-8")
+    match = re.search(
+        r"### Original \(Flawed\) Approach\n\n```mermaid\n(.*?)```",
+        markdown,
+        re.DOTALL,
+    )
+    assert match, "Could not locate the expected Mermaid block in sample document"
+
+    mermaid_block = f"```mermaid\n{match.group(1)}```\n"
+    html = MistuneRenderer().render(mermaid_block)
+    data_uri_match = re.search(r"data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)", html)
+    assert data_uri_match, "Rendered Mermaid block did not produce an SVG data URI"
+
+    uri = f"data:image/svg+xml;base64,{data_uri_match.group(1)}"
+    dest = tmp_path / "sample-mermaid-roundtrip.svg"
+    webkit_preview_6x.WebKitPreview_6x._write_image_uri_to_path(
+        object.__new__(webkit_preview_6x.WebKitPreview_6x), uri, str(dest)
+    )
+
+    saved_svg = dest.read_text(encoding="utf-8")
+    assert "<foreignObject" not in saved_svg
+    assert "<text" in saved_svg
+    for token in (
+        "Receive",
+        "Query",
+        "Kenilworth",
+        "Katrina",
+        "ADST",
+        "Music",
+        "found",
+    ):
+        assert token in saved_svg
 
 
 class TestIsSameDocumentFileAnchor:
@@ -203,6 +315,37 @@ def test_copy_image_file_uri_uses_texture_loader():
     assert loaded_paths == ["/tmp/my image.png"]
 
 
+def test_copy_image_file_svg_uses_svg_clipboard(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    copied = []
+    preview._set_clipboard_svg = lambda raw: copied.append(raw)
+    preview._set_clipboard_texture = MagicMock()
+
+    m = MagicMock()
+    m.__enter__.return_value.read.return_value = b"<svg/>"
+    m.__exit__.return_value = False
+    monkeypatch.setattr("builtins.open", lambda *_args, **_kwargs: m)
+
+    webkit_preview_6x.WebKitPreview_6x._copy_image(preview, "file:///tmp/diagram.svg")
+
+    assert copied == [b"<svg/>"]
+    preview._set_clipboard_texture.assert_not_called()
+
+
+def test_copy_image_data_svg_uses_svg_clipboard():
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    copied = []
+    preview._set_clipboard_svg = lambda raw: copied.append(raw)
+    preview._set_clipboard_texture_from_bytes = MagicMock()
+
+    webkit_preview_6x.WebKitPreview_6x._copy_image(
+        preview, "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="
+    )
+
+    assert copied == [b"<svg></svg>"]
+    preview._set_clipboard_texture_from_bytes.assert_not_called()
+
+
 def test_set_clipboard_texture_sets_png_content(monkeypatch):
     preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
 
@@ -231,6 +374,30 @@ def test_set_clipboard_texture_sets_png_content(monkeypatch):
     assert providers == [("image/png", b"PNGDATA")]
     clipboard.set_content.assert_called_once_with(("provider", "image/png"))
     primary_clipboard.set_content.assert_called_once_with(("provider", "image/png"))
+
+
+def test_set_clipboard_svg_sets_svg_provider(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._set_clipboard_provider = MagicMock()
+
+    providers = []
+    monkeypatch.setattr(
+        webkit_preview_6x.Gdk.ContentProvider,
+        "new_for_bytes",
+        lambda mime, data: providers.append((mime, data))
+        or SimpleNamespace(mime=mime, data=data),
+    )
+    monkeypatch.setattr(
+        webkit_preview_6x.Gdk.ContentProvider,
+        "new_union",
+        lambda p: SimpleNamespace(union=p),
+    )
+    monkeypatch.setattr(webkit_preview_6x.Gdk.Texture, "new_from_filename", MagicMock())
+
+    webkit_preview_6x.WebKitPreview_6x._set_clipboard_svg(preview, b"<svg/>")
+
+    assert providers[0][0] == "image/svg+xml"
+    preview._set_clipboard_provider.assert_called_once()
 
 
 def test_on_create_web_view_opens_uri_externally():
@@ -365,3 +532,49 @@ def test_on_decide_policy_file_link_uses_open_path_callback(monkeypatch):
 
     decision.ignore.assert_called_once()
     assert opened_paths == ["/tmp/other.md"]
+
+
+def test_open_data_uri_svg_uses_image_viewer_window(monkeypatch):
+    import sys
+
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+
+    presented = []
+
+    class FakeViewer:
+        def __init__(self, uri, title):
+            presented.append((uri, title))
+
+        def present(self):
+            presented.append("presented")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "calamus.imageviewer",
+        SimpleNamespace(ImageViewerWindow=FakeViewer),
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._open_data_uri_externally(
+        preview, "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="
+    )
+
+    assert presented[0][1] == "SVG Viewer"
+    assert presented[1] == "presented"
+
+
+def test_open_data_uri_png_opens_temp_file_externally(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+
+    launched = []
+    monkeypatch.setattr(
+        webkit_preview_6x.Gio,
+        "AppInfo",
+        SimpleNamespace(launch_default_for_uri=lambda uri, _ctx: launched.append(uri)),
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._open_data_uri_externally(
+        preview, "data:image/png;base64,iVBORw0KGgo="
+    )
+
+    assert len(launched) == 1
+    assert launched[0].startswith("file://")
