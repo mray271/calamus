@@ -245,6 +245,7 @@ class _FakeEditor:
         self.replace_current_calls: list = []
         self.replace_all_calls: list = []
         self.replace_and_find_calls: list = []
+        self._buffer = _FakeBuffer()
 
     def find_next(self, state):
         self.find_next_calls.append(state)
@@ -268,6 +269,37 @@ class _FakeEditor:
 
     def get_selection(self):
         return ("", False)
+
+    def get_buffer(self):
+        return self._buffer
+
+
+class _FakeIter:
+    def __init__(self, offset: int):
+        self._offset = offset
+
+    def get_offset(self) -> int:
+        return self._offset
+
+
+class _FakeBuffer:
+    def __init__(self):
+        self._selection = False
+        self._selection_start = 0
+        self._selection_end = 0
+        self.cursor_offset = 0
+
+    def get_has_selection(self):
+        return self._selection
+
+    def get_selection_bounds(self):
+        return _FakeIter(self._selection_start), _FakeIter(self._selection_end)
+
+    def place_cursor(self, iterator):
+        self.cursor_offset = iterator.get_offset()
+
+    def get_iter_at_offset(self, offset: int):
+        return _FakeIter(offset)
 
 
 class _FakeCheck:
@@ -451,6 +483,7 @@ def test_replace_logic_handle_replace_calls_replace_current():
     state.push_find("foo")
     logic = _TestReplaceLogic(editor, state, find_text="foo", replace_text="bar").impl
     logic.handle_replace()
+    assert len(editor.find_next_calls) == 1
     assert len(editor.replace_current_calls) == 1
     replacement, _ = editor.replace_current_calls[0]
     assert replacement == "bar"
@@ -465,7 +498,22 @@ def test_replace_logic_handle_replace_and_find():
     logic._checks["keep_dialog"] = _FakeCheck(True)
     result = logic.handle_replace_and_find()
     assert result is True
-    assert len(editor.replace_and_find_calls) == 1
+    assert len(editor.find_next_calls) == 2
+    assert len(editor.replace_current_calls) == 1
+
+
+def test_replace_logic_handle_replace_and_find_honors_backward():
+    editor = _FakeEditor()
+    state = SearchState()
+    state.search_backward = True
+    state.keep_dialog = True
+    state.push_find("foo")
+    logic = _TestReplaceLogic(editor, state, find_text="foo", replace_text="bar").impl
+    logic._checks["search_backward"] = _FakeCheck(True)
+    result = logic.handle_replace_and_find()
+    assert result is True
+    assert len(editor.find_previous_calls) == 2
+    assert len(editor.replace_current_calls) == 1
 
 
 def test_replace_logic_handle_replace_and_find_closes_when_not_keep():
@@ -517,6 +565,136 @@ def test_replace_logic_get_all_editors_no_tab_manager():
     logic = _TestReplaceLogic(editor, state).impl
     editors = logic._get_all_editors()
     assert editors == [editor]
+
+
+def test_find_dialog_entry_activate_triggers_find():
+    gi = pytest.importorskip("gi")
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from calamus.search_dialogs import FindDialog
+
+    _init_gtk()
+
+    class _Editor(_FakeEditor):
+        pass
+
+    editor = _Editor()
+    state = SearchState()
+    dialog = FindDialog(editor, state)
+    try:
+        dialog._find_entry.set_text("needle")
+        dialog.handle_find()
+        assert len(editor.find_next_calls) == 1
+    finally:
+        dialog.close()
+
+
+def test_replace_dialog_entry_activate_triggers_replace():
+    gi = pytest.importorskip("gi")
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from calamus.search_dialogs import ReplaceDialog
+
+    _init_gtk()
+
+    editor = _FakeEditor()
+    state = SearchState()
+    dialog = ReplaceDialog(editor, state)
+    try:
+        dialog._find_entry.set_text("needle")
+        dialog._replace_entry.set_text("replacement")
+        dialog.handle_replace()
+        assert len(editor.replace_current_calls) == 1
+    finally:
+        dialog.close()
+
+
+def test_find_dialog_default_widget_is_find():
+    gi = pytest.importorskip("gi")
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from calamus.search_dialogs import FindDialog
+
+    _init_gtk()
+
+    dialog = FindDialog(_FakeEditor(), SearchState())
+    try:
+        default = dialog.get_default_widget()
+        assert default is not None
+        assert default.get_label() == "Find"
+    finally:
+        dialog.close()
+
+
+def test_replace_dialog_default_widget_is_replace():
+    gi = pytest.importorskip("gi")
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from calamus.search_dialogs import ReplaceDialog
+
+    _init_gtk()
+
+    dialog = ReplaceDialog(_FakeEditor(), SearchState())
+    try:
+        default = dialog.get_default_widget()
+        assert default is not None
+        assert default.get_label() == "Replace"
+    finally:
+        dialog.close()
+
+
+def test_find_dialog_enter_works_when_checkbox_has_focus():
+    from calamus.search_dialogs import FindDialog, _activate_dialog_default
+
+    _init_gtk()
+
+    editor = _FakeEditor()
+    dialog = FindDialog(editor, SearchState())
+    try:
+        dialog._find_entry.set_text("needle")
+        dialog._checks["keep_dialog"].grab_focus()
+        _activate_dialog_default(dialog)
+        assert len(editor.find_next_calls) == 1
+    finally:
+        dialog.close()
+
+
+def test_replace_dialog_enter_uses_replace_default_when_checkbox_has_focus():
+    from calamus.search_dialogs import ReplaceDialog, _activate_dialog_default
+
+    _init_gtk()
+
+    editor = _FakeEditor()
+    dialog = ReplaceDialog(editor, SearchState())
+    try:
+        dialog._find_entry.set_text("needle")
+        dialog._replace_entry.set_text("replacement")
+        dialog._checks["keep_dialog"].grab_focus()
+        _activate_dialog_default(dialog)
+        assert len(editor.find_next_calls) == 1
+        assert len(editor.replace_current_calls) == 1
+        assert len(editor.replace_and_find_calls) == 0
+    finally:
+        dialog.close()
+
+
+def test_replace_dialog_enter_honors_backward_search_when_checkbox_has_focus():
+    from calamus.search_dialogs import ReplaceDialog, _activate_dialog_default
+
+    _init_gtk()
+
+    editor = _FakeEditor()
+    dialog = ReplaceDialog(editor, SearchState())
+    try:
+        dialog._find_entry.set_text("needle")
+        dialog._replace_entry.set_text("replacement")
+        dialog._checks["search_backward"].set_active(True)
+        dialog._checks["keep_dialog"].grab_focus()
+        _activate_dialog_default(dialog)
+        assert len(editor.find_previous_calls) == 1
+        assert len(editor.replace_current_calls) == 1
+    finally:
+        dialog.close()
 
 
 # ---------------------------------------------------------------------------

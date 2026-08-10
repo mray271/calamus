@@ -84,6 +84,10 @@ class AbstractEditor(ABC):
         """Return the underlying GTK widget."""
 
     @abstractmethod
+    def get_buffer(self) -> GtkSource.Buffer:
+        """Return the underlying text buffer."""
+
+    @abstractmethod
     def set_editable(self, editable: bool) -> None:
         """Set whether the editor is editable."""
 

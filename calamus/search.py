@@ -261,15 +261,34 @@ class ReplaceDialogLogic:
         else:
             self._editor.find_next(self._live_state)
 
-    def handle_replace(self) -> None:
+    def _find_current_match(self) -> bool:
+        if self._live_state.search_backward:
+            return self._editor.find_previous(self._live_state)
+        return self._editor.find_next(self._live_state)
+
+    def handle_replace(self) -> bool:
         self.commit_entries()
-        self._editor.replace_current(self._live_state.replace_string, self._live_state)
+        if not self._find_current_match():
+            return False
+        return self._editor.replace_current(
+            self._live_state.replace_string, self._live_state
+        )
 
     def handle_replace_and_find(self) -> bool:
         self.commit_entries()
-        found = self._editor.replace_and_find(
-            self._live_state.replace_string, self._live_state
-        )
+        if not self._find_current_match():
+            return False
+        buffer = self._editor.get_buffer()
+        start_offset = 0
+        if buffer.get_has_selection():
+            sel_start, _sel_end = buffer.get_selection_bounds()
+            start_offset = sel_start.get_offset()
+        self._editor.replace_current(self._live_state.replace_string, self._live_state)
+        if self._live_state.search_backward:
+            buffer.place_cursor(buffer.get_iter_at_offset(start_offset))
+            found = self._editor.find_previous(self._live_state)
+        else:
+            found = self._editor.find_next(self._live_state)
         if found and not self._live_state.keep_dialog:
             self.close_dialog()
         return found
