@@ -5,6 +5,7 @@ from __future__ import annotations
 import configparser
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import gi
@@ -33,6 +34,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
     "Preview": {
         "auto_refresh": "true",
         "refresh_delay_ms": "500",
+        "mermaid_html_labels": "true",
     },
     "Appearance": {
         "color_scheme": "system",
@@ -115,6 +117,7 @@ class PreferencesDialog(Adw.PreferencesWindow):
         self,
         config_provider: AbstractConfigProvider | None = None,
         theme_manager: ThemeManager | None = None,
+        on_saved: Callable[[], None] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -122,6 +125,7 @@ class PreferencesDialog(Adw.PreferencesWindow):
         self.set_default_size(600, 500)
         self._config_provider = config_provider or FileConfigProvider()
         self._theme_manager = theme_manager
+        self._on_saved = on_saved
         self._config = self._config_provider.load()
         self._build_ui()
 
@@ -185,12 +189,32 @@ class PreferencesDialog(Adw.PreferencesWindow):
         theme_row.set_selected({"system": 0, "light": 1, "dark": 2}.get(scheme, 0))
         appearance_group.add(theme_row)
 
+        preview_page = Adw.PreferencesPage.new()
+        preview_page.set_title("Preview")
+        preview_page.set_icon_name("view-dual-symbolic")
+        self.add(preview_page)
+
+        preview_group = Adw.PreferencesGroup.new()
+        preview_group.set_title("Mermaid")
+        preview_page.add(preview_group)
+
+        mermaid_labels_row = Adw.SwitchRow.new()
+        mermaid_labels_row.set_title("Mermaid label rendering")
+        mermaid_labels_row.set_subtitle(
+            "Enabled: richer HTML labels. Disabled: SVG-label compatibility mode."
+        )
+        mermaid_labels_row.set_active(
+            self._config.getboolean("Preview", "mermaid_html_labels", fallback=True)
+        )
+        preview_group.add(mermaid_labels_row)
+
         self._font_row = font_row
         self._tab_row = tab_row
         self._spaces_row = spaces_row
         self._lineno_row = lineno_row
         self._wrap_row = wrap_row
         self._theme_row = theme_row
+        self._mermaid_labels_row = mermaid_labels_row
 
         self.connect("close-request", self._on_close)
 
@@ -208,10 +232,19 @@ class PreferencesDialog(Adw.PreferencesWindow):
             self._lineno_row.get_active()
         ).lower()
         self._config["Editor"]["word_wrap"] = str(self._wrap_row.get_active()).lower()
+        self._config["Preview"]["mermaid_html_labels"] = str(
+            self._mermaid_labels_row.get_active()
+        ).lower()
+
+        from calamus.mermaid_support import set_mermaid_html_labels
+
+        set_mermaid_html_labels(self._mermaid_labels_row.get_active())
+
         schemes = ["system", "light", "dark"]
         chosen = schemes[self._theme_row.get_selected()]
+        self._config["Appearance"]["color_scheme"] = chosen
         if self._theme_manager is not None:
             self._theme_manager.set_scheme(chosen)
-        else:
-            self._config["Appearance"]["color_scheme"] = chosen
-            self._config_provider.save(self._config)
+        self._config_provider.save(self._config)
+        if self._on_saved is not None:
+            self._on_saved()

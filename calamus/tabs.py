@@ -13,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk
 
 from calamus.editor import AbstractEditor, MarkdownEditor
+from calamus.mermaid_support import set_mermaid_html_labels
 from calamus.preferences import FileConfigProvider
 from calamus.preview import AbstractPreview
 from calamus.webkit_version import detect_webkit_version
@@ -103,6 +104,11 @@ class EditorTab(AbstractTab):
 
     def __init__(self, file_path: str | None = None, on_open_path=None) -> None:
         super().__init__()
+        config = FileConfigProvider().load()
+        set_mermaid_html_labels(
+            config.getboolean("Preview", "mermaid_html_labels", fallback=True)
+        )
+
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._file_path = file_path
         self._modified = False
@@ -157,7 +163,6 @@ class EditorTab(AbstractTab):
 
         self._preview_timer_id: int | None = None
         self._loading: bool = False  # suppresses debounce re-render during load
-        config = FileConfigProvider().load()
         self._preview_delay_ms: int = config.getint(
             "Preview", "refresh_delay_ms", fallback=500
         )

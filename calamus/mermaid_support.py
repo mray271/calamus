@@ -24,6 +24,18 @@ MERMAID_SYSTEM_PATH = "/usr/local/share/calamus/js/mermaid.min.js"
 # Puppeteer config for mmdc inside Docker (no-sandbox, system Chromium).
 MMDC_PUPPETEER_CONFIG = "/usr/local/share/calamus/mmdc-puppeteer.json"
 MMDC_MERMAID_CONFIG = "calamus/resources/.mermaid-render/mmdc-mermaid-config.json"
+_MERMAID_HTML_LABELS_ENABLED = True
+
+
+def set_mermaid_html_labels(enabled: bool) -> None:
+    """Set whether Mermaid mmdc output should use HTML labels."""
+    global _MERMAID_HTML_LABELS_ENABLED
+    _MERMAID_HTML_LABELS_ENABLED = bool(enabled)
+
+
+def get_mermaid_html_labels() -> bool:
+    """Return current Mermaid HTML-label preference."""
+    return _MERMAID_HTML_LABELS_ENABLED
 
 
 def get_mermaid_script_tag(local_first: bool = True) -> str:
@@ -118,11 +130,11 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
         mermaid_config_path.write_text(
             json.dumps(
                 {
-                    # Prefer plain SVG <text> labels over HTML foreignObject labels
-                    # for better compatibility with Inkscape, office suites, and
-                    # non-browser image viewers.
-                    "htmlLabels": False,
-                    "flowchart": {"htmlLabels": False},
+                    # When disabled, prefer plain SVG <text> labels over HTML
+                    # foreignObject labels for better compatibility with
+                    # Inkscape, office suites, and non-browser image viewers.
+                    "htmlLabels": get_mermaid_html_labels(),
+                    "flowchart": {"htmlLabels": get_mermaid_html_labels()},
                 }
             ),
             encoding="utf-8",
