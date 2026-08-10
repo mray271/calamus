@@ -130,6 +130,22 @@ def test_mermaid_version_constant():
     assert MERMAID_VERSION == "11.5.0"
 
 
+def test_mermaid_html_labels_setting_roundtrip():
+    from calamus.mermaid_support import (
+        get_mermaid_html_labels,
+        set_mermaid_html_labels,
+    )
+
+    original = get_mermaid_html_labels()
+    try:
+        set_mermaid_html_labels(False)
+        assert get_mermaid_html_labels() is False
+        set_mermaid_html_labels(True)
+        assert get_mermaid_html_labels() is True
+    finally:
+        set_mermaid_html_labels(original)
+
+
 def test_mermaid_cdn_url_contains_version():
     from calamus.mermaid_support import MERMAID_CDN_URL, MERMAID_VERSION
 
@@ -351,3 +367,49 @@ def test_subprocess_renderer_returns_none_when_output_not_created(monkeypatch):
 
     renderer = SubprocessMermaidRenderer()
     assert renderer.render_to_svg("graph TD\nA-->B") is None
+
+
+def test_subprocess_renderer_writes_html_labels_from_preference(monkeypatch):
+    """mmdc config should reflect the mermaid_html_labels preference."""
+    import json
+    import subprocess
+
+    from calamus.mermaid_support import (
+        SubprocessMermaidRenderer,
+        set_mermaid_html_labels,
+    )
+
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mmdc")
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        cfg_path = cmd[cmd.index("-c") + 1]
+        out_path = cmd[cmd.index("-o") + 1]
+        captured["config"] = json.loads(open(cfg_path, encoding="utf-8").read())
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write("<svg/>")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    from calamus.mermaid_support import get_mermaid_html_labels
+
+    original = get_mermaid_html_labels()
+    try:
+        # First check disabled mode.
+        set_mermaid_html_labels(False)
+        renderer = SubprocessMermaidRenderer()
+        assert renderer.render_to_svg("graph TD\nA-->B") == "<svg/>"
+        assert captured["config"]["htmlLabels"] is False
+        assert captured["config"]["flowchart"]["htmlLabels"] is False
+
+        # Then check enabled mode.
+        set_mermaid_html_labels(True)
+        renderer = SubprocessMermaidRenderer()
+        assert renderer.render_to_svg("graph TD\nA-->B") == "<svg/>"
+        assert captured["config"]["htmlLabels"] is True
+        assert captured["config"]["flowchart"]["htmlLabels"] is True
+    finally:
+        set_mermaid_html_labels(original)

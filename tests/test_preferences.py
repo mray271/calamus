@@ -11,6 +11,7 @@ def test_load_config_defaults(tmp_path):
     assert config.get("Editor", "font_size") == "11"
     assert config.get("Editor", "tab_width") == "4"
     assert config.getboolean("Editor", "use_spaces") is True
+    assert config.getboolean("Preview", "mermaid_html_labels") is True
 
 
 def test_save_and_reload_config(tmp_path):

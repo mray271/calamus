@@ -706,8 +706,17 @@ class CalamusWindow(Adw.ApplicationWindow):
         PreferencesDialog(
             config_provider=self._config_provider,
             theme_manager=self._theme_manager,
+            on_saved=self._refresh_all_previews,
             transient_for=self,
         ).present()
+
+    def _refresh_all_previews(self) -> None:
+        """Force all open previews to re-render from current editor content."""
+        for i in range(self.tab_manager.get_tab_count()):
+            tab = self.tab_manager.get_nth_tab(i)
+            if tab is None:
+                continue
+            tab.get_preview().update(tab.get_editor().get_text())
 
     def _on_zoom_in(self, _action: Gio.SimpleAction, _param: object) -> None:
         self._zoom_focused_pane(1.0 / 0.9)
@@ -934,7 +943,6 @@ MENU_XML = """
       <item><attribute name="label">Cut</attribute><attribute name="action">app.cut</attribute></item>
       <item><attribute name="label">Copy</attribute><attribute name="action">app.copy</attribute></item>
       <item><attribute name="label">Paste</attribute><attribute name="action">app.paste</attribute></item>
-      <item><attribute name="label">Preferences</attribute><attribute name="action">app.preferences</attribute></item>
     </submenu>
     <submenu>
       <attribute name="label">Search</attribute>
@@ -1063,6 +1071,10 @@ MENU_XML = """
       <item><attribute name="label">Get Help Online</attribute><attribute name="action">app.get-help-online</attribute></item>
       <item><attribute name="label">Mermaid Diagrams: v11.5.0</attribute><attribute name="action">app.show-mermaid-version</attribute></item>
       <item><attribute name="label">About Calamus</attribute><attribute name="action">app.about</attribute></item>
+    </submenu>
+    <submenu>
+      <attribute name="label">Preferences</attribute>
+      <item><attribute name="label">Open Preferences</attribute><attribute name="action">app.preferences</attribute></item>
     </submenu>
   </menu>
 </interface>
