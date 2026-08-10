@@ -368,7 +368,9 @@ def test_on_context_menu_adds_compatibility_save_for_svg(monkeypatch):
         ),
     )
     monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
-    monkeypatch.setattr(webkit_preview_6x.Gio.SimpleAction, "new", lambda *_: MagicMock())
+    monkeypatch.setattr(
+        webkit_preview_6x.Gio.SimpleAction, "new", lambda *_: MagicMock()
+    )
 
     menu = _FakeContextMenu()
     hit = _FakeHitTest(True, "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=")
@@ -402,7 +404,9 @@ def test_on_context_menu_does_not_add_compatibility_items_for_png(monkeypatch):
         ),
     )
     monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
-    monkeypatch.setattr(webkit_preview_6x.Gio.SimpleAction, "new", lambda *_: MagicMock())
+    monkeypatch.setattr(
+        webkit_preview_6x.Gio.SimpleAction, "new", lambda *_: MagicMock()
+    )
 
     menu = _FakeContextMenu()
     hit = _FakeHitTest(True, "file:///tmp/image.png")
