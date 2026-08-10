@@ -118,6 +118,25 @@ class TestDataUriDecode:
         assert b"Node A" in raw
 
 
+def test_svg_compatibility_transform_rewrites_foreign_object():
+    raw = (
+        b'<svg xmlns="http://www.w3.org/2000/svg">'
+        b'<g><foreignObject><div xmlns="http://www.w3.org/1999/xhtml">Node A</div></foreignObject></g>'
+        b"</svg>"
+    )
+    converted = webkit_preview_6x._svg_to_compatibility_mode(raw).decode("utf-8")
+    assert "<foreignObject" not in converted
+    assert "text" in converted
+    assert "Node A" in converted
+
+
+def test_is_svg_uri_detects_data_and_file_paths():
+    assert webkit_preview_6x._is_svg_uri("data:image/svg+xml;base64,PHN2Zw==")
+    assert webkit_preview_6x._is_svg_uri("file:///tmp/diagram.svg")
+    assert webkit_preview_6x._is_svg_uri("https://example.com/diagram.svg")
+    assert not webkit_preview_6x._is_svg_uri("https://example.com/image.png")
+
+
 def test_write_image_uri_to_path_saves_svg_text(tmp_path):
     preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
     svg = "<svg><text>Mermaid Label</text></svg>"
@@ -128,6 +147,26 @@ def test_write_image_uri_to_path_saves_svg_text(tmp_path):
 
     saved = dest.read_bytes()
     assert b"Mermaid Label" in saved
+
+
+def test_write_image_uri_to_path_compatibility_mode_rewrites_foreign_object(tmp_path):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg">'
+        '<g><foreignObject><div xmlns="http://www.w3.org/1999/xhtml">Node A</div></foreignObject></g>'
+        "</svg>"
+    )
+    uri = f"data:image/svg+xml,{quote(svg)}"
+    dest = tmp_path / "saved-compat.svg"
+
+    webkit_preview_6x.WebKitPreview_6x._write_image_uri_to_path(
+        preview, uri, str(dest), compatibility_mode=True
+    )
+
+    saved = dest.read_text(encoding="utf-8")
+    assert "<foreignObject" not in saved
+    assert "text" in saved
+    assert "Node A" in saved
 
 
 def test_write_image_uri_to_path_roundtrip_mermaid_svg_fixture_urlencoded(tmp_path):
@@ -164,40 +203,48 @@ def test_write_image_uri_to_path_roundtrip_mermaid_svg_fixture_base64(tmp_path):
     not SubprocessMermaidRenderer().is_available(), reason="mmdc not installed"
 )
 def test_save_roundtrip_uses_sample_original_flawed_mermaid_block(tmp_path):
+    from calamus.mermaid_support import get_mermaid_html_labels, set_mermaid_html_labels
     from calamus.renderer import MistuneRenderer
 
-    markdown = SAMPLE_DOC_PATH.read_text(encoding="utf-8")
-    match = re.search(
-        r"### Original \(Flawed\) Approach\n\n```mermaid\n(.*?)```",
-        markdown,
-        re.DOTALL,
-    )
-    assert match, "Could not locate the expected Mermaid block in sample document"
+    original = get_mermaid_html_labels()
+    set_mermaid_html_labels(False)
+    try:
+        markdown = SAMPLE_DOC_PATH.read_text(encoding="utf-8")
+        match = re.search(
+            r"### Original \(Flawed\) Approach\n\n```mermaid\n(.*?)```",
+            markdown,
+            re.DOTALL,
+        )
+        assert match, "Could not locate the expected Mermaid block in sample document"
 
-    mermaid_block = f"```mermaid\n{match.group(1)}```\n"
-    html = MistuneRenderer().render(mermaid_block)
-    data_uri_match = re.search(r"data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)", html)
-    assert data_uri_match, "Rendered Mermaid block did not produce an SVG data URI"
+        mermaid_block = f"```mermaid\n{match.group(1)}```\n"
+        html = MistuneRenderer().render(mermaid_block)
+        data_uri_match = re.search(
+            r"data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)", html
+        )
+        assert data_uri_match, "Rendered Mermaid block did not produce an SVG data URI"
 
-    uri = f"data:image/svg+xml;base64,{data_uri_match.group(1)}"
-    dest = tmp_path / "sample-mermaid-roundtrip.svg"
-    webkit_preview_6x.WebKitPreview_6x._write_image_uri_to_path(
-        object.__new__(webkit_preview_6x.WebKitPreview_6x), uri, str(dest)
-    )
+        uri = f"data:image/svg+xml;base64,{data_uri_match.group(1)}"
+        dest = tmp_path / "sample-mermaid-roundtrip.svg"
+        webkit_preview_6x.WebKitPreview_6x._write_image_uri_to_path(
+            object.__new__(webkit_preview_6x.WebKitPreview_6x), uri, str(dest)
+        )
 
-    saved_svg = dest.read_text(encoding="utf-8")
-    assert "<foreignObject" not in saved_svg
-    assert "<text" in saved_svg
-    for token in (
-        "Receive",
-        "Query",
-        "Kenilworth",
-        "Katrina",
-        "ADST",
-        "Music",
-        "found",
-    ):
-        assert token in saved_svg
+        saved_svg = dest.read_text(encoding="utf-8")
+        assert "<foreignObject" not in saved_svg
+        assert "<text" in saved_svg
+        for token in (
+            "Receive",
+            "Query",
+            "Kenilworth",
+            "Katrina",
+            "ADST",
+            "Music",
+            "found",
+        ):
+            assert token in saved_svg
+    finally:
+        set_mermaid_html_labels(original)
 
 
 class TestIsSameDocumentFileAnchor:
@@ -301,6 +348,96 @@ def test_on_context_menu_returns_false_for_image(monkeypatch):
 
     assert handled is False
     assert len(menu.appended) == 3
+
+
+def test_on_context_menu_adds_compatibility_save_for_svg(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._context_menu_actions = []
+    preview._save_image = lambda *_: None
+    preview._copy_image = lambda *_: None
+    preview._copy_to_clipboard = lambda *_: None
+    preview._uri_to_markdown_image = lambda *_: "![img](x)"
+
+    fake_webkit = SimpleNamespace(
+        ContextMenuAction=SimpleNamespace(
+            COPY_IMAGE_URL_TO_CLIPBOARD=1,
+            DOWNLOAD_IMAGE_TO_DISK=2,
+        ),
+        ContextMenuItem=SimpleNamespace(
+            new_from_gaction=lambda action, label: (action, label)
+        ),
+    )
+    monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
+    monkeypatch.setattr(webkit_preview_6x.Gio.SimpleAction, "new", lambda *_: MagicMock())
+
+    menu = _FakeContextMenu()
+    hit = _FakeHitTest(True, "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=")
+
+    handled = webkit_preview_6x.WebKitPreview_6x._on_context_menu(
+        preview, None, menu, hit
+    )
+
+    assert handled is False
+    labels = [item[1] for item in menu.appended]
+    assert "Copy Image (Compatibility SVG)" in labels
+    assert "Save Image As..." in labels
+    assert "Save Image As (Compatibility SVG)..." in labels
+
+
+def test_on_context_menu_does_not_add_compatibility_items_for_png(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._context_menu_actions = []
+    preview._save_image = lambda *_: None
+    preview._copy_image = lambda *_: None
+    preview._copy_to_clipboard = lambda *_: None
+    preview._uri_to_markdown_image = lambda *_: "![img](x)"
+
+    fake_webkit = SimpleNamespace(
+        ContextMenuAction=SimpleNamespace(
+            COPY_IMAGE_URL_TO_CLIPBOARD=1,
+            DOWNLOAD_IMAGE_TO_DISK=2,
+        ),
+        ContextMenuItem=SimpleNamespace(
+            new_from_gaction=lambda action, label: (action, label)
+        ),
+    )
+    monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
+    monkeypatch.setattr(webkit_preview_6x.Gio.SimpleAction, "new", lambda *_: MagicMock())
+
+    menu = _FakeContextMenu()
+    hit = _FakeHitTest(True, "file:///tmp/image.png")
+
+    handled = webkit_preview_6x.WebKitPreview_6x._on_context_menu(
+        preview, None, menu, hit
+    )
+
+    assert handled is False
+    labels = [item[1] for item in menu.appended]
+    assert "Copy Image (Compatibility SVG)" not in labels
+    assert "Save Image As (Compatibility SVG)..." not in labels
+
+
+def test_copy_image_data_svg_compatibility_mode_rewrites_foreign_object():
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    copied = []
+    preview._set_clipboard_svg = lambda raw: copied.append(raw)
+    preview._set_clipboard_texture_from_bytes = MagicMock()
+
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg">'
+        '<foreignObject><div xmlns="http://www.w3.org/1999/xhtml">Node A</div></foreignObject>'
+        "</svg>"
+    )
+    uri = f"data:image/svg+xml,{quote(svg)}"
+    webkit_preview_6x.WebKitPreview_6x._copy_image(
+        preview, uri, compatibility_mode=True
+    )
+
+    saved = copied[0].decode("utf-8")
+    assert "<foreignObject" not in saved
+    assert "text" in saved
+    assert "Node A" in saved
+    preview._set_clipboard_texture_from_bytes.assert_not_called()
 
 
 def test_copy_image_file_uri_uses_texture_loader():
