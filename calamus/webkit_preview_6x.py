@@ -25,6 +25,7 @@ import shutil
 import tempfile
 import threading
 import urllib.request
+import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from urllib.parse import unquote, urlparse
 
@@ -96,6 +97,64 @@ _SAVE_MIME_NAMES: dict[str, str] = {
     "image/gif": "image.gif",
     "image/webp": "image.webp",
 }
+
+
+def _decode_data_uri_bytes(uri: str) -> tuple[str, bytes]:
+    """Decode a data: URI into ``(mime, raw_bytes)``."""
+    header, _, data_part = uri.partition(",")
+    mime = header[len("data:") :].split(";")[0].strip().lower()
+    raw = (
+        base64.b64decode(data_part)
+        if ";base64" in header
+        else unquote(data_part).encode("utf-8")
+    )
+    return mime, raw
+
+
+def _is_svg_uri(uri: str) -> bool:
+    """Return True when *uri* likely points to SVG content."""
+    if uri.startswith("data:"):
+        mime, _raw = _decode_data_uri_bytes(uri)
+        return mime == "image/svg+xml"
+    return urlparse(uri).path.lower().endswith(".svg")
+
+
+def _svg_to_compatibility_mode(raw: bytes) -> bytes:
+    """Rewrite SVG foreignObject labels into plain <text> nodes when possible."""
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return raw
+
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+    updated = False
+    for node in list(root.iter()):
+        if not node.tag.endswith("foreignObject"):
+            continue
+        parent = parent_map.get(node)
+        if parent is None:
+            continue
+        label = " ".join(part.strip() for part in node.itertext() if part.strip())
+        ns = node.tag.split("}")[0].strip("{") if node.tag.startswith("{") else ""
+        text_tag = f"{{{ns}}}text" if ns else "text"
+        text_el = ET.Element(
+            text_tag,
+            {
+                "x": "0",
+                "y": "0",
+                "text-anchor": "middle",
+                "dominant-baseline": "middle",
+            },
+        )
+        text_el.text = label
+        idx = list(parent).index(node)
+        parent.remove(node)
+        parent.insert(idx, text_el)
+        updated = True
+
+    if not updated:
+        return raw
+    return ET.tostring(root, encoding="utf-8")
 
 
 def _default_save_filename(uri: str) -> str:
@@ -491,6 +550,18 @@ box {
         )
         context_menu.append(copy_image_item)
 
+        if _is_svg_uri(image_uri):
+            copy_compat_action = Gio.SimpleAction.new("copy-image-compat", None)
+            copy_compat_action.connect(
+                "activate",
+                lambda *_: self._copy_image(image_uri, compatibility_mode=True),
+            )
+            self._context_menu_actions.append(copy_compat_action)
+            copy_compat_item = WebKit.ContextMenuItem.new_from_gaction(
+                copy_compat_action, "Copy Image (Compatibility SVG)"
+            )
+            context_menu.append(copy_compat_item)
+
         # Add "Save Image As..." action
         save_action = Gio.SimpleAction.new("save-image", None)
         save_action.connect("activate", lambda *_: self._save_image(image_uri))
@@ -500,6 +571,18 @@ box {
             save_action, "Save Image As..."
         )
         context_menu.append(save_item)
+
+        if _is_svg_uri(image_uri):
+            save_compat_action = Gio.SimpleAction.new("save-image-compat", None)
+            save_compat_action.connect(
+                "activate",
+                lambda *_: self._save_image(image_uri, compatibility_mode=True),
+            )
+            self._context_menu_actions.append(save_compat_action)
+            save_compat_item = WebKit.ContextMenuItem.new_from_gaction(
+                save_compat_action, "Save Image As (Compatibility SVG)..."
+            )
+            context_menu.append(save_compat_item)
 
         # Add "Copy Markdown Image" for http/https/file URLs
         if image_uri.startswith(("http://", "https://", "file://")):
@@ -552,7 +635,7 @@ box {
         except GLib.GError:
             pass
 
-    def _save_image(self, image_uri: str) -> None:
+    def _save_image(self, image_uri: str, compatibility_mode: bool = False) -> None:
         """Show save dialog for image."""
         suggested = _default_save_filename(image_uri)
         dialog = Gtk.FileDialog.new()
@@ -570,19 +653,9 @@ box {
 
                 def _fetch(url: str = image_uri, dest: str = path) -> None:
                     try:
-                        if url.startswith("data:"):
-                            # Handle data: URIs
-                            header, data_b64 = url.split(",", 1)
-                            import base64
-
-                            data = base64.b64decode(data_b64)
-                        else:
-                            # Fetch from network
-                            with urllib.request.urlopen(url) as response:
-                                data = response.read()
-
-                        with open(dest, "wb") as f:
-                            f.write(data)
+                        self._write_image_uri_to_path(
+                            url, dest, compatibility_mode=compatibility_mode
+                        )
                     except Exception as e:
                         _logger.error(f"Failed to save image: {e}")
 
@@ -592,6 +665,46 @@ box {
                 pass
 
         dialog.save(parent, None, handle_response)
+
+    def _write_image_uri_to_path(
+        self, image_uri: str, dest: str, compatibility_mode: bool = False
+    ) -> None:
+        """Write image URI payload to *dest* path."""
+        if image_uri.startswith("data:"):
+            mime, data = _decode_data_uri_bytes(image_uri)
+            if compatibility_mode and mime == "image/svg+xml":
+                data = _svg_to_compatibility_mode(data)
+            with open(dest, "wb") as f:
+                f.write(data)
+            return
+
+        if image_uri.startswith("file://"):
+            src = unquote(urlparse(image_uri).path)
+            with open(src, "rb") as in_f:
+                data = in_f.read()
+            if compatibility_mode and src.lower().endswith(".svg"):
+                data = _svg_to_compatibility_mode(data)
+            with open(dest, "wb") as out_f:
+                out_f.write(data)
+            return
+
+        req = urllib.request.Request(
+            image_uri,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) " "Gecko/20100101 Firefox/128.0"
+                )
+            },
+        )
+        with urllib.request.urlopen(req) as response:
+            data = response.read()
+            mime = response.headers.get_content_type()
+        if compatibility_mode and (
+            mime == "image/svg+xml" or urlparse(image_uri).path.lower().endswith(".svg")
+        ):
+            data = _svg_to_compatibility_mode(data)
+        with open(dest, "wb") as f:
+            f.write(data)
 
     def _uri_to_markdown_image(self, uri: str) -> str:
         """Convert URI to markdown image syntax."""
@@ -612,22 +725,32 @@ box {
         except Exception:
             pass
 
-    def _copy_image(self, image_uri: str) -> None:
+    def _copy_image(self, image_uri: str, compatibility_mode: bool = False) -> None:
         """Copy image data from *image_uri* into the system clipboard."""
         if image_uri.startswith("file://"):
             path = unquote(urlparse(image_uri).path)
+            if path.lower().endswith(".svg"):
+                try:
+                    with open(path, "rb") as fh:
+                        raw = fh.read()
+                    if compatibility_mode:
+                        raw = _svg_to_compatibility_mode(raw)
+                    self._set_clipboard_svg(raw)
+                except OSError:
+                    pass
+                return
             self._set_clipboard_texture(path)
             return
 
         if image_uri.startswith("data:"):
             try:
-                header, _, data_part = image_uri.partition(",")
-                raw = (
-                    base64.b64decode(data_part)
-                    if ";base64" in header
-                    else unquote(data_part).encode("utf-8")
-                )
-                suffix = ".svg" if "image/svg+xml" in header else ".img"
+                mime, raw = _decode_data_uri_bytes(image_uri)
+                if mime == "image/svg+xml":
+                    if compatibility_mode:
+                        raw = _svg_to_compatibility_mode(raw)
+                    self._set_clipboard_svg(raw)
+                    return
+                suffix = ".img"
                 self._set_clipboard_texture_from_bytes(raw, suffix)
             except Exception:
                 pass
@@ -646,12 +769,20 @@ box {
                 )
                 with urllib.request.urlopen(req) as response:
                     raw = response.read()
+                    mime = response.headers.get_content_type()
                 parsed = urlparse(image_uri)
                 ext = os.path.splitext(parsed.path)[1] or ".img"
-                GLib.idle_add(
-                    lambda b=raw, s=ext: self._set_clipboard_texture_from_bytes(b, s)
-                    or False
-                )
+                if mime == "image/svg+xml" or ext.lower() == ".svg":
+                    if compatibility_mode:
+                        raw = _svg_to_compatibility_mode(raw)
+                    GLib.idle_add(lambda b=raw: self._set_clipboard_svg(b) or False)
+                else:
+                    GLib.idle_add(
+                        lambda b=raw, s=ext: self._set_clipboard_texture_from_bytes(
+                            b, s
+                        )
+                        or False
+                    )
             except Exception:
                 pass
 
@@ -668,18 +799,50 @@ box {
 
     def _set_clipboard_texture(self, path: str) -> None:
         try:
-            display = Gdk.Display.get_default()
-            if display is None:
-                return
             texture = Gdk.Texture.new_from_filename(path)
             png_bytes = texture.save_to_png_bytes()
             provider = Gdk.ContentProvider.new_for_bytes("image/png", png_bytes)
-            display.get_clipboard().set_content(provider)
-            primary = display.get_primary_clipboard()
-            if primary is not None:
-                primary.set_content(provider)
+            self._set_clipboard_provider(provider)
         except Exception as exc:
             _logger.error("Failed to copy image to clipboard: %s", exc)
+
+    def _set_clipboard_svg(self, raw: bytes) -> None:
+        """Set clipboard image content for an SVG payload."""
+        try:
+            providers = [
+                Gdk.ContentProvider.new_for_bytes("image/svg+xml", GLib.Bytes.new(raw))
+            ]
+            try:
+                fd, path = tempfile.mkstemp(suffix=".svg", prefix="calamus_svg_")
+                with os.fdopen(fd, "wb") as fh:
+                    fh.write(raw)
+                texture = Gdk.Texture.new_from_filename(path)
+                providers.append(
+                    Gdk.ContentProvider.new_for_bytes(
+                        "image/png", texture.save_to_png_bytes()
+                    )
+                )
+            except Exception:
+                pass
+
+            provider = (
+                providers[0]
+                if len(providers) == 1
+                else Gdk.ContentProvider.new_union(providers)
+            )
+            self._set_clipboard_provider(provider)
+        except Exception as exc:
+            _logger.error("Failed to copy SVG image to clipboard: %s", exc)
+
+    def _set_clipboard_provider(self, provider: object) -> None:
+        """Publish clipboard provider to CLIPBOARD and PRIMARY selections."""
+        display = Gdk.Display.get_default()
+        if display is None:
+            return
+        display.get_clipboard().set_content(provider)
+        primary = display.get_primary_clipboard()
+        if primary is not None:
+            primary.set_content(provider)
 
     def _on_create_web_view(
         self, _webview: object, navigation_action: object
@@ -703,19 +866,36 @@ box {
             pass
 
     def _open_data_uri_externally(self, uri: str) -> None:
-        """Handle data: URIs by saving to temp file."""
+        """Display or open a data: URI appropriately.
+
+        SVG images are opened in Calamus's own WebKit viewer window because
+        common system image viewers do not fully support SVG interaction.
+        Other image types are decoded to temp files and opened externally.
+        """
         try:
-            import base64
+            mime, raw = _decode_data_uri_bytes(uri)
 
-            header, data_b64 = uri.split(",", 1)
-            data = base64.b64decode(data_b64)
+            if mime == "image/svg+xml":
+                from calamus.imageviewer import ImageViewerWindow
 
-            # Create temp file
-            fd, path = tempfile.mkstemp(suffix=".html")
-            with os.fdopen(fd, "wb") as f:
-                f.write(data)
+                viewer = ImageViewerWindow(uri, title="SVG Viewer")
+                viewer.present()
+                return
 
-            self._open_uri_externally(f"file://{path}")
+            mime_exts = {
+                "image/png": ".png",
+                "image/jpeg": ".jpg",
+                "image/gif": ".gif",
+                "image/webp": ".webp",
+            }
+            ext = mime_exts.get(mime, "")
+
+            with tempfile.NamedTemporaryFile(
+                suffix=ext, delete=False, prefix="calamus_img_"
+            ) as tmp:
+                tmp.write(raw)
+                tmp_path = tmp.name
+            Gio.AppInfo.launch_default_for_uri(f"file://{tmp_path}", None)
         except Exception:
             pass
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
+import json
 import re
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ MERMAID_LOCAL_PATH = "calamus/resources/js/mermaid.min.js"
 MERMAID_SYSTEM_PATH = "/usr/local/share/calamus/js/mermaid.min.js"
 # Puppeteer config for mmdc inside Docker (no-sandbox, system Chromium).
 MMDC_PUPPETEER_CONFIG = "/usr/local/share/calamus/mmdc-puppeteer.json"
+MMDC_MERMAID_CONFIG = "calamus/resources/.mermaid-render/mmdc-mermaid-config.json"
 
 
 def get_mermaid_script_tag(local_first: bool = True) -> str:
@@ -111,7 +113,20 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
         work_dir.mkdir(parents=True, exist_ok=True)
         input_path = work_dir / "diagram.mmd"
         output_path = work_dir / "diagram.svg"
+        mermaid_config_path = Path(MMDC_MERMAID_CONFIG)
         input_path.write_text(diagram_source, encoding="utf-8")
+        mermaid_config_path.write_text(
+            json.dumps(
+                {
+                    # Prefer plain SVG <text> labels over HTML foreignObject labels
+                    # for better compatibility with Inkscape, office suites, and
+                    # non-browser image viewers.
+                    "htmlLabels": False,
+                    "flowchart": {"htmlLabels": False},
+                }
+            ),
+            encoding="utf-8",
+        )
         try:
             puppeteer_config = Path(MMDC_PUPPETEER_CONFIG)
             subprocess.run(
@@ -121,6 +136,8 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
                     str(input_path),
                     "-o",
                     str(output_path),
+                    "-c",
+                    str(mermaid_config_path),
                     *(
                         ["-p", str(puppeteer_config)]
                         if puppeteer_config.exists()

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="140" viewBox="0 0 420 140">
+  <rect x="10" y="10" width="180" height="60" rx="8" ry="8" fill="#eceff4" stroke="#4c566a" />
+  <rect x="230" y="10" width="180" height="60" rx="8" ry="8" fill="#eceff4" stroke="#4c566a" />
+  <path d="M190 40 L230 40" stroke="#4c566a" stroke-width="2" marker-end="url(#arrow)" />
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#4c566a" />
+    </marker>
+  </defs>
+  <text x="100" y="45" text-anchor="middle" font-family="Arial, sans-serif" font-size="14">Start Node</text>
+  <text x="320" y="45" text-anchor="middle" font-family="Arial, sans-serif" font-size="14">End Node</text>
+  <foreignObject x="20" y="85" width="380" height="45">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="font: 12px Arial, sans-serif; color: #2e3440;">
+      Mermaid Note: This text should survive Save Image As round-trip.
+    </div>
+  </foreignObject>
+</svg>
