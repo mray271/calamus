@@ -243,7 +243,7 @@ class FindDialogLogic:
             found = self._findable.find_previous(self._live_state)
         else:
             found = self._findable.find_next(self._live_state)
-        if found and not self._live_state.keep_dialog:
+        if not self._live_state.keep_dialog:
             self.close_dialog()
         return found
 

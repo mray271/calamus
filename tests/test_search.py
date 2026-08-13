@@ -418,6 +418,16 @@ def test_find_logic_closes_dialog_when_found_and_not_keep():
     assert logic._closed is True
 
 
+def test_find_logic_closes_dialog_when_not_found_and_not_keep():
+    editor = _FakeEditor()
+    state = SearchState()
+    state.keep_dialog = False
+    logic = _TestFindLogic(editor, state, find_text="missing").impl
+    logic._checks["keep_dialog"] = _FakeCheck(False)
+    logic.handle_find()
+    assert logic._closed is True
+
+
 def test_find_logic_does_not_close_when_keep_dialog():
     editor = _FakeEditor()
     state = SearchState()
