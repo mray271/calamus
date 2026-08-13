@@ -323,6 +323,9 @@ class WebKitPreview_6x(AbstractWebKitPreview):
         self._setup_footer_widget()
         self._setup_loading_overlay()
 
+        # FindController for preview-pane find support (pluggable FindDialog)
+        self._find_controller = self._view.get_find_controller()
+
     def _setup_sandbox(self, context: object) -> None:
         """Configure WebKit 6.0 sandbox (disable for Docker environments)."""
         # WebKit 6.0 does not expose set_sandbox_enabled().
@@ -1173,6 +1176,47 @@ if (document.body) {
         )
         if hasattr(self._view, "evaluate_javascript"):
             self._view.evaluate_javascript(js, -1, None, None, None, None, None)
+
+    def _build_find_options(self, state: object) -> int:
+        """Map a ``SearchState`` onto ``WebKit.FindOptions`` flags."""
+        options = WebKit.FindOptions.WRAP_AROUND
+        if not getattr(state, "case_sensitive", False):
+            options |= WebKit.FindOptions.CASE_INSENSITIVE
+        if getattr(state, "whole_word", False):
+            options |= WebKit.FindOptions.AT_WORD_STARTS
+        return options
+
+    def find_next(self, state: object) -> bool:
+        """Advance to the next match using the search term in *state*.
+
+        Maps ``SearchState`` options onto ``WebKit.FindOptions`` and calls
+        ``FindController.search`` + ``search_next``.  Always returns True
+        (WebKit find is async; success/failure arrives via signals).
+        """
+        needle = ""
+        if hasattr(state, "find_history") and state.find_history:
+            needle = state.find_history[-1]
+        if not needle:
+            return False
+        options = self._build_find_options(state)
+        self._find_controller.search(needle, options, 500)
+        self._find_controller.search_next()
+        return True
+
+    def find_previous(self, state: object) -> bool:
+        """Go back to the previous match using the search term in *state*.
+
+        Always returns True (see :meth:`find_next`).
+        """
+        needle = ""
+        if hasattr(state, "find_history") and state.find_history:
+            needle = state.find_history[-1]
+        if not needle:
+            return False
+        options = self._build_find_options(state)
+        self._find_controller.search(needle, options, 500)
+        self._find_controller.search_previous()
+        return True
 
     def get_widget(self) -> Gtk.Widget:
         """Return the root widget."""

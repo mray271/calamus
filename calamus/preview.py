@@ -261,6 +261,14 @@ class AbstractPreview(ABC):
     def reset_zoom(self) -> None:
         """Reset preview zoom to its default."""
 
+    def find_next(self, state: object) -> bool:
+        """Advance to the next find match. No-op if not supported."""
+        return False
+
+    def find_previous(self, state: object) -> bool:
+        """Go back to the previous find match. No-op if not supported."""
+        return False
+
 
 class WebKitPreview(AbstractPreview):
     """Preview implementation backed by WebKit 6.0+.

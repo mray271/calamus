@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from calamus.editor import AbstractEditor
-    from calamus.protocols import HasGetActive
+    from calamus.protocols import Findable, HasGetActive
     from calamus.tabs import AbstractTabManager
 
 _MAX_HISTORY = 20
@@ -182,7 +182,7 @@ class FindDialogLogic:
     The ``@abstractmethod`` markers are enforced statically by type checkers.
     """
 
-    _editor: "AbstractEditor"
+    _findable: "Findable"  # editor or preview — any target that supports find
     _state: SearchState  # dialog-local scratch copy
     _live_state: SearchState  # window's shared live state
     _checks: "dict[str, HasGetActive]"
@@ -204,9 +204,9 @@ class FindDialogLogic:
         self._state.push_find(text)
         self._state.commit_to(self._live_state)
         if self._live_state.search_backward:
-            found = self._editor.find_previous(self._live_state)
+            found = self._findable.find_previous(self._live_state)
         else:
-            found = self._editor.find_next(self._live_state)
+            found = self._findable.find_next(self._live_state)
         if found and not self._live_state.keep_dialog:
             self.close_dialog()
         return found
