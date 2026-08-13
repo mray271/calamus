@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-08-12
+
+### Added
+- **Regular Expression search in the preview pane**: the **Regular Expression** checkbox in the Find dialog is now enabled when the preview pane is the find target. Regex searches use a JavaScript `TreeWalker`-based engine injected into the WebView — matching text nodes are wrapped in `<mark>` elements with theme-aware highlight colours, and navigation wraps around. Non-regex searches continue to use WebKit's native `FindController`. JS find state is automatically invalidated on page reload so re-renders during typing do not stale-navigate. Closes [#96](https://github.com/mray271/calamus/issues/96).
+
 ## [0.9.3] - 2026-08-12
 
 ### Added
