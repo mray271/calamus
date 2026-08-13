@@ -1,9 +1,14 @@
 """GTK widget tests for MarkdownEditor — requires xvfb (run via xvfb-run)."""
 
+from pathlib import Path
+
 import pytest
 
 # These tests require a display. Skip gracefully if no display is available.
 gi_available = pytest.importorskip("gi", reason="PyGObject not available")
+
+_CANTICO_PATH = Path(__file__).resolve().parent.parent / "samples" / "cantico_negro.md"
+_CANTICO_MD = _CANTICO_PATH.read_text(encoding="utf-8")
 
 
 def _init_gtk():
@@ -306,6 +311,87 @@ def test_editor_find_with_case_sensitive():
     start, end = buf.get_selection_bounds()
     matched = buf.get_text(start, end, True)
     assert matched == "hello"
+
+
+def test_editor_find_match_diacritics_off_matches_without_accents():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("café cafe")
+    state = SearchState()
+    state.push_find("cafe")
+    state.match_diacritics = False
+    found = editor.find_next(state)
+    assert found is True
+    buf = editor.get_buffer()
+    start, end = buf.get_selection_bounds()
+    matched = buf.get_text(start, end, True)
+    assert matched in {"café", "cafe"}
+
+
+def test_editor_find_match_diacritics_on_requires_exact_marks():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text("café cafe")
+    state = SearchState()
+    state.push_find("cafe")
+    state.match_diacritics = True
+    found = editor.find_next(state)
+    assert found is True
+    buf = editor.get_buffer()
+    start, end = buf.get_selection_bounds()
+    matched = buf.get_text(start, end, True)
+    assert matched == "cafe"
+
+
+def test_editor_match_diacritics_off_finds_cantico_negro_accented_words():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    editor.set_text(_CANTICO_MD)
+    state = SearchState()
+    state.push_find("intencoes")
+    state.match_diacritics = False
+    found = editor.find_next(state)
+    assert found is True
+    buf = editor.get_buffer()
+    start, end = buf.get_selection_bounds()
+    matched = buf.get_text(start, end, True)
+    assert matched == "intenções"
+
+
+def test_editor_match_diacritics_off_finds_multiple_oro_matches():
+    _init_gtk()
+    from calamus.editor import MarkdownEditor
+    from calamus.search import SearchState
+
+    editor = MarkdownEditor()
+    text = (
+        Path(__file__).resolve().parent.parent
+        / "samples"
+        / "oro_se_do_bheatha_abhaile_lyrics.md"
+    ).read_text(encoding="utf-8")
+    editor.set_text(text)
+    state = SearchState()
+    state.push_find("oro")
+    state.match_diacritics = False
+
+    expected = text.count("Óró")
+    starts: set[int] = set()
+    for _ in range(expected):
+        assert editor.find_next(state) is True
+        buf = editor.get_buffer()
+        start, _end = buf.get_selection_bounds()
+        starts.add(start.get_offset())
+
+    assert len(starts) == expected
 
 
 def test_editor_abstract_methods_present():

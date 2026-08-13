@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -12,6 +13,39 @@ if TYPE_CHECKING:
     from calamus.tabs import AbstractTabManager
 
 _MAX_HISTORY = 20
+
+
+def _strip_diacritics(text: str) -> str:
+    """Return *text* with combining marks removed."""
+    return "".join(
+        ch
+        for ch in unicodedata.normalize("NFD", text)
+        if unicodedata.category(ch) != "Mn"
+    )
+
+
+def _strip_diacritics_with_map(text: str) -> tuple[str, list[int]]:
+    """Return diacritic-stripped text plus original-index mapping.
+
+    The mapping records the source offset for each output character plus a
+    terminal end offset. It is intentionally simple and optimized for the
+    accent-folding use case in Calamus search.
+    """
+    folded: list[str] = []
+    offsets: list[int] = []
+    for idx, ch in enumerate(text):
+        pieces = unicodedata.normalize("NFD", ch)
+        kept = False
+        for piece in pieces:
+            if unicodedata.category(piece) == "Mn":
+                continue
+            folded.append(piece)
+            offsets.append(idx)
+            kept = True
+        if not kept and not pieces:
+            offsets.append(idx)
+    offsets.append(len(text))
+    return "".join(folded), offsets
 
 
 @dataclass
@@ -36,6 +70,7 @@ class SearchState:
     replace_string: str = ""
     replace_history: list[str] = field(default_factory=list)
     use_regex: bool = False
+    match_diacritics: bool = False
     case_sensitive: bool = False
     whole_word: bool = False
     search_backward: bool = False
@@ -143,6 +178,7 @@ class SearchState:
         target.replace_history[:] = self.replace_history
         target.replace_string = self.replace_string
         target.use_regex = self.use_regex
+        target.match_diacritics = self.match_diacritics
         target.case_sensitive = self.case_sensitive
         target.whole_word = self.whole_word
         target.search_backward = self.search_backward

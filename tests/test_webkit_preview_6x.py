@@ -20,6 +20,12 @@ SAMPLE_DOC_PATH = (
     / "samples"
     / "why_claude_sonnet_fails_to_discover_music.md"
 )
+ORO_SAMPLE_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "samples"
+    / "oro_se_do_bheatha_abhaile_lyrics.md"
+)
+ORO_SAMPLE_MD = ORO_SAMPLE_PATH.read_text(encoding="utf-8")
 
 
 class TestWebKitPreview6x:
@@ -857,16 +863,26 @@ def _make_find_preview():
     """Return a minimal WebKitPreview_6x with find-controller stub."""
     preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
     preview._find_controller = MagicMock()
+    preview._js_find_valid = False
+    preview._last_js_key = None
+    preview._js_calls = []
+    preview._js_run = lambda js: preview._js_calls.append(js)
     return preview
 
 
-def _make_state(needle="hello", case_sensitive=False, whole_word=False):
+def _make_state(
+    needle="hello",
+    case_sensitive=False,
+    whole_word=False,
+    match_diacritics=True,
+):
     from calamus.search import SearchState
 
     s = SearchState()
     s.push_find(needle)
     s.case_sensitive = case_sensitive
     s.whole_word = whole_word
+    s.match_diacritics = match_diacritics
     return s
 
 
@@ -973,3 +989,146 @@ def test_find_next_respects_whole_word_flag(monkeypatch):
     webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
     call_args = preview._find_controller.search.call_args[0]
     assert call_args[1] & 4 != 0  # AT_WORD_STARTS bit is set
+
+
+# ---------------------------------------------------------------------------
+# Regex find-in-preview — issue #96
+# ---------------------------------------------------------------------------
+
+
+def _make_regex_find_preview():
+    """Return a WebKitPreview_6x stub with JS-find state initialised."""
+    return _make_find_preview()
+
+
+def _make_regex_state(
+    needle="hel+o",
+    case_sensitive=False,
+    use_regex=True,
+    match_diacritics=False,
+):
+    from calamus.search import SearchState
+
+    s = SearchState()
+    s.push_find(needle)
+    s.case_sensitive = case_sensitive
+    s.use_regex = use_regex
+    s.match_diacritics = match_diacritics
+    return s
+
+
+def test_build_regex_flags_case_insensitive():
+    preview = _make_regex_find_preview()
+    state = _make_regex_state(case_sensitive=False)
+    flags = webkit_preview_6x.WebKitPreview_6x._build_regex_flags(preview, state)
+    assert "g" in flags
+    assert "u" in flags
+    assert "i" in flags
+
+
+def test_build_regex_flags_case_sensitive():
+    preview = _make_regex_find_preview()
+    state = _make_regex_state(case_sensitive=True)
+    flags = webkit_preview_6x.WebKitPreview_6x._build_regex_flags(preview, state)
+    assert "g" in flags
+    assert "u" in flags
+    assert "i" not in flags
+
+
+def test_find_next_regex_injects_helper_and_searches_on_first_call():
+    preview = _make_regex_find_preview()
+    state = _make_regex_state("hel+o")
+    result = webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    assert result is True
+    assert preview._js_find_valid is True
+    assert len(preview._js_calls) == 1
+    js = preview._js_calls[0]
+    # Helper must be injected and search + next called
+    assert "__calamusFind" in js
+    assert ".search(" in js
+    assert ".next()" in js
+    # FindController should NOT be called in regex mode
+    preview._find_controller.search.assert_not_called()
+
+
+def test_find_next_regex_navigates_without_reinit_when_valid():
+    preview = _make_regex_find_preview()
+    preview._js_find_valid = True
+    preview._last_js_key = ("hel+o", "gui", True, False)
+    state = _make_regex_state("hel+o", case_sensitive=False)
+    webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    js = preview._js_calls[0]
+    # Should just navigate, not re-inject helper or re-search
+    assert ".next()" in js
+    assert ".search(" not in js
+
+
+def test_find_next_regex_reinits_when_needle_changes():
+    preview = _make_regex_find_preview()
+    preview._js_find_valid = True
+    preview._last_js_key = ("old", "gui", True, False)
+    state = _make_regex_state("new_pattern")
+    webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    js = preview._js_calls[0]
+    assert ".search(" in js
+    assert ".next()" in js
+
+
+def test_find_previous_regex_calls_prev():
+    preview = _make_regex_find_preview()
+    state = _make_regex_state("hel+o")
+    webkit_preview_6x.WebKitPreview_6x.find_previous(preview, state)
+    js = preview._js_calls[0]
+    assert ".prev()" in js
+
+
+def test_switching_from_regex_to_plain_clears_js_highlights():
+    preview = _make_regex_find_preview()
+    preview._js_find_valid = True  # was in regex mode
+    preview._last_js_key = ("hel+o", "gui", False, False)
+    state = _make_regex_state("hello", use_regex=False, match_diacritics=True)
+
+    fake_options = SimpleNamespace(WRAP_AROUND=1, CASE_INSENSITIVE=2, AT_WORD_STARTS=4)
+    import unittest.mock as _mock
+
+    with _mock.patch.object(webkit_preview_6x, "WebKit") as mock_wk:
+        mock_wk.FindOptions = fake_options
+        webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+
+    # JS clear must have been called
+    assert any(".clear()" in js for js in preview._js_calls)
+    assert preview._js_find_valid is False
+    # FindController must have been used
+    preview._find_controller.search.assert_called_once()
+    preview._find_controller.search_next.assert_called_once()
+
+
+def test_find_next_plain_text_match_diacritics_off_uses_js_literal_search():
+    preview = _make_regex_find_preview()
+    state = _make_regex_state("cafe", use_regex=False, match_diacritics=False)
+    webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    js = preview._js_calls[0]
+    assert "__calamusFind.search" in js
+    assert "true, true" in js
+    preview._find_controller.search.assert_not_called()
+
+
+def test_find_next_regex_match_diacritics_off_folds_pattern():
+    preview = _make_regex_find_preview()
+    state = _make_regex_state("café", use_regex=True, match_diacritics=False)
+    webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    js = preview._js_calls[0]
+    assert "cafe" in js
+    assert "café" not in js
+
+
+def test_find_next_match_diacritics_off_navigates_all_oro_sample_matches():
+    preview = _make_regex_find_preview()
+    state = _make_regex_state("Óró", use_regex=False, match_diacritics=False)
+    expected = ORO_SAMPLE_MD.count("Óró")
+
+    for _ in range(expected):
+        assert webkit_preview_6x.WebKitPreview_6x.find_next(preview, state) is True
+
+    assert len(preview._js_calls) == expected
+    assert "Oro" in preview._js_calls[0]
