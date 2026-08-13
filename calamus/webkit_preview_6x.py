@@ -738,13 +738,10 @@ box {
             pass
 
     def _copy_to_clipboard(self, text: str) -> None:
-        """Copy text to clipboard."""
+        """Copy *text* to the CLIPBOARD and PRIMARY selections."""
         try:
-            display = Gdk.Display.get_default()
-            if display is None:
-                return
             provider = Gdk.ContentProvider.new_for_value(GObject.Value(str, text))
-            display.get_clipboard().set_content(provider)
+            self._set_clipboard_provider(provider)
         except Exception:
             pass
 

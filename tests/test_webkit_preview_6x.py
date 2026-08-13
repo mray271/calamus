@@ -789,3 +789,60 @@ def test_copy_svg_data_uri_as_markdown_copies_svg_text():
     webkit_preview_6x.WebKitPreview_6x._copy_svg_data_uri_as_markdown(preview, uri)
 
     assert copied == [svg]
+
+
+# ---------------------------------------------------------------------------
+# _copy_to_clipboard sets CLIPBOARD and PRIMARY — issue #92
+# ---------------------------------------------------------------------------
+
+
+def test_copy_to_clipboard_sets_clipboard_and_primary(monkeypatch):
+    """_copy_to_clipboard must write to both CLIPBOARD and PRIMARY selections."""
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+
+    clipboard = MagicMock()
+    primary = MagicMock()
+    provider_calls = []
+
+    monkeypatch.setattr(
+        webkit_preview_6x.Gdk.Display,
+        "get_default",
+        lambda: SimpleNamespace(
+            get_clipboard=lambda: clipboard,
+            get_primary_clipboard=lambda: primary,
+        ),
+    )
+    monkeypatch.setattr(
+        webkit_preview_6x.Gdk.ContentProvider,
+        "new_for_value",
+        lambda v: provider_calls.append(v) or "provider",
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._copy_to_clipboard(preview, "hello")
+
+    clipboard.set_content.assert_called_once_with("provider")
+    primary.set_content.assert_called_once_with("provider")
+
+
+def test_copy_to_clipboard_tolerates_no_primary(monkeypatch):
+    """_copy_to_clipboard must not raise when get_primary_clipboard returns None."""
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+
+    clipboard = MagicMock()
+    monkeypatch.setattr(
+        webkit_preview_6x.Gdk.Display,
+        "get_default",
+        lambda: SimpleNamespace(
+            get_clipboard=lambda: clipboard,
+            get_primary_clipboard=lambda: None,
+        ),
+    )
+    monkeypatch.setattr(
+        webkit_preview_6x.Gdk.ContentProvider,
+        "new_for_value",
+        lambda v: "provider",
+    )
+
+    webkit_preview_6x.WebKitPreview_6x._copy_to_clipboard(preview, "hello")
+
+    clipboard.set_content.assert_called_once_with("provider")

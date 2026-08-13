@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-08-12
+
+### Fixed
+- **Copy Markdown Image** now copies to the system clipboard (both CLIPBOARD and PRIMARY selections) so middle-mouse-button paste works in other applications on Linux. Previously it only wrote to the CLIPBOARD selection. Closes [#92](https://github.com/mray271/calamus/issues/92).
+
 ## [0.9.1] - 2026-08-12
 
 ### Fixed
