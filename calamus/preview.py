@@ -633,13 +633,16 @@ class WebKitPreview(AbstractPreview):
         return f"![image]({uri})"
 
     def _copy_to_clipboard(self, text: str) -> None:
-        """Copy *text* to the system clipboard."""
+        """Copy *text* to the CLIPBOARD and PRIMARY selections."""
         try:
             display = Gdk.Display.get_default()
             if display is None:
                 return
             provider = Gdk.ContentProvider.new_for_value(GObject.Value(str, text))
             display.get_clipboard().set_content(provider)
+            primary = display.get_primary_clipboard()
+            if primary is not None:
+                primary.set_content(provider)
         except Exception:
             pass
 

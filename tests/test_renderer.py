@@ -575,3 +575,75 @@ def test_copy_svg_data_uri_as_markdown_copies_svg_text():
     preview_mod.WebKitPreview._copy_svg_data_uri_as_markdown(preview, uri)
 
     assert copied == [svg]
+
+
+# ---------------------------------------------------------------------------
+# preview.py _copy_to_clipboard sets CLIPBOARD and PRIMARY — issue #92
+# ---------------------------------------------------------------------------
+
+
+def test_preview_copy_to_clipboard_sets_clipboard_and_primary(monkeypatch):
+    """WebKitPreview._copy_to_clipboard must write to CLIPBOARD and PRIMARY."""
+    from unittest.mock import MagicMock
+
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+
+    clipboard = MagicMock()
+    primary = MagicMock()
+
+    monkeypatch.setattr(
+        preview_mod.Gdk.Display,
+        "get_default",
+        lambda: type(
+            "D",
+            (),
+            {
+                "get_clipboard": lambda self: clipboard,
+                "get_primary_clipboard": lambda self: primary,
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        preview_mod.Gdk.ContentProvider,
+        "new_for_value",
+        lambda v: "provider",
+    )
+
+    preview_mod.WebKitPreview._copy_to_clipboard(preview, "hello")
+
+    clipboard.set_content.assert_called_once_with("provider")
+    primary.set_content.assert_called_once_with("provider")
+
+
+def test_preview_copy_to_clipboard_tolerates_no_primary(monkeypatch):
+    """WebKitPreview._copy_to_clipboard must not raise when PRIMARY is None."""
+    from unittest.mock import MagicMock
+
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    clipboard = MagicMock()
+
+    monkeypatch.setattr(
+        preview_mod.Gdk.Display,
+        "get_default",
+        lambda: type(
+            "D",
+            (),
+            {
+                "get_clipboard": lambda self: clipboard,
+                "get_primary_clipboard": lambda self: None,
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        preview_mod.Gdk.ContentProvider,
+        "new_for_value",
+        lambda v: "provider",
+    )
+
+    preview_mod.WebKitPreview._copy_to_clipboard(preview, "hello")
+
+    clipboard.set_content.assert_called_once_with("provider")
