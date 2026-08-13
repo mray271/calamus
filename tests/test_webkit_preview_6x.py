@@ -865,6 +865,8 @@ def _make_find_preview():
     preview._find_controller = MagicMock()
     preview._js_find_valid = False
     preview._last_js_key = None
+    preview._last_js_needle = ""
+    preview._last_js_flags = ""
     preview._js_calls = []
     preview._js_run = lambda js: preview._js_calls.append(js)
     return preview
@@ -1055,6 +1057,8 @@ def test_find_next_regex_navigates_without_reinit_when_valid():
     preview = _make_regex_find_preview()
     preview._js_find_valid = True
     preview._last_js_key = ("hel+o", "gui", True, False)
+    preview._last_js_needle = "hel+o"
+    preview._last_js_flags = "gui"
     state = _make_regex_state("hel+o", case_sensitive=False)
     webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
     js = preview._js_calls[0]
@@ -1067,6 +1071,8 @@ def test_find_next_regex_reinits_when_needle_changes():
     preview = _make_regex_find_preview()
     preview._js_find_valid = True
     preview._last_js_key = ("old", "gui", True, False)
+    preview._last_js_needle = "old"
+    preview._last_js_flags = "gui"
     state = _make_regex_state("new_pattern")
     webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
     js = preview._js_calls[0]
@@ -1086,6 +1092,8 @@ def test_switching_from_regex_to_plain_clears_js_highlights():
     preview = _make_regex_find_preview()
     preview._js_find_valid = True  # was in regex mode
     preview._last_js_key = ("hel+o", "gui", False, False)
+    state = _make_regex_state("hello", use_regex=False, match_diacritics=True)
+    preview._last_js_needle = "hel+o"
     state = _make_regex_state("hello", use_regex=False, match_diacritics=True)
 
     fake_options = SimpleNamespace(WRAP_AROUND=1, CASE_INSENSITIVE=2, AT_WORD_STARTS=4)
@@ -1109,7 +1117,7 @@ def test_find_next_plain_text_match_diacritics_off_uses_js_literal_search():
     webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
     js = preview._js_calls[0]
     assert "__calamusFind.search" in js
-    assert "true, true" in js
+    assert "cafe" in js
     preview._find_controller.search.assert_not_called()
 
 

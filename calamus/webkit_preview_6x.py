@@ -498,6 +498,8 @@ class WebKitPreview_6x(AbstractWebKitPreview):
         # re-injects the helper and re-scans the DOM.
         self._js_find_valid: bool = False
         self._last_js_key: tuple[str, str, bool, bool] | None = None
+        self._last_js_needle: str = ""
+        self._last_js_flags: str = ""
 
     def _setup_sandbox(self, context: object) -> None:
         """Configure WebKit 6.0 sandbox (disable for Docker environments)."""
@@ -1384,37 +1386,23 @@ if (document.body) {
         if hasattr(self._view, "evaluate_javascript"):
             self._view.evaluate_javascript(js, -1, None, None, None, None, None)
 
-    def _js_find(
-        self,
-        needle: str,
-        flags: str,
-        direction: str,
-        fold_diacritics: bool,
-        literal: bool,
-    ) -> None:
-        """Run a JS regex find operation.
-
-        Injects ``_JS_FIND_HELPER`` if the page was reloaded since the last
-        search (``_js_find_valid`` is False) or the search term/flags changed.
-        Then calls ``__calamusFind.next()`` or ``__calamusFind.prev()``.
-
-        Args:
-            needle:    The regex pattern string (already JSON-escaped by caller).
-            flags:     JS RegExp flags, e.g. ``"gui"``.
-            direction: ``"next"`` or ``"prev"``.
-        """
-        js_key = (needle, flags, fold_diacritics, literal)
-        need_search = not self._js_find_valid or js_key != self._last_js_key
+    def _js_find(self, needle: str, flags: str, direction: str) -> None:
+        """Run a JS regex find operation."""
+        escaped_needle = json.dumps(needle)
+        escaped_flags = json.dumps(flags)
+        need_search = (
+            not self._js_find_valid
+            or needle != self._last_js_needle
+            or flags != self._last_js_flags
+        )
         if need_search:
-            self._last_js_key = js_key
+            self._last_js_needle = needle
+            self._last_js_flags = flags
             self._js_find_valid = True
-            # Also clear any active FindController highlights.
             self._find_controller.search_finish()
             js = (
                 _JS_FIND_HELPER
-                + "\nwindow.__calamusFind.search("
-                + f"{json.dumps(needle)}, {json.dumps(flags)}, "
-                + f"{json.dumps(fold_diacritics)}, {json.dumps(literal)});"
+                + f"\nwindow.__calamusFind.search({escaped_needle}, {escaped_flags});"
                 f"\nwindow.__calamusFind.{direction}();"
             )
         else:
@@ -1435,20 +1423,13 @@ if (document.body) {
         use_regex = getattr(state, "use_regex", False)
         match_diacritics = getattr(state, "match_diacritics", False)
         if use_regex or not match_diacritics:
-            # Clear FindController highlights before switching to JS mode.
-            self._js_find(
-                needle,
-                self._build_regex_flags(state),
-                "next",
-                fold_diacritics=not match_diacritics,
-                literal=not use_regex,
-            )
+            self._js_find(needle, self._build_regex_flags(state), "next")
         else:
-            # If we were previously in JS regex mode, clear those highlights.
             if self._js_find_valid:
                 self._js_run("window.__calamusFind && window.__calamusFind.clear();")
                 self._js_find_valid = False
-                self._last_js_key = None
+                self._last_js_needle = ""
+                self._last_js_flags = ""
             options = self._build_find_options(state)
             self._find_controller.search(needle, options, 500)
             self._find_controller.search_next()
@@ -1465,18 +1446,13 @@ if (document.body) {
         use_regex = getattr(state, "use_regex", False)
         match_diacritics = getattr(state, "match_diacritics", False)
         if use_regex or not match_diacritics:
-            self._js_find(
-                needle,
-                self._build_regex_flags(state),
-                "prev",
-                fold_diacritics=not match_diacritics,
-                literal=not use_regex,
-            )
+            self._js_find(needle, self._build_regex_flags(state), "prev")
         else:
             if self._js_find_valid:
                 self._js_run("window.__calamusFind && window.__calamusFind.clear();")
                 self._js_find_valid = False
-                self._last_js_key = None
+                self._last_js_needle = ""
+                self._last_js_flags = ""
             options = self._build_find_options(state)
             self._find_controller.search(needle, options, 500)
             self._find_controller.search_previous()
