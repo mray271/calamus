@@ -28,6 +28,7 @@ from calamus.search import (
 
 if TYPE_CHECKING:
     from calamus.editor import AbstractEditor
+    from calamus.protocols import Findable
 
 
 # ---------------------------------------------------------------------------
@@ -270,13 +271,19 @@ class FindDialog(FindDialogLogic, Adw.Window):
 
     def __init__(
         self,
-        editor: AbstractEditor,
-        state: SearchState,
+        editor: "AbstractEditor | None" = None,
+        state: SearchState | None = None,
         file_path: str | None = None,
+        findable: "Findable | None" = None,
+        disabled_options: frozenset[str] = frozenset(),
         **kwargs: object,
     ) -> None:
         Adw.Window.__init__(self, **kwargs)
-        self._editor = editor
+        # Accept either the legacy ``editor`` kwarg or the new ``findable`` kwarg.
+        # ``findable`` takes precedence; ``editor`` is kept for backward compat.
+        self._findable = findable if findable is not None else editor
+        if state is None:
+            raise ValueError("FindDialog requires a SearchState")
         # _live_state is the window's shared state (used by Find Again etc.).
         # _state is a fresh blank scratch copy for this dialog session.
         # History lists are shared by reference so ↑/↓ recall works.
@@ -311,6 +318,11 @@ class FindDialog(FindDialogLogic, Adw.Window):
 
         options_box, self._checks = _build_options_box(self._state)
         _wire_regex_constraints(self._checks)
+        # Grey out options that the target findable does not support.
+        for key in disabled_options:
+            if key in self._checks:
+                self._checks[key].set_sensitive(False)
+                self._checks[key].set_tooltip_text("Not supported for this pane")
         _wire_keep_dialog_title(self, "Find", self._checks, file_path)
         content_box.append(options_box)
 

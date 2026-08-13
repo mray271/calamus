@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-08-12
+
+### Added
+- **Find in preview pane** (Ctrl+F / Ctrl+G / Ctrl+Shift+G): when the preview pane has keyboard focus, the Find…, Find Again, and Find Again Reverse menu actions now open a search bar at the bottom of the preview and navigate matches using WebKit's `FindController` (case-insensitive, wrap-around). Closes [#93](https://github.com/mray271/calamus/issues/93).
+
 ## [0.9.2] - 2026-08-12
 
 ### Fixed

@@ -33,6 +33,32 @@ class HasGetActive(Protocol):
         ...
 
 
+class Findable(Protocol):
+    """Structural protocol for targets that support find-next / find-previous.
+
+    Satisfied by ``AbstractEditor`` (GtkSourceView-backed) and
+    ``WebKitPreview_6x`` (WebKit FindController-backed).  Enables
+    ``FindDialogLogic`` and ``FindDialog`` to operate on either pane without
+    coupling to any concrete implementation.
+    """
+
+    def find_next(self, state: object) -> bool:
+        """Advance to the next match for the current search state.
+
+        Returns True if a match was found, False otherwise.
+        Implementations that cannot return a meaningful bool (e.g. async
+        WebKit searches) may return True optimistically.
+        """
+        ...
+
+    def find_previous(self, state: object) -> bool:
+        """Go back to the previous match for the current search state.
+
+        Returns True if a match was found, False otherwise.
+        """
+        ...
+
+
 class HasWidget(Protocol):
     """Structural protocol for objects that wrap and expose a GTK widget.
 

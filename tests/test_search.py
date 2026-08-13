@@ -342,7 +342,7 @@ class _TestFindLogic:
         # Dynamically create a concrete subclass
         class _Impl(FindDialogLogic):
             def __init__(self_, *, editor, state, find_text):
-                self_._editor = editor
+                self_._findable = editor
                 # In tests, scratch == live so assertions on state work directly.
                 self_._live_state = state
                 self_._state = state.make_dialog_scratch()

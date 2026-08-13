@@ -846,3 +846,130 @@ def test_copy_to_clipboard_tolerates_no_primary(monkeypatch):
     webkit_preview_6x.WebKitPreview_6x._copy_to_clipboard(preview, "hello")
 
     clipboard.set_content.assert_called_once_with("provider")
+
+
+# ---------------------------------------------------------------------------
+# Find in preview pane — issue #93
+# ---------------------------------------------------------------------------
+
+
+def _make_find_preview():
+    """Return a minimal WebKitPreview_6x with find-controller stub."""
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._find_controller = MagicMock()
+    return preview
+
+
+def _make_state(needle="hello", case_sensitive=False, whole_word=False):
+    from calamus.search import SearchState
+
+    s = SearchState()
+    s.push_find(needle)
+    s.case_sensitive = case_sensitive
+    s.whole_word = whole_word
+    return s
+
+
+def test_find_next_calls_search_and_search_next(monkeypatch):
+    preview = _make_find_preview()
+    fake_options = SimpleNamespace(WRAP_AROUND=1, CASE_INSENSITIVE=2, AT_WORD_STARTS=4)
+    monkeypatch.setattr(
+        webkit_preview_6x,
+        "WebKit",
+        SimpleNamespace(
+            FindOptions=fake_options,
+            ContextMenuAction=SimpleNamespace(
+                COPY_IMAGE_URL_TO_CLIPBOARD=1, DOWNLOAD_IMAGE_TO_DISK=2
+            ),
+            ContextMenuItem=SimpleNamespace(new_from_gaction=lambda a, l: (a, l)),
+        ),
+    )
+    state = _make_state("hello")
+    result = webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    assert result is True
+    preview._find_controller.search.assert_called_once_with("hello", 1 | 2, 500)
+    preview._find_controller.search_next.assert_called_once()
+
+
+def test_find_previous_calls_search_and_search_previous(monkeypatch):
+    preview = _make_find_preview()
+    fake_options = SimpleNamespace(WRAP_AROUND=1, CASE_INSENSITIVE=2, AT_WORD_STARTS=4)
+    monkeypatch.setattr(
+        webkit_preview_6x,
+        "WebKit",
+        SimpleNamespace(
+            FindOptions=fake_options,
+            ContextMenuAction=SimpleNamespace(
+                COPY_IMAGE_URL_TO_CLIPBOARD=1, DOWNLOAD_IMAGE_TO_DISK=2
+            ),
+            ContextMenuItem=SimpleNamespace(new_from_gaction=lambda a, l: (a, l)),
+        ),
+    )
+    state = _make_state("hello")
+    result = webkit_preview_6x.WebKitPreview_6x.find_previous(preview, state)
+    assert result is True
+    preview._find_controller.search.assert_called_once_with("hello", 1 | 2, 500)
+    preview._find_controller.search_previous.assert_called_once()
+
+
+def test_find_next_returns_false_on_empty_history(monkeypatch):
+    from calamus.search import SearchState
+
+    preview = _make_find_preview()
+    fake_options = SimpleNamespace(WRAP_AROUND=1, CASE_INSENSITIVE=2, AT_WORD_STARTS=4)
+    monkeypatch.setattr(
+        webkit_preview_6x,
+        "WebKit",
+        SimpleNamespace(
+            FindOptions=fake_options,
+            ContextMenuAction=SimpleNamespace(
+                COPY_IMAGE_URL_TO_CLIPBOARD=1, DOWNLOAD_IMAGE_TO_DISK=2
+            ),
+            ContextMenuItem=SimpleNamespace(new_from_gaction=lambda a, l: (a, l)),
+        ),
+    )
+    state = SearchState()  # no history
+    result = webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    assert result is False
+    preview._find_controller.search.assert_not_called()
+
+
+def test_find_next_respects_case_sensitive_flag(monkeypatch):
+    preview = _make_find_preview()
+    fake_options = SimpleNamespace(WRAP_AROUND=1, CASE_INSENSITIVE=2, AT_WORD_STARTS=4)
+    monkeypatch.setattr(
+        webkit_preview_6x,
+        "WebKit",
+        SimpleNamespace(
+            FindOptions=fake_options,
+            ContextMenuAction=SimpleNamespace(
+                COPY_IMAGE_URL_TO_CLIPBOARD=1, DOWNLOAD_IMAGE_TO_DISK=2
+            ),
+            ContextMenuItem=SimpleNamespace(new_from_gaction=lambda a, l: (a, l)),
+        ),
+    )
+    state = _make_state("Hello", case_sensitive=True)
+    webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    # CASE_INSENSITIVE should NOT be set when case_sensitive=True
+    call_args = preview._find_controller.search.call_args[0]
+    assert call_args[1] & 2 == 0  # CASE_INSENSITIVE bit not set
+
+
+def test_find_next_respects_whole_word_flag(monkeypatch):
+    preview = _make_find_preview()
+    fake_options = SimpleNamespace(WRAP_AROUND=1, CASE_INSENSITIVE=2, AT_WORD_STARTS=4)
+    monkeypatch.setattr(
+        webkit_preview_6x,
+        "WebKit",
+        SimpleNamespace(
+            FindOptions=fake_options,
+            ContextMenuAction=SimpleNamespace(
+                COPY_IMAGE_URL_TO_CLIPBOARD=1, DOWNLOAD_IMAGE_TO_DISK=2
+            ),
+            ContextMenuItem=SimpleNamespace(new_from_gaction=lambda a, l: (a, l)),
+        ),
+    )
+    state = _make_state("hello", whole_word=True)
+    webkit_preview_6x.WebKitPreview_6x.find_next(preview, state)
+    call_args = preview._find_controller.search.call_args[0]
+    assert call_args[1] & 4 != 0  # AT_WORD_STARTS bit is set

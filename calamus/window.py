@@ -639,6 +639,20 @@ class CalamusWindow(Adw.ApplicationWindow):
             editor.show_goto_line_dialog(self)
 
     def _on_find(self, _action: Gio.SimpleAction, _param: object) -> None:
+        focus = self.get_focus()
+        if self._is_focus_in_current_preview(focus):
+            preview = self.tab_manager.get_current_preview()
+            tab = self.tab_manager.get_current_tab()
+            if preview is not None:
+                dlg = FindDialog(
+                    findable=preview,
+                    state=self._search_state,
+                    file_path=tab.file_path if tab else None,
+                    disabled_options=frozenset({"use_regex"}),
+                )
+                dlg.set_transient_for(self)
+                dlg.present()
+                return
         tab = self.tab_manager.get_current_tab()
         if tab is not None:
             dlg = FindDialog(
@@ -663,12 +677,24 @@ class CalamusWindow(Adw.ApplicationWindow):
 
     def _on_find_again(self, _action: Gio.SimpleAction, _param: object) -> None:
         """Ctrl+G — repeat last find forward (wraps at end of file)."""
+        focus = self.get_focus()
+        if self._is_focus_in_current_preview(focus):
+            preview = self.tab_manager.get_current_preview()
+            if preview is not None:
+                preview.find_next(self._search_state)
+                return
         editor = self.tab_manager.get_current_editor()
         if editor is not None:
             editor.find_next(self._search_state)
 
     def _on_find_again_reverse(self, _action: Gio.SimpleAction, _param: object) -> None:
         """Ctrl+Shift+G — repeat last find backward (wraps at start of file)."""
+        focus = self.get_focus()
+        if self._is_focus_in_current_preview(focus):
+            preview = self.tab_manager.get_current_preview()
+            if preview is not None:
+                preview.find_previous(self._search_state)
+                return
         editor = self.tab_manager.get_current_editor()
         if editor is not None:
             editor.find_previous(self._search_state)
