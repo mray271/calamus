@@ -218,6 +218,22 @@ def _default_save_filename(uri: str) -> str:
     return unquote(last_segment) if last_segment else "image"
 
 
+def _is_svg_data_uri(uri: str) -> bool:
+    """Return True when *uri* is a data: URI containing SVG content."""
+    if not uri.startswith("data:"):
+        return False
+    mime = uri[len("data:") :].partition(";")[0].partition(",")[0].strip().lower()
+    return mime == "image/svg+xml"
+
+
+def _decode_svg_data_uri(uri: str) -> str:
+    """Decode a ``data:image/svg+xml`` URI and return the raw SVG text."""
+    header, _, data_part = uri.partition(",")
+    if ";base64" in header:
+        return base64.b64decode(data_part).decode("utf-8", errors="replace")
+    return unquote(data_part)
+
+
 class AbstractPreview(ABC):
     """Defines preview behavior."""
 
@@ -470,7 +486,9 @@ class WebKitPreview(AbstractPreview):
         # Clear previous actions — new ones are appended below.
         self._context_menu_actions = []
 
-        # "Copy Markdown Image" — only useful for non-data: URIs.
+        # "Copy Markdown Image" — for non-data: URIs use the normal markdown
+        # snippet; for SVG data: URIs (Mermaid diagrams) copy the raw SVG text
+        # so it can be pasted as an inline SVG block in Markdown.
         if not image_uri.startswith("data:"):
             md = self._uri_to_markdown_image(image_uri)
             copy_action = Gio.SimpleAction.new("copy-markdown-image", None)
@@ -482,6 +500,21 @@ class WebKitPreview(AbstractPreview):
                 context_menu.append(
                     _WebKitModule.ContextMenuItem.new_from_gaction(
                         copy_action, "Copy Markdown Image", None
+                    )
+                )
+            except Exception:
+                pass
+        elif _is_svg_data_uri(image_uri):
+            svg_copy_action = Gio.SimpleAction.new("copy-markdown-image-svg", None)
+            svg_copy_action.connect(
+                "activate",
+                lambda _a, _p, u=image_uri: self._copy_svg_data_uri_as_markdown(u),
+            )
+            self._context_menu_actions.append(svg_copy_action)
+            try:
+                context_menu.append(
+                    _WebKitModule.ContextMenuItem.new_from_gaction(
+                        svg_copy_action, "Copy Markdown Image", None
                     )
                 )
             except Exception:
@@ -607,6 +640,16 @@ class WebKitPreview(AbstractPreview):
                 return
             provider = Gdk.ContentProvider.new_for_value(GObject.Value(str, text))
             display.get_clipboard().set_content(provider)
+        except Exception:
+            pass
+
+    def _copy_svg_data_uri_as_markdown(self, image_uri: str) -> None:
+        """Decode an SVG data URI and copy the raw <svg>…</svg> text to the clipboard.
+
+        This lets the user paste the inline SVG directly into a Markdown document.
+        """
+        try:
+            self._copy_to_clipboard(_decode_svg_data_uri(image_uri))
         except Exception:
             pass
 

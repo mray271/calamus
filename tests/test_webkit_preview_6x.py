@@ -719,3 +719,73 @@ def test_open_data_uri_png_opens_temp_file_externally(monkeypatch):
 
     assert len(launched) == 1
     assert launched[0].startswith("file://")
+
+
+# ---------------------------------------------------------------------------
+# "Copy Markdown Image" for SVG data: URIs — issue #91
+# ---------------------------------------------------------------------------
+
+
+def _make_svg_preview_6x(monkeypatch):
+    """Return a minimal WebKitPreview_6x instance with context-menu stubs."""
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._context_menu_actions = []
+    preview._save_image = lambda *_: None
+    preview._copy_image = lambda *_: None
+    preview._copy_to_clipboard = lambda *_: None
+    preview._copy_svg_data_uri_as_markdown = lambda *_: None
+    preview._uri_to_markdown_image = lambda *_: "![img](x)"
+
+    fake_webkit = SimpleNamespace(
+        ContextMenuAction=SimpleNamespace(
+            COPY_IMAGE_URL_TO_CLIPBOARD=1,
+            DOWNLOAD_IMAGE_TO_DISK=2,
+        ),
+        ContextMenuItem=SimpleNamespace(
+            new_from_gaction=lambda action, label: (action, label)
+        ),
+    )
+    monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
+    monkeypatch.setattr(
+        webkit_preview_6x.Gio.SimpleAction, "new", lambda *_: MagicMock()
+    )
+    return preview
+
+
+def test_on_context_menu_svg_data_uri_has_copy_markdown_image(monkeypatch):
+    """SVG data: URIs should get a 'Copy Markdown Image' context menu entry."""
+    preview = _make_svg_preview_6x(monkeypatch)
+    menu = _FakeContextMenu()
+    hit = _FakeHitTest(True, "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=")
+
+    webkit_preview_6x.WebKitPreview_6x._on_context_menu(preview, None, menu, hit)
+
+    labels = [item[1] for item in menu.appended]
+    assert "Copy Markdown Image" in labels
+
+
+def test_on_context_menu_non_svg_data_uri_no_copy_markdown_image(monkeypatch):
+    """Non-SVG data: URIs (e.g. PNG) should NOT get 'Copy Markdown Image'."""
+    preview = _make_svg_preview_6x(monkeypatch)
+    menu = _FakeContextMenu()
+    hit = _FakeHitTest(True, "data:image/png;base64,iVBORw0KGgo=")
+
+    webkit_preview_6x.WebKitPreview_6x._on_context_menu(preview, None, menu, hit)
+
+    labels = [item[1] for item in menu.appended]
+    assert "Copy Markdown Image" not in labels
+
+
+def test_copy_svg_data_uri_as_markdown_copies_svg_text():
+    """_copy_svg_data_uri_as_markdown should decode SVG and copy as plain text."""
+    import base64 as _b64
+
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    copied = []
+    preview._copy_to_clipboard = lambda text: copied.append(text)
+
+    svg = "<svg><circle r='10'/></svg>"
+    uri = f"data:image/svg+xml;base64,{_b64.b64encode(svg.encode()).decode()}"
+    webkit_preview_6x.WebKitPreview_6x._copy_svg_data_uri_as_markdown(preview, uri)
+
+    assert copied == [svg]
