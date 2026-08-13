@@ -648,7 +648,7 @@ class CalamusWindow(Adw.ApplicationWindow):
                     findable=preview,
                     state=self._search_state,
                     file_path=tab.file_path if tab else None,
-                    disabled_options=frozenset({"use_regex"}),
+                    disabled_options=frozenset(),
                 )
                 dlg.set_transient_for(self)
                 dlg.present()
