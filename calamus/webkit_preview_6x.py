@@ -584,21 +584,32 @@ box {
             )
             context_menu.append(save_compat_item)
 
-        # Add "Copy Markdown Image" for http/https/file URLs
+        # Add "Copy Markdown Image" for http/https/file URLs and SVG data URIs.
+        # For SVG data URIs (Mermaid diagrams) the raw <svg>…</svg> text is
+        # copied so it can be pasted as an inline SVG block in Markdown.
         if image_uri.startswith(("http://", "https://", "file://")):
+            md_text = self._uri_to_markdown_image(image_uri)
             markdown_action = Gio.SimpleAction.new("copy-markdown", None)
             markdown_action.connect(
                 "activate",
-                lambda *_: self._copy_to_clipboard(
-                    self._uri_to_markdown_image(image_uri)
-                ),
+                lambda *_, t=md_text: self._copy_to_clipboard(t),
             )
             self._context_menu_actions.append(markdown_action)
-
             markdown_item = WebKit.ContextMenuItem.new_from_gaction(
                 markdown_action, "Copy Markdown Image"
             )
             context_menu.append(markdown_item)
+        elif image_uri.startswith("data:") and _is_svg_uri(image_uri):
+            svg_md_action = Gio.SimpleAction.new("copy-markdown-svg", None)
+            svg_md_action.connect(
+                "activate",
+                lambda *_: self._copy_svg_data_uri_as_markdown(image_uri),
+            )
+            self._context_menu_actions.append(svg_md_action)
+            svg_md_item = WebKit.ContextMenuItem.new_from_gaction(
+                svg_md_action, "Copy Markdown Image"
+            )
+            context_menu.append(svg_md_item)
 
         return False
 
@@ -713,6 +724,18 @@ box {
         if uri.startswith("data:"):
             return f"<!-- data: URI (too long for markdown) -->"
         return f"![image]({uri})"
+
+    def _copy_svg_data_uri_as_markdown(self, image_uri: str) -> None:
+        """Decode an SVG data URI and copy the raw <svg>…</svg> text to the clipboard.
+
+        This lets the user paste the inline SVG directly into a Markdown document.
+        """
+        try:
+            _mime, raw = _decode_data_uri_bytes(image_uri)
+            svg_text = raw.decode("utf-8", errors="replace")
+            self._copy_to_clipboard(svg_text)
+        except Exception:
+            pass
 
     def _copy_to_clipboard(self, text: str) -> None:
         """Copy text to clipboard."""

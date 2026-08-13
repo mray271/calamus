@@ -515,3 +515,63 @@ def test_uri_to_markdown_image_file_parent_directory():
         preview, "file:///home/user/docs/shared/logo.png"
     )
     assert result == "![image](../shared/logo.png)"
+
+
+# ---------------------------------------------------------------------------
+# SVG data: URI helpers — issue #91
+# ---------------------------------------------------------------------------
+
+
+def test_is_svg_data_uri_true_for_svg_data():
+    import calamus.preview as preview_mod
+
+    assert preview_mod._is_svg_data_uri("data:image/svg+xml;base64,PHN2Zz4=")
+    assert preview_mod._is_svg_data_uri("data:image/svg+xml,<svg/>")
+
+
+def test_is_svg_data_uri_false_for_png_data():
+    import calamus.preview as preview_mod
+
+    assert not preview_mod._is_svg_data_uri("data:image/png;base64,iVBORw0KGgo=")
+
+
+def test_is_svg_data_uri_false_for_file_uri():
+    import calamus.preview as preview_mod
+
+    assert not preview_mod._is_svg_data_uri("file:///tmp/diagram.svg")
+
+
+def test_decode_svg_data_uri_base64():
+    import base64
+
+    import calamus.preview as preview_mod
+
+    svg = "<svg><text>hello</text></svg>"
+    uri = f"data:image/svg+xml;base64,{base64.b64encode(svg.encode()).decode()}"
+    assert preview_mod._decode_svg_data_uri(uri) == svg
+
+
+def test_decode_svg_data_uri_urlencoded():
+    from urllib.parse import quote
+
+    import calamus.preview as preview_mod
+
+    svg = "<svg><circle r='5'/></svg>"
+    uri = f"data:image/svg+xml,{quote(svg)}"
+    assert preview_mod._decode_svg_data_uri(uri) == svg
+
+
+def test_copy_svg_data_uri_as_markdown_copies_svg_text():
+    import base64
+
+    import calamus.preview as preview_mod
+
+    preview = object.__new__(preview_mod.WebKitPreview)
+    copied = []
+    preview._copy_to_clipboard = lambda t: copied.append(t)
+
+    svg = "<svg><rect width='10' height='10'/></svg>"
+    uri = f"data:image/svg+xml;base64,{base64.b64encode(svg.encode()).decode()}"
+    preview_mod.WebKitPreview._copy_svg_data_uri_as_markdown(preview, uri)
+
+    assert copied == [svg]
