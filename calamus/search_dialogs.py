@@ -108,30 +108,35 @@ class GotoLineDialog(Adw.Window):
 def _build_options_box(
     state: SearchState,
 ) -> tuple[Gtk.Box, dict[str, Gtk.CheckButton]]:
-    """Build the five option CheckButtons shared by Find and Replace dialogs.
+    """Build the option CheckButtons shared by Find and Replace dialogs.
 
-    Laid out in two horizontal rows to save vertical space:
+    Laid out in three horizontal rows to save vertical space:
       Row 1: Regular Expression, Case Sensitive, Whole Word
-      Row 2: Search Backward, Keep Dialog
+      Row 2: Match Diacritics, Search Backward
+      Row 3: Keep Dialog
     """
     outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
     row1 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     row2 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+    row3 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
     outer.append(row1)
     outer.append(row2)
+    outer.append(row3)
 
     checks: dict[str, Gtk.CheckButton] = {}
     rows = {
         "use_regex": row1,
         "case_sensitive": row1,
         "whole_word": row1,
+        "match_diacritics": row2,
         "search_backward": row2,
-        "keep_dialog": row2,
+        "keep_dialog": row3,
     }
     for key, label in [
         ("use_regex", "Regular Expression"),
         ("case_sensitive", "Case Sensitive"),
         ("whole_word", "Whole Word"),
+        ("match_diacritics", "Match Diacritics"),
         ("search_backward", "Search Backward"),
         ("keep_dialog", "Keep Dialog"),
     ]:

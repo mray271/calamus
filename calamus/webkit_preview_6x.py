@@ -50,6 +50,7 @@ from calamus.mermaid_support import (
     preprocess_with_cache,
 )
 from calamus.renderer import AbstractMarkdownRenderer, MistuneRenderer
+from calamus.search import _strip_diacritics
 from calamus.webkit_preview_base import AbstractWebKitPreview
 
 _logger = logging.getLogger(__name__)
@@ -269,22 +270,45 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>"""
 
-# JavaScript helper that implements regex-based find-in-page.
-# Injected on demand via evaluate_javascript when use_regex=True.
-# All match state (array + current index) lives in the JS object so that
-# sequential find_next/find_previous calls simply call .next()/.prev()
-# without re-scanning the DOM each time.
+# JavaScript helper that implements preview-pane find-in-page.
+# Injected on demand via evaluate_javascript whenever preview searching
+# needs to bypass WebKit's native FindController (regex and/or diacritic-
+# insensitive searches). The match state (array + current index) lives in
+# the JS object so sequential find_next/find_previous calls just navigate.
 _JS_FIND_HELPER = """
 (function() {
   if (!window.__calamusFind) {
+    function foldWithMap(text) {
+      var folded = '';
+      var map = [];
+      for (var i = 0; i < text.length; i++) {
+        var base = text[i].normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+        if (!base) continue;
+        for (var j = 0; j < base.length; j++) {
+          folded += base[j];
+          map.push(i);
+        }
+      }
+      map.push(text.length);
+      return { text: folded, map: map };
+    }
+
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+    }
+
     window.__calamusFind = {
       matches: [],
       index: -1,
 
-      search: function(pattern, flags) {
+      search: function(pattern, flags, foldDiacritics, literal) {
         this.clear();
         var regex;
-        try { regex = new RegExp(pattern, flags); }
+        var sourcePattern = foldDiacritics ? foldWithMap(pattern).text : pattern;
+        if (literal) {
+          sourcePattern = escapeRegex(sourcePattern);
+        }
+        try { regex = new RegExp(sourcePattern, flags); }
         catch(e) { return 0; }
 
         var walker = document.createTreeWalker(
@@ -312,26 +336,39 @@ _JS_FIND_HELPER = """
 
         var self = this;
         textNodes.forEach(function(textNode) {
-          var text = textNode.textContent;
+          var source = foldDiacritics
+            ? foldWithMap(textNode.textContent)
+            : { text: textNode.textContent, map: null };
+          var text = source.text;
           var parts = [];
           var lastIndex = 0;
           regex.lastIndex = 0;
           var match;
           while ((match = regex.exec(text)) !== null) {
-            if (match.index > lastIndex) {
-              parts.push(document.createTextNode(text.slice(lastIndex, match.index)));
+            var start = match.index;
+            var end = match.index + (match[0].length || 1);
+            var originalStart = source.map ? source.map[start] : start;
+            var originalEnd = source.map ? source.map[end] : end;
+            if (start > lastIndex) {
+              var prefixStart = source.map ? source.map[lastIndex] : lastIndex;
+              parts.push(
+                document.createTextNode(
+                  textNode.textContent.slice(prefixStart, originalStart)
+                )
+              );
             }
             var mark = document.createElement('mark');
             mark.className = 'calamus-find';
-            mark.textContent = match[0] || '\u200b';
+            mark.textContent = textNode.textContent.slice(originalStart, originalEnd) || '\u200b';
             parts.push(mark);
             self.matches.push(mark);
-            lastIndex = match.index + (match[0].length || 1);
+            lastIndex = end;
             if (!regex.global) break;
           }
           if (parts.length > 0 && textNode.parentNode) {
             if (lastIndex < text.length) {
-              parts.push(document.createTextNode(text.slice(lastIndex)));
+              var tailStart = source.map ? source.map[lastIndex] : lastIndex;
+              parts.push(document.createTextNode(textNode.textContent.slice(tailStart)));
             }
             var parent = textNode.parentNode;
             parts.forEach(function(p) { parent.insertBefore(p, textNode); });
@@ -460,6 +497,7 @@ class WebKitPreview_6x(AbstractWebKitPreview):
         # Reset to False whenever the page reloads so the next regex find
         # re-injects the helper and re-scans the DOM.
         self._js_find_valid: bool = False
+        self._last_js_key: tuple[str, str, bool, bool] | None = None
         self._last_js_needle: str = ""
         self._last_js_flags: str = ""
 
@@ -1334,23 +1372,22 @@ if (document.body) {
             flags += "i"
         return flags
 
+    def _build_search_needle(self, state: object) -> str:
+        """Return the current needle, folded for diacritic-insensitive search."""
+        needle = ""
+        if hasattr(state, "find_history") and state.find_history:
+            needle = state.find_history[-1]
+        if not getattr(state, "match_diacritics", False):
+            needle = _strip_diacritics(needle)
+        return needle
+
     def _js_run(self, js: str) -> None:
         """Fire-and-forget evaluate_javascript (no result needed)."""
         if hasattr(self._view, "evaluate_javascript"):
             self._view.evaluate_javascript(js, -1, None, None, None, None, None)
 
     def _js_find(self, needle: str, flags: str, direction: str) -> None:
-        """Run a JS regex find operation.
-
-        Injects ``_JS_FIND_HELPER`` if the page was reloaded since the last
-        search (``_js_find_valid`` is False) or the search term/flags changed.
-        Then calls ``__calamusFind.next()`` or ``__calamusFind.prev()``.
-
-        Args:
-            needle:    The regex pattern string (already JSON-escaped by caller).
-            flags:     JS RegExp flags, e.g. ``"gui"``.
-            direction: ``"next"`` or ``"prev"``.
-        """
+        """Run a JS regex find operation."""
         escaped_needle = json.dumps(needle)
         escaped_flags = json.dumps(flags)
         need_search = (
@@ -1362,7 +1399,6 @@ if (document.body) {
             self._last_js_needle = needle
             self._last_js_flags = flags
             self._js_find_valid = True
-            # Also clear any active FindController highlights.
             self._find_controller.search_finish()
             js = (
                 _JS_FIND_HELPER
@@ -1381,21 +1417,19 @@ if (document.body) {
         Always returns True — WebKit/JS find is async; success/failure
         arrives asynchronously.
         """
-        needle = ""
-        if hasattr(state, "find_history") and state.find_history:
-            needle = state.find_history[-1]
+        needle = self._build_search_needle(state)
         if not needle:
             return False
-        if getattr(state, "use_regex", False):
-            # Clear FindController highlights before switching to JS mode.
-            if self._js_find_valid or self._last_js_needle != needle:
-                pass  # handled inside _js_find
+        use_regex = getattr(state, "use_regex", False)
+        match_diacritics = getattr(state, "match_diacritics", False)
+        if use_regex or not match_diacritics:
             self._js_find(needle, self._build_regex_flags(state), "next")
         else:
-            # If we were previously in JS regex mode, clear those highlights.
             if self._js_find_valid:
                 self._js_run("window.__calamusFind && window.__calamusFind.clear();")
                 self._js_find_valid = False
+                self._last_js_needle = ""
+                self._last_js_flags = ""
             options = self._build_find_options(state)
             self._find_controller.search(needle, options, 500)
             self._find_controller.search_next()
@@ -1406,17 +1440,19 @@ if (document.body) {
 
         Always returns True (see :meth:`find_next`).
         """
-        needle = ""
-        if hasattr(state, "find_history") and state.find_history:
-            needle = state.find_history[-1]
+        needle = self._build_search_needle(state)
         if not needle:
             return False
-        if getattr(state, "use_regex", False):
+        use_regex = getattr(state, "use_regex", False)
+        match_diacritics = getattr(state, "match_diacritics", False)
+        if use_regex or not match_diacritics:
             self._js_find(needle, self._build_regex_flags(state), "prev")
         else:
             if self._js_find_valid:
                 self._js_run("window.__calamusFind && window.__calamusFind.clear();")
                 self._js_find_valid = False
+                self._last_js_needle = ""
+                self._last_js_flags = ""
             options = self._build_find_options(state)
             self._find_controller.search(needle, options, 500)
             self._find_controller.search_previous()

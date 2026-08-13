@@ -23,6 +23,7 @@ class TestSearchStateDefaults:
     def test_initial_flags_are_false(self):
         s = SearchState()
         assert s.use_regex is False
+        assert s.match_diacritics is False
         assert s.case_sensitive is False
         assert s.whole_word is False
         assert s.search_backward is False
@@ -158,6 +159,7 @@ class TestSearchStateMakeDialogScratch:
         scratch = live.make_dialog_scratch()
         assert scratch.case_sensitive is False
         assert scratch.use_regex is False
+        assert scratch.match_diacritics is False
         assert scratch.whole_word is False
         assert scratch.search_backward is False
         assert scratch.keep_dialog is False
@@ -186,6 +188,7 @@ class TestSearchStateCommitTo:
         scratch = SearchState()
         scratch.case_sensitive = True
         scratch.use_regex = True
+        scratch.match_diacritics = True
         scratch.whole_word = True
         scratch.search_backward = True
         scratch.keep_dialog = True
@@ -194,6 +197,7 @@ class TestSearchStateCommitTo:
         scratch.commit_to(live)
         assert live.case_sensitive is True
         assert live.use_regex is True
+        assert live.match_diacritics is True
         assert live.whole_word is True
         assert live.search_backward is True
         assert live.keep_dialog is True
@@ -394,11 +398,31 @@ def test_find_logic_handle_find_pushes_history():
     assert "newterm" in state.find_history
 
 
+def test_find_logic_handle_find_copies_match_diacritics():
+    editor = _FakeEditor()
+    state = SearchState()
+    state.keep_dialog = True
+    logic = _TestFindLogic(editor, state, find_text="cafe").impl
+    logic._checks["match_diacritics"] = _FakeCheck(True)
+    logic.handle_find()
+    assert editor.find_next_calls[0].match_diacritics is True
+
+
 def test_find_logic_closes_dialog_when_found_and_not_keep():
     editor = _FakeEditor()
     state = SearchState()
     state.keep_dialog = False
     logic = _TestFindLogic(editor, state, find_text="x").impl
+    logic._checks["keep_dialog"] = _FakeCheck(False)
+    logic.handle_find()
+    assert logic._closed is True
+
+
+def test_find_logic_closes_dialog_when_not_found_and_not_keep():
+    editor = _FakeEditor()
+    state = SearchState()
+    state.keep_dialog = False
+    logic = _TestFindLogic(editor, state, find_text="missing").impl
     logic._checks["keep_dialog"] = _FakeCheck(False)
     logic.handle_find()
     assert logic._closed is True
@@ -582,6 +606,8 @@ def test_find_dialog_entry_activate_triggers_find():
     state = SearchState()
     dialog = FindDialog(editor, state)
     try:
+        assert "match_diacritics" in dialog._checks
+        assert dialog._checks["match_diacritics"].get_active() is False
         dialog._find_entry.set_text("needle")
         dialog.handle_find()
         assert len(editor.find_next_calls) == 1

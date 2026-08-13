@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-08-12
+
+### Fixed
+- Find dialog now closes when **Keep Dialog** is unchecked, even if the search term is not found.
+
+## [0.10.0] - 2026-08-12
+
+### Added
+- **Match Diacritics** is now available in the Find dialog for both the editor and preview panes. When unchecked, searches ignore diacritic marks (e.g. `cafe` matches `café`) via Unicode folding in the editor and the preview pane's JS search engine. Closes [#97](https://github.com/mray271/calamus/issues/97).
+
 ## [0.9.4] - 2026-08-12
 
 ### Added

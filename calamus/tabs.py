@@ -441,8 +441,9 @@ class AdwTabManager(AbstractTabManager):
         self._on_title_changed = callback
 
     def _notify_title_changed(self) -> None:
-        if self._on_title_changed is not None:
-            self._on_title_changed()
+        callback = getattr(self, "_on_title_changed", None)
+        if callback is not None:
+            callback()
 
     def new_tab(self, file_path: str | None = None) -> AbstractTab:
         tab = EditorTab(file_path, on_open_path=self.open_file)
@@ -536,6 +537,9 @@ class AdwTabManager(AbstractTabManager):
             self.save_as_current(self._window)
         else:
             tab.save()
+            page = self._tab_view.get_selected_page()
+            if page is not None:
+                page.set_title(tab.title)
             self._notify_title_changed()
 
     def mark_current_saved(self) -> None:
@@ -543,6 +547,9 @@ class AdwTabManager(AbstractTabManager):
         tab = self.get_current_tab()
         if tab is not None:
             tab.mark_saved()
+            page = self._tab_view.get_selected_page()
+            if page is not None:
+                page.set_title(tab.title)
             self._notify_title_changed()
 
     def set_all_editors_editable(self, editable: bool) -> None:

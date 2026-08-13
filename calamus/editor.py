@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import configparser
 import os
+import re
 from abc import ABC, ABCMeta, abstractmethod
+from bisect import bisect_left
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -17,6 +19,8 @@ gi.require_version("GtkSource", "5")
 gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk, GtkSource, Pango
+
+from calamus.search import _strip_diacritics, _strip_diacritics_with_map
 
 # Register Calamus custom style schemes (calamus-adwaita, calamus-adwaita-dark)
 # so the StyleSchemeManager can find them before any MarkdownEditor is created.
@@ -315,20 +319,27 @@ class MarkdownEditor(AbstractEditor):
         haystack: str,
         from_offset: int,
         use_regex: bool,
+        match_diacritics: bool,
         case_sensitive: bool,
         whole_word: bool,
         backward: bool = False,
     ) -> tuple[int, int] | None:
         """Return (start, end) offsets of the next/prev match, or None."""
-        import re
+        search_text = haystack
+        search_needle = needle
+        offset_map = None
+        if not match_diacritics:
+            search_text, offset_map = _strip_diacritics_with_map(haystack)
+            search_needle = _strip_diacritics(needle)
+            from_offset = bisect_left(offset_map, from_offset)
 
         flags = re.MULTILINE
         if not case_sensitive:
             flags |= re.IGNORECASE
         if use_regex:
-            pattern = needle
+            pattern = search_needle
         else:
-            pattern = re.escape(needle)
+            pattern = re.escape(search_needle)
         if whole_word:
             pattern = r"\b" + pattern + r"\b"
         try:
@@ -338,21 +349,23 @@ class MarkdownEditor(AbstractEditor):
 
         if backward:
             # Search from start up to from_offset, keep last match
-            matches = list(compiled.finditer(haystack, 0, from_offset))
+            matches = list(compiled.finditer(search_text, 0, from_offset))
             if not matches:
                 # Wrap around: search whole buffer
-                matches = list(compiled.finditer(haystack))
+                matches = list(compiled.finditer(search_text))
                 if not matches:
                     return None
             m = matches[-1]
         else:
-            m = compiled.search(haystack, from_offset)
+            m = compiled.search(search_text, from_offset)
             if m is None:
                 # Wrap around from the beginning
-                m = compiled.search(haystack, 0, from_offset)
+                m = compiled.search(search_text, 0, from_offset)
             if m is None:
                 return None
-        return m.start(), m.end()
+        if offset_map is None:
+            return m.start(), m.end()
+        return offset_map[m.start()], offset_map[m.end()]
 
     def find_next(self, state: SearchState) -> bool:
         """Find and select the next occurrence. Returns True on match."""
@@ -373,6 +386,7 @@ class MarkdownEditor(AbstractEditor):
             text,
             cursor_offset,
             state.use_regex,
+            state.match_diacritics,
             state.case_sensitive,
             state.whole_word,
         )
@@ -404,6 +418,7 @@ class MarkdownEditor(AbstractEditor):
             text,
             cursor_offset,
             state.use_regex,
+            state.match_diacritics,
             state.case_sensitive,
             state.whole_word,
             backward=True,

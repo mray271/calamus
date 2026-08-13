@@ -199,6 +199,56 @@ class TestAdwTabManagerReloadLargeFileGate:
 
 
 # ---------------------------------------------------------------------------
+# AdwTabManager save/current-saved title refresh
+# ---------------------------------------------------------------------------
+
+
+class TestAdwTabManagerSaveTitleRefresh:
+    def _make_mock_manager(self):
+        from calamus.tabs import AdwTabManager
+
+        mgr = object.__new__(AdwTabManager)
+        mgr._window = MagicMock()
+        mgr._tab_view = MagicMock()
+        mgr._notify_title_changed = MagicMock()
+        mgr._pages = {}
+        return mgr
+
+    def test_save_current_refreshes_page_title(self):
+        from calamus.tabs import AdwTabManager
+
+        mgr = self._make_mock_manager()
+        page = MagicMock()
+        tab = MagicMock()
+        tab.file_path = "/tmp/example.md"
+        tab.title = "*example.md"
+        mgr._tab_view.get_selected_page.return_value = page
+        mgr.get_current_tab = MagicMock(return_value=tab)
+
+        AdwTabManager.save_current(mgr)
+
+        tab.save.assert_called_once()
+        page.set_title.assert_called_once_with(tab.title)
+        mgr._notify_title_changed.assert_called_once()
+
+    def test_mark_current_saved_refreshes_page_title(self):
+        from calamus.tabs import AdwTabManager
+
+        mgr = self._make_mock_manager()
+        page = MagicMock()
+        tab = MagicMock()
+        tab.title = "example.md"
+        mgr._tab_view.get_selected_page.return_value = page
+        mgr.get_current_tab = MagicMock(return_value=tab)
+
+        AdwTabManager.mark_current_saved(mgr)
+
+        tab.mark_saved.assert_called_once()
+        page.set_title.assert_called_once_with(tab.title)
+        mgr._notify_title_changed.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # LARGE_FILE_SIZE_BYTES constant sanity check
 # ---------------------------------------------------------------------------
 
