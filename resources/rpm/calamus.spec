@@ -1,5 +1,5 @@
 Name:           calamus
-Version:        0.1.0
+Version:        0.10.2
 Release:        1%{?dist}
 Summary:        A GTK4 Markdown editor for GNOME
 
@@ -65,5 +65,8 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/calamus.desktop
 %{_mandir}/man1/calamus.1*
 
 %changelog
+* Thu Aug 13 2026 Daniel P. Dougherty <mray271@gmail.com> - 0.10.2-1
+- Rebuild for 0.10.2 release
+
 * Sat Jul 05 2026 Daniel P. Dougherty <mray271@gmail.com> - 0.1.0-1
 - Initial package

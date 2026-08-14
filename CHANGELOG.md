@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-08-13
+
+### Fixed
+- Find dialog now follows the active pane while **Keep Dialog** is on, so clicking between editor and preview keeps Find working without reopening the dialog.
+- Restored **Find Again** and **Find Again Reverse** accelerators after the shared find target refactor.
+- Fixed preview rendering on first open so the initial page paints without needing a resize.
+
 ## [0.10.1] - 2026-08-12
 
 ### Fixed

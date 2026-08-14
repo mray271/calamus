@@ -340,13 +340,21 @@ def _make_fake_checks(
 class _TestFindLogic:
     """Concrete FindDialogLogic for tests (no GTK)."""
 
-    def __init__(self, editor, state, find_text="", keep_dialog=False):
+    def __init__(
+        self,
+        editor,
+        state,
+        find_text="",
+        keep_dialog=False,
+        findable_resolver=None,
+    ):
         from calamus.search import FindDialogLogic
 
         # Dynamically create a concrete subclass
         class _Impl(FindDialogLogic):
-            def __init__(self_, *, editor, state, find_text):
+            def __init__(self_, *, editor, state, find_text, findable_resolver):
                 self_._findable = editor
+                self_._findable_resolver = findable_resolver
                 # In tests, scratch == live so assertions on state work directly.
                 self_._live_state = state
                 self_._state = state.make_dialog_scratch()
@@ -360,7 +368,12 @@ class _TestFindLogic:
             def close_dialog(self_):
                 self_._closed = True
 
-        self._impl = _Impl(editor=editor, state=state, find_text=find_text)
+        self._impl = _Impl(
+            editor=editor,
+            state=state,
+            find_text=find_text,
+            findable_resolver=findable_resolver,
+        )
 
     @property
     def impl(self):
@@ -436,6 +449,27 @@ def test_find_logic_does_not_close_when_keep_dialog():
     logic._checks["keep_dialog"] = _FakeCheck(True)
     logic.handle_find()
     assert logic._closed is False
+
+
+def test_find_logic_uses_latest_resolved_findable():
+    editor1 = _FakeEditor()
+    editor2 = _FakeEditor()
+    state = SearchState()
+    state.keep_dialog = True
+    active = {"findable": editor1}
+
+    def resolve():
+        return active["findable"]
+
+    logic = _TestFindLogic(
+        editor1, state, find_text="x", findable_resolver=resolve
+    ).impl
+    logic.handle_find()
+    active["findable"] = editor2
+    logic.handle_find()
+
+    assert len(editor1.find_next_calls) == 1
+    assert len(editor2.find_next_calls) == 1
 
 
 # ---------------------------------------------------------------------------

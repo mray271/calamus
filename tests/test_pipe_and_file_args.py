@@ -627,3 +627,46 @@ class TestPreviewModeClose:
         assert (
             captured.getvalue() == ""
         ), "Preview mode must suppress pipe output on close"
+
+
+class TestFindAccelTargetResolution:
+    def test_accel_prefers_focused_preview(self):
+        import types
+
+        from calamus.window import CalamusWindow
+
+        preview_widget = object()
+        editor_widget = object()
+        preview = types.SimpleNamespace(get_widget=lambda: preview_widget)
+        editor = types.SimpleNamespace(get_widget=lambda: editor_widget)
+        stub = types.SimpleNamespace(
+            tab_manager=types.SimpleNamespace(
+                get_current_preview=lambda: preview,
+                get_current_editor=lambda: editor,
+            ),
+            _active_findable=None,
+            get_focus=lambda: preview_widget,
+            _is_focus_in_pane=lambda focus, pane: focus == pane.get_widget(),
+        )
+
+        assert CalamusWindow._resolve_findable_for_accel(stub) is preview
+
+    def test_accel_falls_back_to_last_active_when_dialog_has_focus(self):
+        import types
+
+        from calamus.window import CalamusWindow
+
+        preview_widget = object()
+        editor = types.SimpleNamespace(get_widget=lambda: object())
+        preview = types.SimpleNamespace(get_widget=lambda: preview_widget)
+        stub = types.SimpleNamespace(
+            tab_manager=types.SimpleNamespace(
+                get_current_preview=lambda: preview,
+                get_current_editor=lambda: editor,
+            ),
+            _active_findable=preview,
+            get_focus=lambda: None,
+            _is_focus_in_pane=lambda focus, pane: False,
+        )
+
+        assert CalamusWindow._resolve_findable_for_accel(stub) is preview

@@ -219,6 +219,7 @@ class FindDialogLogic:
     """
 
     _findable: "Findable"  # editor or preview — any target that supports find
+    _findable_resolver: "Callable[[], Findable | None] | None"
     _state: SearchState  # dialog-local scratch copy
     _live_state: SearchState  # window's shared live state
     _checks: "dict[str, HasGetActive]"
@@ -230,6 +231,15 @@ class FindDialogLogic:
     def close_dialog(self) -> None:
         """Close the dialog. No-op in pure-logic / test context."""
 
+    def resolve_findable(self) -> "Findable | None":
+        """Return the current find target, preferring the active resolver."""
+        resolver = getattr(self, "_findable_resolver", None)
+        if resolver is not None:
+            findable = resolver()
+            if findable is not None:
+                return findable
+        return self._findable
+
     def handle_find(self) -> bool:
         """Commit scratch state to live state and execute find.
 
@@ -239,10 +249,13 @@ class FindDialogLogic:
         _sync_options_to_state(self._checks, self._state)
         self._state.push_find(text)
         self._state.commit_to(self._live_state)
+        findable = self.resolve_findable()
+        if findable is None:
+            return False
         if self._live_state.search_backward:
-            found = self._findable.find_previous(self._live_state)
+            found = findable.find_previous(self._live_state)
         else:
-            found = self._findable.find_next(self._live_state)
+            found = findable.find_next(self._live_state)
         if not self._live_state.keep_dialog:
             self.close_dialog()
         return found
