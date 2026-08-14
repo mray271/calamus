@@ -280,6 +280,7 @@ class FindDialog(FindDialogLogic, Adw.Window):
         state: SearchState | None = None,
         file_path: str | None = None,
         findable: "Findable | None" = None,
+        findable_resolver: "Callable[[], Findable | None] | None" = None,
         disabled_options: frozenset[str] = frozenset(),
         **kwargs: object,
     ) -> None:
@@ -287,6 +288,7 @@ class FindDialog(FindDialogLogic, Adw.Window):
         # Accept either the legacy ``editor`` kwarg or the new ``findable`` kwarg.
         # ``findable`` takes precedence; ``editor`` is kept for backward compat.
         self._findable = findable if findable is not None else editor
+        self._findable_resolver = findable_resolver
         if state is None:
             raise ValueError("FindDialog requires a SearchState")
         # _live_state is the window's shared state (used by Find Again etc.).

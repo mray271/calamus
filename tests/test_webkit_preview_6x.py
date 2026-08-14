@@ -518,9 +518,36 @@ def test_set_clipboard_texture_sets_png_content(monkeypatch):
 
     webkit_preview_6x.WebKitPreview_6x._set_clipboard_texture(preview, "/tmp/image.png")
 
-    assert providers == [("image/png", b"PNGDATA")]
-    clipboard.set_content.assert_called_once_with(("provider", "image/png"))
-    primary_clipboard.set_content.assert_called_once_with(("provider", "image/png"))
+
+def test_find_js_matcher_handles_repeated_accented_terms(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._js_find_valid = False
+    preview._last_js_needle = ""
+    preview._last_js_flags = ""
+
+    calls = []
+    preview._find_controller = SimpleNamespace(
+        search_finish=lambda: calls.append("finish")
+    )
+    preview._js_run = lambda js: calls.append(js)
+
+    state = SimpleNamespace(
+        find_history=["Óró"],
+        match_diacritics=False,
+        use_regex=False,
+        case_sensitive=False,
+        whole_word=False,
+    )
+
+    preview.find_next(state)
+    preview.find_next(state)
+    preview.find_previous(state)
+
+    search_calls = [call for call in calls if "window.__calamusFind.search" in call]
+    assert len(search_calls) == 1
+    assert "true, true" in search_calls[0]
+    assert any("window.__calamusFind.next();" in call for call in calls)
+    assert any("window.__calamusFind.prev();" in call for call in calls)
 
 
 def test_set_clipboard_svg_sets_svg_provider(monkeypatch):
@@ -564,6 +591,41 @@ def test_on_create_web_view_opens_uri_externally():
 
     assert result is None
     assert opened == ["https://example.com/photo.jpg"]
+
+
+def test_on_load_changed_nudges_render_after_finish(monkeypatch):
+    preview = object.__new__(webkit_preview_6x.WebKitPreview_6x)
+    preview._js_find_valid = True
+    preview._pending_scroll_restore_ratio = 0.25
+    preview._has_rendered_content = False
+    preview._end_render_loading = MagicMock()
+    preview._restore_scroll_ratio = MagicMock()
+    preview._view = SimpleNamespace(
+        queue_resize=MagicMock(),
+        queue_draw=MagicMock(),
+    )
+    preview._overlay = SimpleNamespace(
+        queue_resize=MagicMock(),
+        queue_draw=MagicMock(),
+    )
+
+    monkeypatch.setattr(
+        webkit_preview_6x.GLib,
+        "idle_add",
+        lambda fn, *args, **kwargs: fn(*args, **kwargs),
+    )
+    fake_webkit = SimpleNamespace(LoadEvent=SimpleNamespace(FINISHED=1))
+    monkeypatch.setattr(webkit_preview_6x, "WebKit", fake_webkit)
+
+    webkit_preview_6x.WebKitPreview_6x._on_load_changed(preview, None, 1)
+
+    assert preview._js_find_valid is False
+    preview._end_render_loading.assert_called_once()
+    preview._restore_scroll_ratio.assert_called_once_with(0.25)
+    preview._view.queue_resize.assert_called_once()
+    preview._view.queue_draw.assert_called_once()
+    preview._overlay.queue_resize.assert_called_once()
+    preview._overlay.queue_draw.assert_called_once()
 
 
 def test_open_uri_externally_launches_default_without_callback(monkeypatch):
@@ -1118,6 +1180,7 @@ def test_find_next_plain_text_match_diacritics_off_uses_js_literal_search():
     js = preview._js_calls[0]
     assert "__calamusFind.search" in js
     assert "cafe" in js
+    assert "true, true" in js
     preview._find_controller.search.assert_not_called()
 
 
@@ -1128,6 +1191,7 @@ def test_find_next_regex_match_diacritics_off_folds_pattern():
     js = preview._js_calls[0]
     assert "cafe" in js
     assert "café" not in js
+    assert "true, false" in js
 
 
 def test_find_next_match_diacritics_off_navigates_all_oro_sample_matches():

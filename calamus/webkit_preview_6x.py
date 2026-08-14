@@ -297,6 +297,33 @@ _JS_FIND_HELPER = """
       return s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
     }
 
+    function collectTextNodes() {
+      var walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode: function(node) {
+            var p = node.parentNode;
+            while (p) {
+              var tag = p.nodeName && p.nodeName.toLowerCase();
+              if (tag === 'script' || tag === 'style') {
+                return NodeFilter.FILTER_REJECT;
+              }
+              if (p === document.body) break;
+              p = p.parentNode;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        }
+      );
+      var textNodes = [];
+      var node;
+      while ((node = walker.nextNode())) {
+        textNodes.push(node);
+      }
+      return textNodes;
+    }
+
     window.__calamusFind = {
       matches: [],
       index: -1,
@@ -311,69 +338,52 @@ _JS_FIND_HELPER = """
         try { regex = new RegExp(sourcePattern, flags); }
         catch(e) { return 0; }
 
-        var walker = document.createTreeWalker(
-          document.body,
-          NodeFilter.SHOW_TEXT,
-          {
-            acceptNode: function(node) {
-              var p = node.parentNode;
-              while (p) {
-                var tag = p.nodeName && p.nodeName.toLowerCase();
-                if (tag === 'script' || tag === 'style') {
-                  return NodeFilter.FILTER_REJECT;
-                }
-                if (p === document.body) break;
-                p = p.parentNode;
-              }
-              return NodeFilter.FILTER_ACCEPT;
-            }
-          }
-        );
-
-        var textNodes = [];
-        var node;
-        while ((node = walker.nextNode())) { textNodes.push(node); }
-
         var self = this;
-        textNodes.forEach(function(textNode) {
+        collectTextNodes().forEach(function(textNode) {
           var source = foldDiacritics
             ? foldWithMap(textNode.textContent)
             : { text: textNode.textContent, map: null };
           var text = source.text;
-          var parts = [];
-          var lastIndex = 0;
+          var spans = [];
           regex.lastIndex = 0;
           var match;
           while ((match = regex.exec(text)) !== null) {
             var start = match.index;
             var end = match.index + (match[0].length || 1);
+            spans.push([start, end]);
+            if (!regex.global) break;
+            if (match[0].length === 0) regex.lastIndex++;
+          }
+          if (!spans.length || !textNode.parentNode) return;
+          var fragment = document.createDocumentFragment();
+          var last = 0;
+          spans.forEach(function(span) {
+            var start = span[0];
+            var end = span[1];
             var originalStart = source.map ? source.map[start] : start;
             var originalEnd = source.map ? source.map[end] : end;
-            if (start > lastIndex) {
-              var prefixStart = source.map ? source.map[lastIndex] : lastIndex;
-              parts.push(
+            var originalLast = source.map ? source.map[last] : last;
+            if (originalStart > originalLast) {
+              fragment.appendChild(
                 document.createTextNode(
-                  textNode.textContent.slice(prefixStart, originalStart)
+                  textNode.textContent.slice(originalLast, originalStart)
                 )
               );
             }
             var mark = document.createElement('mark');
             mark.className = 'calamus-find';
             mark.textContent = textNode.textContent.slice(originalStart, originalEnd) || '\u200b';
-            parts.push(mark);
+            fragment.appendChild(mark);
             self.matches.push(mark);
-            lastIndex = end;
-            if (!regex.global) break;
+            last = end;
+          });
+          var tailStart = source.map ? source.map[last] : last;
+          if (tailStart < textNode.textContent.length) {
+            fragment.appendChild(
+              document.createTextNode(textNode.textContent.slice(tailStart))
+            );
           }
-          if (parts.length > 0 && textNode.parentNode) {
-            if (lastIndex < text.length) {
-              var tailStart = source.map ? source.map[lastIndex] : lastIndex;
-              parts.push(document.createTextNode(textNode.textContent.slice(tailStart)));
-            }
-            var parent = textNode.parentNode;
-            parts.forEach(function(p) { parent.insertBefore(p, textNode); });
-            parent.removeChild(textNode);
-          }
+          textNode.parentNode.replaceChild(fragment, textNode);
         });
         return this.matches.length;
       },
@@ -638,6 +648,13 @@ box {
         """Stop loading indicator after render is complete or fails."""
         self._clear_loading_spinner_timeout()
         self._set_loading_visible(False)
+
+    def _nudge_render_after_load(self) -> None:
+        """Invalidate layout after a load finishes so the first paint lands."""
+        self._view.queue_resize()
+        self._view.queue_draw()
+        self._overlay.queue_resize()
+        self._overlay.queue_draw()
 
     def _on_decide_policy(
         self,
@@ -1177,6 +1194,7 @@ if (document.body) {
                 self._restore_scroll_ratio(ratio)
             self._has_rendered_content = True
             self._end_render_loading()
+            GLib.idle_add(self._nudge_render_after_load)
 
     def _on_tooltip_message(
         self,
@@ -1386,10 +1404,19 @@ if (document.body) {
         if hasattr(self._view, "evaluate_javascript"):
             self._view.evaluate_javascript(js, -1, None, None, None, None, None)
 
-    def _js_find(self, needle: str, flags: str, direction: str) -> None:
+    def _js_find(
+        self,
+        needle: str,
+        flags: str,
+        direction: str,
+        fold_diacritics: bool,
+        literal: bool,
+    ) -> None:
         """Run a JS regex find operation."""
         escaped_needle = json.dumps(needle)
         escaped_flags = json.dumps(flags)
+        fold_js = "true" if fold_diacritics else "false"
+        literal_js = "true" if literal else "false"
         need_search = (
             not self._js_find_valid
             or needle != self._last_js_needle
@@ -1402,7 +1429,7 @@ if (document.body) {
             self._find_controller.search_finish()
             js = (
                 _JS_FIND_HELPER
-                + f"\nwindow.__calamusFind.search({escaped_needle}, {escaped_flags});"
+                + f"\nwindow.__calamusFind.search({escaped_needle}, {escaped_flags}, {fold_js}, {literal_js});"
                 f"\nwindow.__calamusFind.{direction}();"
             )
         else:
@@ -1423,7 +1450,13 @@ if (document.body) {
         use_regex = getattr(state, "use_regex", False)
         match_diacritics = getattr(state, "match_diacritics", False)
         if use_regex or not match_diacritics:
-            self._js_find(needle, self._build_regex_flags(state), "next")
+            self._js_find(
+                needle,
+                self._build_regex_flags(state),
+                "next",
+                not match_diacritics,
+                not use_regex,
+            )
         else:
             if self._js_find_valid:
                 self._js_run("window.__calamusFind && window.__calamusFind.clear();")
@@ -1446,7 +1479,13 @@ if (document.body) {
         use_regex = getattr(state, "use_regex", False)
         match_diacritics = getattr(state, "match_diacritics", False)
         if use_regex or not match_diacritics:
-            self._js_find(needle, self._build_regex_flags(state), "prev")
+            self._js_find(
+                needle,
+                self._build_regex_flags(state),
+                "prev",
+                not match_diacritics,
+                not use_regex,
+            )
         else:
             if self._js_find_valid:
                 self._js_run("window.__calamusFind && window.__calamusFind.clear();")

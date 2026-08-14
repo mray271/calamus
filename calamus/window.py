@@ -10,7 +10,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from calamus.about import show_about_dialog
 from calamus.directorytree import GtkDirectoryPane
@@ -18,7 +18,7 @@ from calamus.exporter import HtmlExporter, OdtExporter, PdfExporter
 from calamus.formatting import DialogFormattingAction, FormattingRegistry
 from calamus.preferences import FileConfigProvider, PreferencesDialog
 from calamus.printer import GtkPrinter
-from calamus.protocols import HasWidget, Zoomable
+from calamus.protocols import Findable, HasWidget, Zoomable
 from calamus.recentfiles import ConfigFileRecentFilesProvider
 from calamus.search import SearchState
 from calamus.search_dialogs import FindDialog, ReplaceDialog
@@ -125,12 +125,15 @@ class CalamusWindow(Adw.ApplicationWindow):
         self._confirmed_quit = False
         self._printer = GtkPrinter()
         self._search_state = SearchState()
+        self._active_findable: Findable | None = None
         self._pipe_content = pipe_content
         self._pipe_mode = pipe_content is not None
         self._pipe_saved_content: str | None = None
         self._pipe_base_path = pipe_base_path
         self._preview_mode = preview_mode
         self._build_ui()
+        self.connect("notify::focus-widget", self._on_focus_widget_changed)
+        self._sync_active_findable_from_focus()
         self._build_actions()
         self.connect("close-request", self._on_close_request)
         if self._preview_mode:
@@ -639,26 +642,12 @@ class CalamusWindow(Adw.ApplicationWindow):
             editor.show_goto_line_dialog(self)
 
     def _on_find(self, _action: Gio.SimpleAction, _param: object) -> None:
-        focus = self.get_focus()
-        if self._is_focus_in_current_preview(focus):
-            preview = self.tab_manager.get_current_preview()
-            tab = self.tab_manager.get_current_tab()
-            if preview is not None:
-                dlg = FindDialog(
-                    findable=preview,
-                    state=self._search_state,
-                    file_path=tab.file_path if tab else None,
-                    disabled_options=frozenset(),
-                )
-                dlg.set_transient_for(self)
-                dlg.present()
-                return
         tab = self.tab_manager.get_current_tab()
         if tab is not None:
             dlg = FindDialog(
-                editor=tab.editor,
                 state=self._search_state,
                 file_path=tab.file_path,
+                findable_resolver=self._resolve_findable_for_dialog,
             )
             dlg.set_transient_for(self)
             dlg.present()
@@ -677,27 +666,15 @@ class CalamusWindow(Adw.ApplicationWindow):
 
     def _on_find_again(self, _action: Gio.SimpleAction, _param: object) -> None:
         """Ctrl+G — repeat last find forward (wraps at end of file)."""
-        focus = self.get_focus()
-        if self._is_focus_in_current_preview(focus):
-            preview = self.tab_manager.get_current_preview()
-            if preview is not None:
-                preview.find_next(self._search_state)
-                return
-        editor = self.tab_manager.get_current_editor()
-        if editor is not None:
-            editor.find_next(self._search_state)
+        target = self._resolve_findable_for_accel()
+        if target is not None:
+            target.find_next(self._search_state)
 
     def _on_find_again_reverse(self, _action: Gio.SimpleAction, _param: object) -> None:
         """Ctrl+Shift+G — repeat last find backward (wraps at start of file)."""
-        focus = self.get_focus()
-        if self._is_focus_in_current_preview(focus):
-            preview = self.tab_manager.get_current_preview()
-            if preview is not None:
-                preview.find_previous(self._search_state)
-                return
-        editor = self.tab_manager.get_current_editor()
-        if editor is not None:
-            editor.find_previous(self._search_state)
+        target = self._resolve_findable_for_accel()
+        if target is not None:
+            target.find_previous(self._search_state)
 
     def _on_find_selection(self, _action: Gio.SimpleAction, _param: object) -> None:
         editor = self.tab_manager.get_current_editor()
@@ -815,6 +792,37 @@ class CalamusWindow(Adw.ApplicationWindow):
 
     def _is_focus_in_current_preview(self, focus: Gtk.Widget | None) -> bool:
         return self._is_focus_in_pane(focus, self.tab_manager.get_current_preview())
+
+    def _sync_active_findable_from_focus(self) -> None:
+        focus = self.get_focus()
+        if self._is_focus_in_current_preview(focus):
+            self._active_findable = self.tab_manager.get_current_preview()
+            return
+        editor = self.tab_manager.get_current_editor()
+        if self._is_focus_in_pane(focus, editor):
+            self._active_findable = editor
+            return
+        if self._active_findable is None:
+            self._active_findable = editor or self.tab_manager.get_current_preview()
+
+    def _resolve_findable_for_dialog(self) -> Findable | None:
+        self._sync_active_findable_from_focus()
+        return self._active_findable
+
+    def _resolve_findable_for_accel(self) -> Findable | None:
+        focus = self.get_focus()
+        preview = self.tab_manager.get_current_preview()
+        if self._is_focus_in_pane(focus, preview):
+            return preview
+        editor = self.tab_manager.get_current_editor()
+        if self._is_focus_in_pane(focus, editor):
+            return editor
+        return self._active_findable or editor or preview
+
+    def _on_focus_widget_changed(
+        self, _window: Gtk.Window, _param_spec: GObject.ParamSpec
+    ) -> None:
+        self._sync_active_findable_from_focus()
 
     def _is_focus_in_pane(
         self, focus: Gtk.Widget | None, pane: HasWidget | None
