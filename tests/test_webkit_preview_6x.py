@@ -526,7 +526,9 @@ def test_find_js_matcher_handles_repeated_accented_terms(monkeypatch):
     preview._last_js_flags = ""
 
     calls = []
-    preview._find_controller = SimpleNamespace(search_finish=lambda: calls.append("finish"))
+    preview._find_controller = SimpleNamespace(
+        search_finish=lambda: calls.append("finish")
+    )
     preview._js_run = lambda js: calls.append(js)
 
     state = SimpleNamespace(
