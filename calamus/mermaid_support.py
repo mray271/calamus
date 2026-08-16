@@ -113,6 +113,42 @@ class AbstractMermaidRenderer(ABC):
         """Return whether this renderer can be used."""
 
 
+class MermaidxRenderer(AbstractMermaidRenderer):
+    """Renders Mermaid diagrams using the mermaidx library (recommended).
+    
+    mermaidx is a pure-Python, actively maintained library that:
+    - Renders 2-4.5x faster than mmdc (no browser overhead)
+    - Has no system dependencies (unlike mmdc which needs Node.js)
+    - Properly respects theme settings without hardcoding background colors
+    - Is actively maintained (mmdc is abandoned)
+    """
+
+    _mermaidx_available: bool | None = None  # class-level cache
+
+    def is_available(self) -> bool:
+        if MermaidxRenderer._mermaidx_available is None:
+            try:
+                import mermaidx  # noqa: F401
+                MermaidxRenderer._mermaidx_available = True
+            except ImportError:
+                MermaidxRenderer._mermaidx_available = False
+        return MermaidxRenderer._mermaidx_available
+
+    def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
+        if not self.is_available():
+            return None
+        try:
+            import mermaidx
+
+            # Pass theme as a parameter to mermaidx.Diagram
+            # This avoids conflicts with existing frontmatter config blocks
+            mmd = mermaidx.Diagram(diagram_source, backend="quickjs", theme=theme)
+            svg = mmd.svg()
+            return svg
+        except Exception:
+            return None
+
+
 class SubprocessMermaidRenderer(AbstractMermaidRenderer):
     """Renders Mermaid diagrams using mermaid-cli."""
 
@@ -211,10 +247,24 @@ class FallbackMermaidRenderer(AbstractMermaidRenderer):
 
 
 def get_best_renderer() -> AbstractMermaidRenderer:
-    """Return the best available Mermaid renderer."""
+    """Return the best available Mermaid renderer.
+    
+    Preference order:
+    1. mermaidx (recommended: pure Python, actively maintained, no system deps)
+    2. mmdc (legacy fallback if mermaidx unavailable)
+    3. FallbackMermaidRenderer (placeholder when nothing else works)
+    """
+    # Try mermaidx first (actively maintained, faster, no system dependencies)
+    renderer = MermaidxRenderer()
+    if renderer.is_available():
+        return renderer
+
+    # Fall back to mmdc if available (legacy support)
     renderer = SubprocessMermaidRenderer()
     if renderer.is_available():
         return renderer
+
+    # Last resort: placeholder renderer
     return FallbackMermaidRenderer()
 
 

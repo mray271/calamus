@@ -240,10 +240,16 @@ class TestMermaidSubprocessGracefulFailure:
         import shutil
 
         monkeypatch.setattr(shutil, "which", lambda _: None)
-        from calamus.mermaid_support import SubprocessMermaidRenderer
+        from calamus.mermaid_support import (
+            MermaidxRenderer,
+            SubprocessMermaidRenderer,
+            FallbackMermaidRenderer,
+            get_best_renderer,
+        )
 
+        # Mock both preferred renderers to be unavailable
+        monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", False)
         monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
-        from calamus.mermaid_support import FallbackMermaidRenderer, get_best_renderer
 
         renderer = get_best_renderer()
         assert isinstance(renderer, FallbackMermaidRenderer)

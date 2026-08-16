@@ -94,23 +94,42 @@ def test_subprocess_renderer_render_returns_none_when_unavailable(monkeypatch):
 
 
 def test_get_best_renderer_returns_fallback_when_no_mmdc(monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _: None)
-    from calamus.mermaid_support import SubprocessMermaidRenderer
+    from calamus.mermaid_support import (
+        MermaidxRenderer,
+        SubprocessMermaidRenderer,
+        FallbackMermaidRenderer,
+        get_best_renderer,
+    )
 
-    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
-    from calamus.mermaid_support import FallbackMermaidRenderer, get_best_renderer
+    # Mock both mermaidx and mmdc to be unavailable
+    monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", False)
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", False)
 
     renderer = get_best_renderer()
     assert isinstance(renderer, FallbackMermaidRenderer)
 
 
-def test_get_best_renderer_returns_subprocess_when_mmdc_available(monkeypatch):
-    from calamus.mermaid_support import SubprocessMermaidRenderer, get_best_renderer
+def test_get_best_renderer_prefers_mermaidx_when_available(monkeypatch):
+    from calamus.mermaid_support import MermaidxRenderer, get_best_renderer
 
-    # Reset the class-level cache so is_available() re-checks shutil.which.
-    # Without this, a prior test run in the full suite may have cached False.
-    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
-    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mmdc")
+    # Reset cache so it re-checks availability
+    monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", None)
+
+    renderer = get_best_renderer()
+    # mermaidx should be available in the test environment (it's a dependency)
+    assert isinstance(renderer, MermaidxRenderer)
+
+
+def test_get_best_renderer_returns_subprocess_when_only_mmdc_available(monkeypatch):
+    from calamus.mermaid_support import (
+        MermaidxRenderer,
+        SubprocessMermaidRenderer,
+        get_best_renderer,
+    )
+
+    # Make mermaidx unavailable but mmdc available
+    monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", False)
+    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", True)
 
     renderer = get_best_renderer()
     assert isinstance(renderer, SubprocessMermaidRenderer)
