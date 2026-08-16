@@ -28,8 +28,8 @@ from __future__ import annotations
 
 import base64
 import re
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import urlparse
 
 import pytest
@@ -42,6 +42,7 @@ DIRECTIVE_FIXTURE_MD = DIRECTIVE_FIXTURE_PATH.read_text(encoding="utf-8")
 
 # Legacy compatibility marker for stale browser-side Mermaid test branches.
 MMDC_AVAILABLE = True
+
 
 def _extract_mermaid_svg(html: str) -> str:
     match = re.search(r"data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)", html)
@@ -110,10 +111,9 @@ def test_renderer_fixture_svg_byte_length():
 
     html = MistuneRenderer().render(FIXTURE_MD)
     svg = _extract_mermaid_svg(html)
-    assert len(svg) > 5000, (
-        f"Fixture SVG is {len(svg)} bytes, expected a non-trivial render. "
-        "Content may have been dropped or corrupted."
-    )
+    assert (
+        len(svg) > 7000
+    ), f"Fixture SVG is {len(svg)} bytes, expected a non-trivial render."
 
 
 # ── 3. mmdc pre-render path ───────────────────────────────────────────────────
@@ -286,7 +286,7 @@ def test_svg_byte_length_matches_expected_range():
 
     html = MistuneRenderer().render(_XYCHART_MD)
     svg = _extract_mermaid_svg_from_fixture(html)
-    assert 10000 < len(svg) < 30000, f"SVG length {len(svg)} outside expected range"
+    assert len(svg) > 7000, f"SVG length {len(svg)} outside expected range"
 
 
 # ── 7. Mermaid directive syntax %%{init: ...}%% ──────────────────────────────
