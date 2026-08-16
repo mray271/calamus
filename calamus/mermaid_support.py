@@ -169,7 +169,20 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
                 timeout=30,
             )
             if output_path.exists():
-                return output_path.read_text(encoding="utf-8")
+                svg = output_path.read_text(encoding="utf-8")
+                # Strip mmdc's hardcoded background-color from SVG style attributes.
+                # mmdc always inlines "background-color: white;" in the SVG style attr
+                # even when a different theme is used, which prevents dark themes from
+                # working properly. This is a workaround for an mmdc limitation.
+                # We remove these hardcoded background-color declarations while
+                # preserving other style properties like max-width so the preview
+                # pane's CSS theme background can show through.
+                svg = re.sub(
+                    r'\s*background-color:\s*(?:white|transparent)\s*;?\s*',
+                    ' ',
+                    svg
+                )
+                return svg
         except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return None
         finally:
