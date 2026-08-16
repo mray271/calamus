@@ -1274,7 +1274,8 @@ if (document.body) {
         def worker() -> None:
             try:
                 renderer = self._renderer or MistuneRenderer()
-                html = renderer.render(markdown_text)
+                mermaid_theme = "dark" if self._style_manager.get_dark() else "default"
+                html = renderer.render(markdown_text, mermaid_theme=mermaid_theme)
                 GLib.idle_add(
                     lambda g=generation, h=html, r=scroll_ratio: self._on_async_render_done(
                         g, h, r

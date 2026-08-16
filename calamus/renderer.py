@@ -522,12 +522,12 @@ class MistuneRenderer(AbstractMarkdownRenderer):
         """Run mistune on *text* without any Mermaid preprocessing."""
         return _postprocess_rendered_html(self._renderer(text))
 
-    def render(self, text: str) -> str:
+    def render(self, text: str, mermaid_theme: str = "default") -> str:
         from calamus.mermaid_support import (
             preprocess_markdown_for_static_export,
         )
 
-        text = preprocess_markdown_for_static_export(text)
+        text = preprocess_markdown_for_static_export(text, theme=mermaid_theme)
         return _postprocess_rendered_html(self._renderer(text))
 
     def get_version(self) -> str:
