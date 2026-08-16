@@ -100,8 +100,13 @@ class AbstractMermaidRenderer(ABC):
     """Renders Mermaid diagram source to SVG string."""
 
     @abstractmethod
-    def render_to_svg(self, diagram_source: str) -> str | None:
-        """Return SVG string or None if rendering failed."""
+    def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
+        """Return SVG string or None if rendering failed.
+        
+        Args:
+            diagram_source: Mermaid diagram source code.
+            theme: Mermaid theme to use ('default' for light, 'dark' for dark).
+        """
 
     @abstractmethod
     def is_available(self) -> bool:
@@ -118,7 +123,7 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
             SubprocessMermaidRenderer._mmdc_available = shutil.which("mmdc") is not None
         return SubprocessMermaidRenderer._mmdc_available
 
-    def render_to_svg(self, diagram_source: str) -> str | None:
+    def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
         if not self.is_available():
             return None
         work_dir = Path("calamus/resources/.mermaid-render")
@@ -135,6 +140,7 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
                     # Inkscape, office suites, and non-browser image viewers.
                     "htmlLabels": get_mermaid_html_labels(),
                     "flowchart": {"htmlLabels": get_mermaid_html_labels()},
+                    "theme": theme,
                 }
             ),
             encoding="utf-8",
@@ -178,7 +184,7 @@ class FallbackMermaidRenderer(AbstractMermaidRenderer):
     def is_available(self) -> bool:
         return True
 
-    def render_to_svg(self, diagram_source: str) -> str | None:
+    def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
         escaped = html.escape(diagram_source)
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="200">'
@@ -253,10 +259,14 @@ def preprocess_with_cache(markdown_text: str, cache: MermaidCache) -> str:
     return pattern.sub(repl, markdown_text)
 
 
-def preprocess_markdown_for_static_export(markdown_text: str) -> str:
+def preprocess_markdown_for_static_export(markdown_text: str, theme: str = "default") -> str:
     """Replace Mermaid fenced blocks with inline SVG data URIs.
 
     Mermaid fences inside an outer fence of 4+ backticks are left untouched.
+    
+    Args:
+        markdown_text: Markdown content containing Mermaid blocks.
+        theme: Mermaid theme to use ('default' for light, 'dark' for dark).
     """
     renderer = get_best_renderer()
     outer_ranges = _outer_fenced_ranges(markdown_text)
@@ -266,7 +276,7 @@ def preprocess_markdown_for_static_export(markdown_text: str) -> str:
         if _is_inside_outer_fence(match.start(), outer_ranges):
             return match.group(0)
         diagram_source = match.group(1).strip()
-        svg = renderer.render_to_svg(diagram_source) or ""
+        svg = renderer.render_to_svg(diagram_source, theme) or ""
         encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
         return f'\n<img class="mermaid-diagram" alt="Mermaid diagram" src="data:image/svg+xml;base64,{encoded}" />\n'
 

@@ -837,6 +837,7 @@ class WebKitPreview(AbstractPreview):
         self, _style_manager: Adw.StyleManager, _param: object
     ) -> None:
         if self._last_markdown:
+            self._mermaid_cache = MermaidCache()
             self.update(self._last_markdown)
 
     def _inject_tooltip_script(self) -> None:
@@ -1050,13 +1051,13 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             generation = self._render_generation
             thread = threading.Thread(
                 target=self._async_render_worker,
-                args=(markdown_text, uncached, generation),
+                args=(markdown_text, uncached, generation, dark),
                 daemon=True,
             )
             thread.start()
 
     def _async_render_worker(
-        self, markdown_text: str, uncached: list[str], generation: int
+        self, markdown_text: str, uncached: list[str], generation: int, dark: bool
     ) -> None:
         """Background thread: render uncached diagrams and schedule UI update.
 
@@ -1069,10 +1070,11 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             return  # another render is stuck; give up rather than hang
         try:
             renderer = SubprocessMermaidRenderer()
+            mermaid_theme = "dark" if dark else "default"
             for source in uncached:
                 if generation != self._render_generation:
                     return  # superseded by a newer edit
-                svg = renderer.render_to_svg(source)
+                svg = renderer.render_to_svg(source, mermaid_theme)
                 if svg:
                     self._mermaid_cache.put(source, svg)
         finally:
