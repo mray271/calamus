@@ -140,7 +140,6 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
                     # Inkscape, office suites, and non-browser image viewers.
                     "htmlLabels": get_mermaid_html_labels(),
                     "flowchart": {"htmlLabels": get_mermaid_html_labels()},
-                    "theme": theme,
                 }
             ),
             encoding="utf-8",
@@ -154,6 +153,8 @@ class SubprocessMermaidRenderer(AbstractMermaidRenderer):
                     str(input_path),
                     "-o",
                     str(output_path),
+                    "-t",
+                    theme,
                     "-c",
                     str(mermaid_config_path),
                     *(
