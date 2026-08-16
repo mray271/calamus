@@ -1069,7 +1069,9 @@ console.log('[TOOLTIP-JS] Script initialization complete');
         if not self._mmdc_semaphore.acquire(timeout=60):
             return  # another render is stuck; give up rather than hang
         try:
-            renderer = SubprocessMermaidRenderer()
+            from calamus.mermaid_support import get_best_renderer
+            
+            renderer = get_best_renderer()
             mermaid_theme = "dark" if dark else "default"
             for source in uncached:
                 if generation != self._render_generation:
