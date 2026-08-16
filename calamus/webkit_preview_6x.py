@@ -263,10 +263,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     outline-offset: 1px;
   }}
 </style>
-{mermaid_init}
 </head>
 <body>
 {content}
+<script>
+  if (typeof mermaid !== 'undefined') {{
+    mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
+    mermaid.run({{ querySelector: '.mermaid' }});
+  }}
+</script>
 </body>
 </html>"""
 
@@ -1286,11 +1291,6 @@ if (document.body) {
 
         # Get Mermaid script and highlighting
         mermaid_script = get_mermaid_script_tag()
-        mermaid_init = f"""<script>
-  document.addEventListener('DOMContentLoaded', function() {{
-    mermaid.initialize({{ startOnLoad: true, theme: '{mermaid_theme}' }});
-  }});
-</script>"""
         highlight_css = get_highlight_css_tag()
         highlight_script = get_highlight_script_tag()
 
@@ -1298,7 +1298,7 @@ if (document.body) {
         full_html = _HTML_TEMPLATE.format(
             color_scheme=color_scheme,
             mermaid_script=mermaid_script,
-            mermaid_init=mermaid_init,
+            mermaid_theme=mermaid_theme,
             highlight_css=highlight_css,
             highlight_script=highlight_script,
             content=html,
