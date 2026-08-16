@@ -524,16 +524,11 @@ class MistuneRenderer(AbstractMarkdownRenderer):
 
     def render(self, text: str) -> str:
         from calamus.mermaid_support import (
-            SubprocessMermaidRenderer,
             preprocess_markdown_for_static_export,
         )
 
-        if SubprocessMermaidRenderer().is_available():
-            text = preprocess_markdown_for_static_export(text)
-            return _postprocess_rendered_html(self._renderer(text))
-
-        prepared = self._prepare_mermaid_blocks(text)
-        return _postprocess_rendered_html(self._renderer(prepared))
+        text = preprocess_markdown_for_static_export(text)
+        return _postprocess_rendered_html(self._renderer(text))
 
     def get_version(self) -> str:
         return getattr(mistune, "__version__", "unknown")

@@ -5,10 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
-import json
 import re
-import shutil
-import subprocess
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -21,21 +18,6 @@ MERMAID_LOCAL_PATH = "calamus/resources/js/mermaid.min.js"
 # System-wide copy baked into the Docker image (outside the volume-mounted /app).
 # Used as a fallback when the volume mount shadows the source-tree copy.
 MERMAID_SYSTEM_PATH = "/usr/local/share/calamus/js/mermaid.min.js"
-# Puppeteer config for mmdc inside Docker (no-sandbox, system Chromium).
-MMDC_PUPPETEER_CONFIG = "/usr/local/share/calamus/mmdc-puppeteer.json"
-MMDC_MERMAID_CONFIG = "calamus/resources/.mermaid-render/mmdc-mermaid-config.json"
-_MERMAID_HTML_LABELS_ENABLED = True
-
-
-def set_mermaid_html_labels(enabled: bool) -> None:
-    """Set whether Mermaid mmdc output should use HTML labels."""
-    global _MERMAID_HTML_LABELS_ENABLED
-    _MERMAID_HTML_LABELS_ENABLED = bool(enabled)
-
-
-def get_mermaid_html_labels() -> bool:
-    """Return current Mermaid HTML-label preference."""
-    return _MERMAID_HTML_LABELS_ENABLED
 
 
 def get_mermaid_script_tag(local_first: bool = True) -> str:
@@ -149,87 +131,10 @@ class MermaidxRenderer(AbstractMermaidRenderer):
             return None
 
 
-class SubprocessMermaidRenderer(AbstractMermaidRenderer):
-    """Renders Mermaid diagrams using mermaid-cli."""
-
-    _mmdc_available: bool | None = None  # class-level cache; set once per process
-
-    def is_available(self) -> bool:
-        if SubprocessMermaidRenderer._mmdc_available is None:
-            SubprocessMermaidRenderer._mmdc_available = shutil.which("mmdc") is not None
-        return SubprocessMermaidRenderer._mmdc_available
-
-    def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
-        if not self.is_available():
-            return None
-        work_dir = Path("calamus/resources/.mermaid-render")
-        work_dir.mkdir(parents=True, exist_ok=True)
-        input_path = work_dir / "diagram.mmd"
-        output_path = work_dir / "diagram.svg"
-        mermaid_config_path = Path(MMDC_MERMAID_CONFIG)
-        input_path.write_text(diagram_source, encoding="utf-8")
-        mermaid_config_path.write_text(
-            json.dumps(
-                {
-                    # When disabled, prefer plain SVG <text> labels over HTML
-                    # foreignObject labels for better compatibility with
-                    # Inkscape, office suites, and non-browser image viewers.
-                    "htmlLabels": get_mermaid_html_labels(),
-                    "flowchart": {"htmlLabels": get_mermaid_html_labels()},
-                }
-            ),
-            encoding="utf-8",
-        )
-        try:
-            puppeteer_config = Path(MMDC_PUPPETEER_CONFIG)
-            subprocess.run(
-                [
-                    "mmdc",
-                    "-i",
-                    str(input_path),
-                    "-o",
-                    str(output_path),
-                    "-t",
-                    theme,
-                    "-c",
-                    str(mermaid_config_path),
-                    *(
-                        ["-p", str(puppeteer_config)]
-                        if puppeteer_config.exists()
-                        else []
-                    ),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if output_path.exists():
-                svg = output_path.read_text(encoding="utf-8")
-                # Strip mmdc's hardcoded background-color from SVG style attributes.
-                # mmdc always inlines "background-color: white;" in the SVG style attr
-                # even when a different theme is used, which prevents dark themes from
-                # working properly. This is a workaround for an mmdc limitation.
-                # We remove these hardcoded background-color declarations while
-                # preserving other style properties like max-width so the preview
-                # pane's CSS theme background can show through.
-                svg = re.sub(
-                    r'\s*background-color:\s*(?:white|transparent)\s*;?\s*',
-                    ' ',
-                    svg
-                )
-                return svg
-        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            return None
-        finally:
-            for path in (input_path, output_path):
-                if path.exists():
-                    path.unlink()
-        return None
 
 
 class FallbackMermaidRenderer(AbstractMermaidRenderer):
-    """Returns a placeholder SVG when Mermaid CLI is unavailable."""
+    """Returns a placeholder SVG when Mermaid rendering is unavailable."""
 
     def is_available(self) -> bool:
         return True
@@ -251,20 +156,14 @@ def get_best_renderer() -> AbstractMermaidRenderer:
     
     Preference order:
     1. mermaidx (recommended: pure Python, actively maintained, no system deps)
-    2. mmdc (legacy fallback if mermaidx unavailable)
-    3. FallbackMermaidRenderer (placeholder when nothing else works)
+    2. FallbackMermaidRenderer (placeholder when mermaidx unavailable)
     """
     # Try mermaidx first (actively maintained, faster, no system dependencies)
     renderer = MermaidxRenderer()
     if renderer.is_available():
         return renderer
 
-    # Fall back to mmdc if available (legacy support)
-    renderer = SubprocessMermaidRenderer()
-    if renderer.is_available():
-        return renderer
-
-    # Last resort: placeholder renderer
+    # Fall back to placeholder renderer
     return FallbackMermaidRenderer()
 
 

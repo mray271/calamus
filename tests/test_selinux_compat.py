@@ -42,7 +42,7 @@ import pytest
 
 APPROVED_SUBPROCESS_COMMANDS: frozenset[tuple[str, str]] = frozenset(
     [
-        ("calamus/mermaid_support.py", "mmdc"),  # Mermaid CLI renderer
+        # No subprocess commands approved - mermaidx is pure Python
     ]
 )
 
@@ -190,66 +190,25 @@ def test_no_shell_true_subprocess_calls():
 # without crashing the application.
 
 
-class TestMermaidSubprocessGracefulFailure:
+class TestMermaidGracefulFailure:
     """
-    SubprocessMermaidRenderer must degrade gracefully when SELinux denies
-    mmdc execution. Any denial from SELinux appears as PermissionError or
-    OSError to the calling process.
+    Mermaid rendering must degrade gracefully when the primary renderer
+    (mermaidx) is unavailable. The fallback renderer provides safety.
     """
 
-    def test_permission_error_returns_none(self):
-        from calamus.mermaid_support import SubprocessMermaidRenderer
-
-        renderer = SubprocessMermaidRenderer()
-        with patch("subprocess.run", side_effect=PermissionError("SELinux denied")):
-            with patch("shutil.which", return_value="/usr/bin/mmdc"):
-                result = renderer.render_to_svg("graph TD\nA-->B")
-        assert result is None, (
-            "SubprocessMermaidRenderer must return None on PermissionError "
-            "(SELinux denial of mmdc execution)"
-        )
-
-    def test_os_error_returns_none(self):
-        from calamus.mermaid_support import SubprocessMermaidRenderer
-
-        renderer = SubprocessMermaidRenderer()
-        with patch("subprocess.run", side_effect=OSError("EACCES")):
-            with patch("shutil.which", return_value="/usr/bin/mmdc"):
-                result = renderer.render_to_svg("graph TD\nA-->B")
-        assert result is None
-
-    def test_called_process_error_returns_none(self):
-        from calamus.mermaid_support import SubprocessMermaidRenderer
-
-        renderer = SubprocessMermaidRenderer()
-        with patch(
-            "subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, "mmdc"),
-        ):
-            with patch("shutil.which", return_value="/usr/bin/mmdc"):
-                result = renderer.render_to_svg("graph TD\nA-->B")
-        assert result is None
-
-    def test_fallback_used_when_mmdc_denied(self, monkeypatch):
+    def test_fallback_used_when_mermaidx_unavailable(self, monkeypatch):
         """
-        When SELinux denies mmdc, get_best_renderer() should still return a
-        working renderer (FallbackMermaidRenderer) because SubprocessMermaidRenderer
-        reports is_available() = False when mmdc is not on PATH.
-        After a PermissionError, the app should transparently use the fallback.
+        When mermaidx is unavailable, get_best_renderer() should return
+        FallbackMermaidRenderer as a working fallback.
         """
-        import shutil
-
-        monkeypatch.setattr(shutil, "which", lambda _: None)
         from calamus.mermaid_support import (
             MermaidxRenderer,
-            SubprocessMermaidRenderer,
             FallbackMermaidRenderer,
             get_best_renderer,
         )
 
-        # Mock both preferred renderers to be unavailable
+        # Mock mermaidx to be unavailable
         monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", False)
-        monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
 
         renderer = get_best_renderer()
         assert isinstance(renderer, FallbackMermaidRenderer)
@@ -257,21 +216,23 @@ class TestMermaidSubprocessGracefulFailure:
         assert svg is not None
         assert "<svg" in svg
 
-    def test_preprocess_does_not_raise_on_permission_error(self, monkeypatch):
+    def test_preprocess_does_not_raise_when_renderer_fails(self, monkeypatch):
         """
         preprocess_markdown_for_static_export must never raise even if the
-        underlying renderer fails with a permission error.
+        underlying renderer fails.
         """
-        import shutil
+        from calamus.mermaid_support import (
+            MermaidxRenderer,
+            preprocess_markdown_for_static_export,
+        )
 
-        monkeypatch.setattr(shutil, "which", lambda _: None)
-        from calamus.mermaid_support import SubprocessMermaidRenderer
-
-        monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
-        from calamus.mermaid_support import preprocess_markdown_for_static_export
+        # Mock mermaidx to fail
+        monkeypatch.setattr(
+            MermaidxRenderer, "_mermaidx_available", False
+        )
 
         text = "Before\n```mermaid\ngraph TD\nA-->B\n```\nAfter"
-        # Must not raise
+        # Must not raise - should use fallback
         result = preprocess_markdown_for_static_export(text)
         assert result is not None
         assert "Before" in result
@@ -359,14 +320,12 @@ class TestFilePathSafety:
 
     def test_mermaid_render_temp_dir_is_safe(self):
         """
-        The temporary render directory used by SubprocessMermaidRenderer
-        must be under a path with an appropriate SELinux context.
+        Mermaid rendering code must not reference paths with wrong SELinux context.
         Acceptable: project dir (during dev) or /tmp (tmp_t).
         """
         import calamus.mermaid_support as ms
 
-        # The work_dir is defined inside render_to_svg; check the module source
-        # to ensure it doesn't use a hardcoded absolute system path
+        # Check the module source to ensure it doesn't use hardcoded absolute system paths
         source = Path(ms.__file__).read_text(encoding="utf-8")
         assert (
             "/etc/" not in source or "# selinux-reviewed" in source

@@ -43,7 +43,6 @@ from calamus.highlight_support import get_highlight_css_tag, get_highlight_scrip
 from calamus.link_tooltip import LinkTooltipManager
 from calamus.mermaid_support import (
     MermaidCache,
-    SubprocessMermaidRenderer,
     extract_mermaid_blocks,
     get_mermaid_init_script,
     get_mermaid_script_tag,
@@ -492,7 +491,6 @@ class WebKitPreview_6x(AbstractWebKitPreview):
 
         # Async rendering setup
         self._mermaid_cache = MermaidCache()
-        self._mmdc_available: bool = SubprocessMermaidRenderer().is_available()
         self._render_generation: int = 0
         self._render_spinner_timeout_id: int | None = None
         self._has_rendered_content: bool = False

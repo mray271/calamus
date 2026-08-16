@@ -69,41 +69,11 @@ def test_fallback_renderer_escapes_html_in_source():
     assert "<script>" not in svg
 
 
-def test_subprocess_renderer_unavailable_when_no_mmdc(monkeypatch):
-    """SubprocessMermaidRenderer.is_available() returns False when mmdc is not on PATH."""
-    monkeypatch.setattr(shutil, "which", lambda _: None)
-    from calamus.mermaid_support import SubprocessMermaidRenderer
+def test_get_best_renderer_returns_fallback_when_mermaidx_unavailable(monkeypatch):
+    from calamus.mermaid_support import MermaidxRenderer, FallbackMermaidRenderer, get_best_renderer
 
-    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
-    from calamus.mermaid_support import SubprocessMermaidRenderer
-
-    renderer = SubprocessMermaidRenderer()
-    assert renderer.is_available() is False
-
-
-def test_subprocess_renderer_render_returns_none_when_unavailable(monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _: None)
-    from calamus.mermaid_support import SubprocessMermaidRenderer
-
-    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
-    from calamus.mermaid_support import SubprocessMermaidRenderer
-
-    renderer = SubprocessMermaidRenderer()
-    result = renderer.render_to_svg("graph TD\nA-->B")
-    assert result is None
-
-
-def test_get_best_renderer_returns_fallback_when_no_mmdc(monkeypatch):
-    from calamus.mermaid_support import (
-        MermaidxRenderer,
-        SubprocessMermaidRenderer,
-        FallbackMermaidRenderer,
-        get_best_renderer,
-    )
-
-    # Mock both mermaidx and mmdc to be unavailable
+    # Mock mermaidx to be unavailable
     monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", False)
-    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", False)
 
     renderer = get_best_renderer()
     assert isinstance(renderer, FallbackMermaidRenderer)
@@ -120,21 +90,6 @@ def test_get_best_renderer_prefers_mermaidx_when_available(monkeypatch):
     assert isinstance(renderer, MermaidxRenderer)
 
 
-def test_get_best_renderer_returns_subprocess_when_only_mmdc_available(monkeypatch):
-    from calamus.mermaid_support import (
-        MermaidxRenderer,
-        SubprocessMermaidRenderer,
-        get_best_renderer,
-    )
-
-    # Make mermaidx unavailable but mmdc available
-    monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", False)
-    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", True)
-
-    renderer = get_best_renderer()
-    assert isinstance(renderer, SubprocessMermaidRenderer)
-
-
 def test_get_best_renderer_returns_renderer():
     from calamus.mermaid_support import AbstractMermaidRenderer, get_best_renderer
 
@@ -147,22 +102,6 @@ def test_mermaid_version_constant():
     from calamus.mermaid_support import MERMAID_VERSION
 
     assert MERMAID_VERSION == "11.5.0"
-
-
-def test_mermaid_html_labels_setting_roundtrip():
-    from calamus.mermaid_support import (
-        get_mermaid_html_labels,
-        set_mermaid_html_labels,
-    )
-
-    original = get_mermaid_html_labels()
-    try:
-        set_mermaid_html_labels(False)
-        assert get_mermaid_html_labels() is False
-        set_mermaid_html_labels(True)
-        assert get_mermaid_html_labels() is True
-    finally:
-        set_mermaid_html_labels(original)
 
 
 def test_mermaid_cdn_url_contains_version():
@@ -357,7 +296,6 @@ def test_preprocess_static_export_ignores_mermaid_inside_outer_fence(monkeypatch
     """preprocess_markdown_for_static_export leaves nested mermaid blocks untouched."""
     import calamus.mermaid_support as ms
 
-    monkeypatch.setattr(ms.SubprocessMermaidRenderer, "_mmdc_available", False)
     diagram = "graph LR\nA --> B"
     text = "````markdown\n```mermaid\n{}\n```\n````".format(diagram)
     result = ms.preprocess_markdown_for_static_export(text)
@@ -366,69 +304,5 @@ def test_preprocess_static_export_ignores_mermaid_inside_outer_fence(monkeypatch
 
 
 # ---------------------------------------------------------------------------
-# SubprocessMermaidRenderer — output file not created
 # ---------------------------------------------------------------------------
 
-
-def test_subprocess_renderer_returns_none_when_output_not_created(monkeypatch):
-    """render_to_svg returns None when subprocess succeeds but creates no output file."""
-    import subprocess
-
-    from calamus.mermaid_support import SubprocessMermaidRenderer
-
-    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
-    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mmdc")
-
-    def fake_run(cmd, **kwargs):
-        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
-
-    renderer = SubprocessMermaidRenderer()
-    assert renderer.render_to_svg("graph TD\nA-->B") is None
-
-
-def test_subprocess_renderer_writes_html_labels_from_preference(monkeypatch):
-    """mmdc config should reflect the mermaid_html_labels preference."""
-    import json
-    import subprocess
-
-    from calamus.mermaid_support import (
-        SubprocessMermaidRenderer,
-        set_mermaid_html_labels,
-    )
-
-    monkeypatch.setattr(SubprocessMermaidRenderer, "_mmdc_available", None)
-    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/mmdc")
-
-    captured = {}
-
-    def fake_run(cmd, **kwargs):
-        cfg_path = cmd[cmd.index("-c") + 1]
-        out_path = cmd[cmd.index("-o") + 1]
-        captured["config"] = json.loads(open(cfg_path, encoding="utf-8").read())
-        with open(out_path, "w", encoding="utf-8") as fh:
-            fh.write("<svg/>")
-        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
-
-    from calamus.mermaid_support import get_mermaid_html_labels
-
-    original = get_mermaid_html_labels()
-    try:
-        # First check disabled mode.
-        set_mermaid_html_labels(False)
-        renderer = SubprocessMermaidRenderer()
-        assert renderer.render_to_svg("graph TD\nA-->B") == "<svg/>"
-        assert captured["config"]["htmlLabels"] is False
-        assert captured["config"]["flowchart"]["htmlLabels"] is False
-
-        # Then check enabled mode.
-        set_mermaid_html_labels(True)
-        renderer = SubprocessMermaidRenderer()
-        assert renderer.render_to_svg("graph TD\nA-->B") == "<svg/>"
-        assert captured["config"]["htmlLabels"] is True
-        assert captured["config"]["flowchart"]["htmlLabels"] is True
-    finally:
-        set_mermaid_html_labels(original)
