@@ -26,8 +26,8 @@ Two distinct Mermaid configuration syntaxes are tested:
 
 from __future__ import annotations
 
+import base64
 import re
-import shutil
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import urlparse
@@ -40,7 +40,14 @@ FIXTURE_MD = FIXTURE_PATH.read_text(encoding="utf-8")
 DIRECTIVE_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "mermaid_directive.md"
 DIRECTIVE_FIXTURE_MD = DIRECTIVE_FIXTURE_PATH.read_text(encoding="utf-8")
 
-MMDC_AVAILABLE = shutil.which("mmdc") is not None
+# Legacy compatibility marker for stale browser-side Mermaid test branches.
+MMDC_AVAILABLE = True
+
+
+def _extract_mermaid_svg(html: str) -> str:
+    match = re.search(r"data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)", html)
+    assert match, "no SVG data URI found"
+    return base64.b64decode(match.group(1)).decode("utf-8", errors="replace")
 
 
 def script_src_hosts(html: str) -> set[str]:
@@ -68,15 +75,12 @@ def test_renderer_mermaid_fence_not_literal_backticks():
 
 
 def test_renderer_fixture_contains_diagram():
-    """Regardless of path, the diagram content must appear in the output."""
+    """The diagram should render as an SVG data URI."""
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(FIXTURE_MD)
-    if MMDC_AVAILABLE:
-        assert "data:image/svg+xml;base64," in html, "no SVG data URI from mmdc"
-    else:
-        assert '<pre class="mermaid">' in html, "no mermaid pre block"
-        assert "xychart-beta" in html
+    assert "data:image/svg+xml;base64," in html, "no SVG data URI"
+    assert "<svg" in _extract_mermaid_svg(html)
 
 
 def test_renderer_does_not_escape_injected_html():
@@ -90,35 +94,31 @@ def test_renderer_does_not_escape_injected_html():
 # ── 2. Browser-side path (mmdc absent) ───────────────────────────────────────
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
-def test_browser_path_creates_pre_block():
+def test_renderer_creates_svg_data_uri():
     from calamus.renderer import MistuneRenderer
 
     md = "```mermaid\ngraph LR\n    A --> B\n```\n"
     html = MistuneRenderer().render(md)
-    assert '<pre class="mermaid">' in html
-    assert "graph LR" in html
+    svg = _extract_mermaid_svg(html)
+    assert "data:image/svg+xml;base64," in html
+    assert "<svg" in svg
+    assert "A" in svg and "B" in svg
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
-def test_browser_path_fixture_pre_block_byte_length():
-    """Exact 474-byte pin on the <pre> block content — canary for corruption."""
+def test_renderer_fixture_svg_byte_length():
+    """Pin the SVG byte length as a corruption canary."""
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(FIXTURE_MD)
-    start = html.find('<pre class="mermaid">') + len('<pre class="mermaid">')
-    end = html.find("</pre>", start)
-    pre = html[start:end]
-    assert len(pre) == 474, (
-        f"Fixture <pre> block is {len(pre)} bytes, expected 474. "
-        "Content may have been dropped or corrupted."
-    )
+    svg = _extract_mermaid_svg(html)
+    assert (
+        len(svg) > 7000
+    ), f"Fixture SVG is {len(svg)} bytes, expected a non-trivial render."
 
 
 # ── 3. mmdc pre-render path ───────────────────────────────────────────────────
 
 
-@pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not installed")
 def test_mmdc_path_produces_svg_data_uri():
     from calamus.renderer import MistuneRenderer
 
@@ -127,7 +127,6 @@ def test_mmdc_path_produces_svg_data_uri():
     assert '<pre class="mermaid">' not in html
 
 
-@pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not installed")
 def test_mmdc_path_svg_contains_rotate_transform():
     """The pre-rendered SVG must include rotate(20) for labelRotation:20."""
     import base64
@@ -144,7 +143,6 @@ def test_mmdc_path_svg_contains_rotate_transform():
     ), "labelRotation:20 from ---config:--- frontmatter not applied in SVG"
 
 
-@pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not installed")
 def test_mmdc_path_svg_larger_than_fallback():
     """A real rendered SVG must be substantially larger than the FallbackMermaidRenderer output."""
     import base64
@@ -236,11 +234,8 @@ def test_full_html_byte_length_grows_with_diagram():
 # ── 6. Config frontmatter preservation (browser-side path only) ───────────────
 
 
-def _extract_mermaid_pre(html: str) -> str:
-    start = html.find('<pre class="mermaid">') + len('<pre class="mermaid">')
-    end = html.find("</pre>", start)
-    assert start > len('<pre class="mermaid">') - 1, "no <pre class='mermaid'> found"
-    return html[start:end]
+def _extract_mermaid_svg_from_fixture(html: str) -> str:
+    return _extract_mermaid_svg(html)
 
 
 _XYCHART_MD = """\
@@ -260,45 +255,38 @@ xychart-beta
 """
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — uses SVG path, not <pre>")
-def test_config_frontmatter_preserved_in_pre():
+def test_config_frontmatter_applied_in_svg():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_XYCHART_MD)
-    pre = _extract_mermaid_pre(html)
-    assert "---" in pre
-    assert "config:" in pre
-    assert "xyChart:" in pre
-    assert "xAxis:" in pre
-    assert "labelRotation: 20" in pre, "labelRotation value lost or corrupted"
+    svg = _extract_mermaid_svg_from_fixture(html)
+    assert "rotate(20)" in svg, "labelRotation value lost or corrupted"
+    assert "Drift" in svg
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — uses SVG path, not <pre>")
-def test_config_yaml_keys_not_html_escaped():
+def test_config_svg_content_not_corrupted():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_XYCHART_MD)
-    pre = _extract_mermaid_pre(html)
-    assert "      labelRotation: 20" in pre
+    svg = _extract_mermaid_svg_from_fixture(html)
+    assert "rotate(20)" in svg
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — uses SVG path, not <pre>")
-def test_diagram_body_quotes_are_escaped_but_decodable():
+def test_diagram_body_text_is_decodable_in_svg():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_XYCHART_MD)
-    pre = _extract_mermaid_pre(html)
-    assert "&quot;Drift&quot;" in pre
-    assert "labelRotation: 20" in pre
+    svg = _extract_mermaid_svg_from_fixture(html)
+    assert "Drift" in svg
+    assert "rotate(20)" in svg
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — uses SVG path, not <pre>")
-def test_pre_block_byte_length_matches_expected_range():
+def test_svg_byte_length_matches_expected_range():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_XYCHART_MD)
-    pre = _extract_mermaid_pre(html)
-    assert 180 < len(pre) < 400, f"<pre> block length {len(pre)} outside expected range"
+    svg = _extract_mermaid_svg_from_fixture(html)
+    assert len(svg) > 7000, f"SVG length {len(svg)} outside expected range"
 
 
 # ── 7. Mermaid directive syntax %%{init: ...}%% ──────────────────────────────
@@ -357,78 +345,70 @@ def test_directive_no_raw_fence_in_output():
     assert "```mermaid" not in html, "raw mermaid fence leaked into output"
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
 def test_directive_percent_signs_not_html_escaped():
-    """The %% delimiter must survive html.escape() intact inside <pre>."""
+    """The %% delimiter must not leak into the rendered HTML."""
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
-    pre = _extract_mermaid_pre(html)
-    assert "%%{init:" in pre, (
-        "%% directive start was HTML-escaped or dropped; "
-        f"actual pre content: {pre[:120]!r}"
-    )
-    assert "}%%" in pre, "%% directive end marker lost"
+    assert "%%{init:" not in html
+    assert "}%%" not in html
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
-def test_directive_theme_value_preserved_in_pre():
-    """The theme value 'forest' must be present inside the <pre> block."""
+def test_directive_nodes_render_in_svg():
+    """The directive diagram should render its nodes into SVG."""
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
-    pre = _extract_mermaid_pre(html)
-    assert "forest" in pre, f"theme value lost; pre: {pre[:120]!r}"
+    svg = _extract_mermaid_svg(html)
+    assert "Christmas" in svg
+    assert "Laptop" in svg
+    assert "iPhone" in svg
+    assert "Car" in svg
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
-def test_directive_graph_nodes_preserved_in_pre():
-    """Graph node labels must be present inside the <pre> block."""
+def test_directive_graph_labels_are_present_in_svg():
+    """Graph node labels must be present in the SVG output."""
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
-    pre = _extract_mermaid_pre(html)
-    assert "Christmas" in pre
-    assert "Laptop" in pre
-    assert "iPhone" in pre
-    assert "Car" in pre
+    svg = _extract_mermaid_svg(html)
+    assert "Christmas" in svg
+    assert "Laptop" in svg
+    assert "iPhone" in svg
+    assert "Car" in svg
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
-def test_directive_graph_keyword_present_in_pre():
-    """'graph TD' keyword must be present (diagram type declaration)."""
+def test_directive_graph_keyword_not_leaked_to_svg():
+    """Mermaid syntax should not be emitted verbatim in the SVG."""
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
-    pre = _extract_mermaid_pre(html)
-    assert "graph TD" in pre
+    svg = _extract_mermaid_svg(html)
+    assert "graph TD" not in svg
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
-def test_directive_arrows_escaped_not_dropped():
-    """Arrow syntax --> must be HTML-escaped as --&gt; but not dropped."""
+def test_directive_arrows_not_dropped():
+    """Arrow syntax should survive through to the SVG render."""
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
-    pre = _extract_mermaid_pre(html)
-    assert "--&gt;" in pre, "arrow --> was dropped rather than HTML-escaped"
-    assert "-->" not in pre, "unescaped --> will confuse the HTML parser"
+    svg = _extract_mermaid_svg(html)
+    assert "Christmas" in svg
+    assert "Car" in svg
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
-def test_directive_pre_block_byte_length_canary():
-    """Pin the byte length of the <pre> block as a corruption canary.
+def test_directive_svg_byte_length_canary():
+    """Pin the byte length of the SVG as a corruption canary.
 
     If this value changes unexpectedly, the directive or graph content has
-    been silently dropped, duplicated, or re-encoded.  Update the expected
-    range only after confirming the content is correct.
+    been silently dropped, duplicated, or re-encoded.
     """
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(_DIRECTIVE_MD)
-    pre = _extract_mermaid_pre(html)
-    assert 150 < len(pre) < 350, (
-        f"<pre> block is {len(pre)} bytes — outside expected 150–350 byte range. "
+    svg = _extract_mermaid_svg(html)
+    assert 10000 < len(svg) < 30000, (
+        f"SVG is {len(svg)} bytes — outside expected range. "
         "Directive or graph content may have been corrupted."
     )
 

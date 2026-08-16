@@ -18,7 +18,6 @@ without dropping content, mangling relative paths, or crashing.
 from __future__ import annotations
 
 import re
-import shutil
 from pathlib import Path
 
 import pytest
@@ -29,8 +28,6 @@ SAMPLE_PATH = (
     / "why_claude_sonnet_fails_to_discover_music.md"
 )
 SAMPLE_MD = SAMPLE_PATH.read_text(encoding="utf-8")
-
-MMDC_AVAILABLE = shutil.which("mmdc") is not None
 
 IMAGE_SUBDIR = "why_claude_sonnet_fails_to_discover_music"
 
@@ -173,29 +170,16 @@ def test_renderer_horizontal_rule_rendered():
 
 
 # ---------------------------------------------------------------------------
-# Renderer — browser-side path (mmdc absent)
+# Renderer — Mermaid SVG output
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(MMDC_AVAILABLE, reason="mmdc present — browser-side path not used")
-def test_browser_path_all_five_pre_blocks():
-    from calamus.renderer import MistuneRenderer
-
-    html = MistuneRenderer().render(SAMPLE_MD)
-    assert html.count('<pre class="mermaid">') == 5
-
-
-# ---------------------------------------------------------------------------
-# Renderer — mmdc pre-render path
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.skipif(not MMDC_AVAILABLE, reason="mmdc not available")
-def test_mmdc_path_all_five_data_uris():
+def test_renderer_all_five_mermaid_diagrams_rendered():
     from calamus.renderer import MistuneRenderer
 
     html = MistuneRenderer().render(SAMPLE_MD)
     assert html.count("data:image/svg+xml;base64,") == 5
+    assert '<pre class="mermaid">' not in html
 
 
 # ---------------------------------------------------------------------------

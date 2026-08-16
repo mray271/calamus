@@ -10,7 +10,6 @@ from urllib.parse import quote
 import pytest
 
 from calamus import webkit_preview_6x
-from calamus.mermaid_support import SubprocessMermaidRenderer
 
 MERMAID_SVG_FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "mermaid_sample.svg"
@@ -203,54 +202,6 @@ def test_write_image_uri_to_path_roundtrip_mermaid_svg_fixture_base64(tmp_path):
     assert (
         b"Mermaid Note: This text should survive Save Image As round-trip." in saved_raw
     )
-
-
-@pytest.mark.skipif(
-    not SubprocessMermaidRenderer().is_available(), reason="mmdc not installed"
-)
-def test_save_roundtrip_uses_sample_original_flawed_mermaid_block(tmp_path):
-    from calamus.mermaid_support import get_mermaid_html_labels, set_mermaid_html_labels
-    from calamus.renderer import MistuneRenderer
-
-    original = get_mermaid_html_labels()
-    set_mermaid_html_labels(False)
-    try:
-        markdown = SAMPLE_DOC_PATH.read_text(encoding="utf-8")
-        match = re.search(
-            r"### Original \(Flawed\) Approach\n\n```mermaid\n(.*?)```",
-            markdown,
-            re.DOTALL,
-        )
-        assert match, "Could not locate the expected Mermaid block in sample document"
-
-        mermaid_block = f"```mermaid\n{match.group(1)}```\n"
-        html = MistuneRenderer().render(mermaid_block)
-        data_uri_match = re.search(
-            r"data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)", html
-        )
-        assert data_uri_match, "Rendered Mermaid block did not produce an SVG data URI"
-
-        uri = f"data:image/svg+xml;base64,{data_uri_match.group(1)}"
-        dest = tmp_path / "sample-mermaid-roundtrip.svg"
-        webkit_preview_6x.WebKitPreview_6x._write_image_uri_to_path(
-            object.__new__(webkit_preview_6x.WebKitPreview_6x), uri, str(dest)
-        )
-
-        saved_svg = dest.read_text(encoding="utf-8")
-        assert "<foreignObject" not in saved_svg
-        assert "<text" in saved_svg
-        for token in (
-            "Receive",
-            "Query",
-            "Kenilworth",
-            "Katrina",
-            "ADST",
-            "Music",
-            "found",
-        ):
-            assert token in saved_svg
-    finally:
-        set_mermaid_html_labels(original)
 
 
 class TestIsSameDocumentFileAnchor:

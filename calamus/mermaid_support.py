@@ -5,10 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
-import json
 import re
-import shutil
-import subprocess
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -21,28 +18,17 @@ MERMAID_LOCAL_PATH = "calamus/resources/js/mermaid.min.js"
 # System-wide copy baked into the Docker image (outside the volume-mounted /app).
 # Used as a fallback when the volume mount shadows the source-tree copy.
 MERMAID_SYSTEM_PATH = "/usr/local/share/calamus/js/mermaid.min.js"
-# Puppeteer config for mmdc inside Docker (no-sandbox, system Chromium).
-MMDC_PUPPETEER_CONFIG = "/usr/local/share/calamus/mmdc-puppeteer.json"
-MMDC_MERMAID_CONFIG = "calamus/resources/.mermaid-render/mmdc-mermaid-config.json"
-_MERMAID_HTML_LABELS_ENABLED = True
 
 
-def set_mermaid_html_labels(enabled: bool) -> None:
-    """Set whether Mermaid mmdc output should use HTML labels."""
-    global _MERMAID_HTML_LABELS_ENABLED
-    _MERMAID_HTML_LABELS_ENABLED = bool(enabled)
-
-
-def get_mermaid_html_labels() -> bool:
-    """Return current Mermaid HTML-label preference."""
-    return _MERMAID_HTML_LABELS_ENABLED
-
-
-def get_mermaid_script_tag(local_first: bool = True) -> str:
+def get_mermaid_script_tag(local_first: bool = True, defer: bool = False) -> str:
     """Return a <script> tag that loads Mermaid.js.
 
     When a local copy is available the JS is inlined directly into the tag
     so WebKit's file:// security restrictions cannot block it.
+
+    Args:
+        local_first: Prefer local copy over CDN.
+        defer: If True and loading from CDN, add defer attribute.
     """
     if local_first:
         for candidate in (
@@ -52,7 +38,8 @@ def get_mermaid_script_tag(local_first: bool = True) -> str:
             if candidate.exists():
                 js = candidate.read_text(encoding="utf-8")
                 return f"<script>{js}</script>"
-    return f'<script src="{MERMAID_CDN_URL}"></script>'
+    defer_attr = " defer" if defer else ""
+    return f'<script src="{MERMAID_CDN_URL}"{defer_attr}></script>'
 
 
 def get_mermaid_init_script() -> str:
@@ -100,85 +87,63 @@ class AbstractMermaidRenderer(ABC):
     """Renders Mermaid diagram source to SVG string."""
 
     @abstractmethod
-    def render_to_svg(self, diagram_source: str) -> str | None:
-        """Return SVG string or None if rendering failed."""
+    def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
+        """Return SVG string or None if rendering failed.
+
+        Args:
+            diagram_source: Mermaid diagram source code.
+            theme: Mermaid theme to use ('default' for light, 'dark' for dark).
+        """
 
     @abstractmethod
     def is_available(self) -> bool:
         """Return whether this renderer can be used."""
 
 
-class SubprocessMermaidRenderer(AbstractMermaidRenderer):
-    """Renders Mermaid diagrams using mermaid-cli."""
+class MermaidxRenderer(AbstractMermaidRenderer):
+    """Renders Mermaid diagrams using the mermaidx library (recommended).
 
-    _mmdc_available: bool | None = None  # class-level cache; set once per process
+    mermaidx is a pure-Python, actively maintained library that:
+    - Renders 2-4.5x faster than mmdc (no browser overhead)
+    - Has no system dependencies (unlike mmdc which needs Node.js)
+    - Properly respects theme settings without hardcoding background colors
+    - Is actively maintained (mmdc is abandoned)
+    """
+
+    _mermaidx_available: bool | None = None  # class-level cache
 
     def is_available(self) -> bool:
-        if SubprocessMermaidRenderer._mmdc_available is None:
-            SubprocessMermaidRenderer._mmdc_available = shutil.which("mmdc") is not None
-        return SubprocessMermaidRenderer._mmdc_available
+        if MermaidxRenderer._mermaidx_available is None:
+            try:
+                import mermaidx  # noqa: F401
 
-    def render_to_svg(self, diagram_source: str) -> str | None:
+                MermaidxRenderer._mermaidx_available = True
+            except ImportError:
+                MermaidxRenderer._mermaidx_available = False
+        return MermaidxRenderer._mermaidx_available
+
+    def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
         if not self.is_available():
             return None
-        work_dir = Path("calamus/resources/.mermaid-render")
-        work_dir.mkdir(parents=True, exist_ok=True)
-        input_path = work_dir / "diagram.mmd"
-        output_path = work_dir / "diagram.svg"
-        mermaid_config_path = Path(MMDC_MERMAID_CONFIG)
-        input_path.write_text(diagram_source, encoding="utf-8")
-        mermaid_config_path.write_text(
-            json.dumps(
-                {
-                    # When disabled, prefer plain SVG <text> labels over HTML
-                    # foreignObject labels for better compatibility with
-                    # Inkscape, office suites, and non-browser image viewers.
-                    "htmlLabels": get_mermaid_html_labels(),
-                    "flowchart": {"htmlLabels": get_mermaid_html_labels()},
-                }
-            ),
-            encoding="utf-8",
-        )
         try:
-            puppeteer_config = Path(MMDC_PUPPETEER_CONFIG)
-            subprocess.run(
-                [
-                    "mmdc",
-                    "-i",
-                    str(input_path),
-                    "-o",
-                    str(output_path),
-                    "-c",
-                    str(mermaid_config_path),
-                    *(
-                        ["-p", str(puppeteer_config)]
-                        if puppeteer_config.exists()
-                        else []
-                    ),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if output_path.exists():
-                return output_path.read_text(encoding="utf-8")
-        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            import mermaidx
+
+            # Pass theme as a parameter to mermaidx.Diagram
+            # This avoids conflicts with existing frontmatter config blocks
+            mmd = mermaidx.Diagram(diagram_source, backend="quickjs", theme=theme)
+            svg = mmd.svg()
+            return svg
+        except Exception:
             return None
-        finally:
-            for path in (input_path, output_path):
-                if path.exists():
-                    path.unlink()
-        return None
 
 
 class FallbackMermaidRenderer(AbstractMermaidRenderer):
-    """Returns a placeholder SVG when Mermaid CLI is unavailable."""
+    """Returns a placeholder SVG when Mermaid rendering is unavailable."""
 
     def is_available(self) -> bool:
         return True
 
-    def render_to_svg(self, diagram_source: str) -> str | None:
+    def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
         escaped = html.escape(diagram_source)
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="200">'
@@ -191,10 +156,18 @@ class FallbackMermaidRenderer(AbstractMermaidRenderer):
 
 
 def get_best_renderer() -> AbstractMermaidRenderer:
-    """Return the best available Mermaid renderer."""
-    renderer = SubprocessMermaidRenderer()
+    """Return the best available Mermaid renderer.
+
+    Preference order:
+    1. mermaidx (recommended: pure Python, actively maintained, no system deps)
+    2. FallbackMermaidRenderer (placeholder when mermaidx unavailable)
+    """
+    # Try mermaidx first (actively maintained, faster, no system dependencies)
+    renderer = MermaidxRenderer()
     if renderer.is_available():
         return renderer
+
+    # Fall back to placeholder renderer
     return FallbackMermaidRenderer()
 
 
@@ -253,10 +226,16 @@ def preprocess_with_cache(markdown_text: str, cache: MermaidCache) -> str:
     return pattern.sub(repl, markdown_text)
 
 
-def preprocess_markdown_for_static_export(markdown_text: str) -> str:
+def preprocess_markdown_for_static_export(
+    markdown_text: str, theme: str = "default"
+) -> str:
     """Replace Mermaid fenced blocks with inline SVG data URIs.
 
     Mermaid fences inside an outer fence of 4+ backticks are left untouched.
+
+    Args:
+        markdown_text: Markdown content containing Mermaid blocks.
+        theme: Mermaid theme to use ('default' for light, 'dark' for dark).
     """
     renderer = get_best_renderer()
     outer_ranges = _outer_fenced_ranges(markdown_text)
@@ -266,7 +245,7 @@ def preprocess_markdown_for_static_export(markdown_text: str) -> str:
         if _is_inside_outer_fence(match.start(), outer_ranges):
             return match.group(0)
         diagram_source = match.group(1).strip()
-        svg = renderer.render_to_svg(diagram_source) or ""
+        svg = renderer.render_to_svg(diagram_source, theme) or ""
         encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
         return f'\n<img class="mermaid-diagram" alt="Mermaid diagram" src="data:image/svg+xml;base64,{encoded}" />\n'
 

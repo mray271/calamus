@@ -43,7 +43,6 @@ from calamus.highlight_support import get_highlight_css_tag, get_highlight_scrip
 from calamus.link_tooltip import LinkTooltipManager
 from calamus.mermaid_support import (
     MermaidCache,
-    SubprocessMermaidRenderer,
     extract_mermaid_blocks,
     get_mermaid_init_script,
     get_mermaid_script_tag,
@@ -174,6 +173,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="color-scheme" content="{color_scheme}">
 {mermaid_script}
+<script>
+  // Initialize mermaid when the DOM is fully loaded
+  // This ensures all content is parsed before mermaid starts rendering
+  document.addEventListener('DOMContentLoaded', function() {{
+    if (typeof mermaid !== 'undefined' && typeof mermaid.initialize === 'function') {{
+      mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
+    }}
+  }});
+</script>
 {highlight_css}
 {highlight_script}
 <style>
@@ -267,6 +275,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 {content}
+<script>
+  // Render mermaid diagrams now that DOM is loaded and mermaid is initialized
+  if (typeof mermaid !== 'undefined') {{
+    mermaid.run({{ querySelector: '.mermaid' }});
+  }}
+</script>
 </body>
 </html>"""
 
@@ -492,7 +506,6 @@ class WebKitPreview_6x(AbstractWebKitPreview):
 
         # Async rendering setup
         self._mermaid_cache = MermaidCache()
-        self._mmdc_available: bool = SubprocessMermaidRenderer().is_available()
         self._render_generation: int = 0
         self._render_spinner_timeout_id: int | None = None
         self._has_rendered_content: bool = False
@@ -1261,7 +1274,8 @@ if (document.body) {
         def worker() -> None:
             try:
                 renderer = self._renderer or MistuneRenderer()
-                html = renderer.render(markdown_text)
+                mermaid_theme = "dark" if self._style_manager.get_dark() else "default"
+                html = renderer.render(markdown_text, mermaid_theme=mermaid_theme)
                 GLib.idle_add(
                     lambda g=generation, h=html, r=scroll_ratio: self._on_async_render_done(
                         g, h, r
@@ -1283,9 +1297,11 @@ if (document.body) {
 
         dark = self._style_manager.get_dark()
         color_scheme = "dark" if dark else "light"
+        mermaid_theme = "dark" if dark else "default"
 
         # Get Mermaid script and highlighting
-        mermaid_script = get_mermaid_script_tag()
+        # Load mermaid.js normally (without defer) so it's available for DOMContentLoaded handler
+        mermaid_script = get_mermaid_script_tag(defer=False)
         highlight_css = get_highlight_css_tag()
         highlight_script = get_highlight_script_tag()
 
@@ -1293,6 +1309,7 @@ if (document.body) {
         full_html = _HTML_TEMPLATE.format(
             color_scheme=color_scheme,
             mermaid_script=mermaid_script,
+            mermaid_theme=mermaid_theme,
             highlight_css=highlight_css,
             highlight_script=highlight_script,
             content=html,

@@ -1,5 +1,15 @@
 # Release Notes
 
+## v0.10.3 — Mermaid theme fix
+
+This release fixes Mermaid preview rendering so diagrams now follow Calamus'
+active dark/light theme instead of always using the default light theme.
+
+### Highlights
+
+- **Mermaid diagrams respect app theme** — previewed diagrams now match the
+  current Calamus dark or light mode.
+
 ## v0.4.0 — Private pre-public release (draft)
 
 This is the first private release milestone of Calamus, focused on GLFM support

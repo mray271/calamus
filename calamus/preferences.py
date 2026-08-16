@@ -34,7 +34,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
     "Preview": {
         "auto_refresh": "true",
         "refresh_delay_ms": "500",
-        "mermaid_html_labels": "true",
     },
     "Appearance": {
         "color_scheme": "system",
@@ -198,23 +197,12 @@ class PreferencesDialog(Adw.PreferencesWindow):
         preview_group.set_title("Mermaid")
         preview_page.add(preview_group)
 
-        mermaid_labels_row = Adw.SwitchRow.new()
-        mermaid_labels_row.set_title("Mermaid label rendering")
-        mermaid_labels_row.set_subtitle(
-            "Enabled: richer HTML labels. Disabled: SVG-label compatibility mode."
-        )
-        mermaid_labels_row.set_active(
-            self._config.getboolean("Preview", "mermaid_html_labels", fallback=True)
-        )
-        preview_group.add(mermaid_labels_row)
-
         self._font_row = font_row
         self._tab_row = tab_row
         self._spaces_row = spaces_row
         self._lineno_row = lineno_row
         self._wrap_row = wrap_row
         self._theme_row = theme_row
-        self._mermaid_labels_row = mermaid_labels_row
 
         self.connect("close-request", self._on_close)
 
@@ -232,13 +220,6 @@ class PreferencesDialog(Adw.PreferencesWindow):
             self._lineno_row.get_active()
         ).lower()
         self._config["Editor"]["word_wrap"] = str(self._wrap_row.get_active()).lower()
-        self._config["Preview"]["mermaid_html_labels"] = str(
-            self._mermaid_labels_row.get_active()
-        ).lower()
-
-        from calamus.mermaid_support import set_mermaid_html_labels
-
-        set_mermaid_html_labels(self._mermaid_labels_row.get_active())
 
         schemes = ["system", "light", "dark"]
         chosen = schemes[self._theme_row.get_selected()]

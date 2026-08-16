@@ -25,7 +25,6 @@ from calamus.highlight_support import get_highlight_css_tag, get_highlight_scrip
 from calamus.link_tooltip import LinkTooltipManager
 from calamus.mermaid_support import (
     MermaidCache,
-    SubprocessMermaidRenderer,
     extract_mermaid_blocks,
     get_mermaid_init_script,
     get_mermaid_script_tag,
@@ -341,16 +340,15 @@ class WebKitPreview(AbstractPreview):
         self._context_menu_actions: list[object] = []
         # Layer 2 & 3: async rendering + SVG cache
         self._mermaid_cache = MermaidCache()
-        self._mmdc_available: bool = SubprocessMermaidRenderer().is_available()
         # Generation counter: incremented on every update() call.
         # Background threads check this before posting results — stale renders
         # (superseded by a newer edit) are silently discarded rather than
         # updating the preview with out-of-date content.
         self._render_generation: int = 0
-        # Semaphore: at most one mmdc process runs at a time.
-        # Without this, rapid typing spawns unbounded Chromium processes,
+        # Semaphore: at most one mermaidx process runs at a time.
+        # Without this, rapid typing could spawn unbounded renderer instances.
         # exhausting memory and hanging the application.
-        self._mmdc_semaphore = threading.Semaphore(1)
+        self._mermaid_semaphore = threading.Semaphore(1)
 
         # Create an overlay to layer the footer on top of the WebView
         # This avoids the need for a container that exposes its background
@@ -837,6 +835,7 @@ class WebKitPreview(AbstractPreview):
         self, _style_manager: Adw.StyleManager, _param: object
     ) -> None:
         if self._last_markdown:
+            self._mermaid_cache = MermaidCache()
             self.update(self._last_markdown)
 
     def _inject_tooltip_script(self) -> None:
@@ -1023,12 +1022,6 @@ console.log('[TOOLTIP-JS] Script initialization complete');
         self._last_markdown = markdown_text
         dark = self._style_manager.get_dark()
 
-        if not self._mmdc_available:
-            # No mmdc — use browser-side mermaid.js (instant, no subprocess).
-            html_body = self._renderer.render(markdown_text)
-            self._render_page(html_body, get_mermaid_script_tag(), dark)
-            return
-
         # Fast path: render immediately using cached SVGs where available.
         # Uncached blocks fall back to browser-side mermaid.js until the
         # background thread produces their SVGs.
@@ -1050,33 +1043,36 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             generation = self._render_generation
             thread = threading.Thread(
                 target=self._async_render_worker,
-                args=(markdown_text, uncached, generation),
+                args=(markdown_text, uncached, generation, dark),
                 daemon=True,
             )
             thread.start()
 
     def _async_render_worker(
-        self, markdown_text: str, uncached: list[str], generation: int
+        self, markdown_text: str, uncached: list[str], generation: int, dark: bool
     ) -> None:
         """Background thread: render uncached diagrams and schedule UI update.
 
-        Acquires ``_mmdc_semaphore`` so only one mmdc process runs at a time.
+        Acquires ``_mermaid_semaphore`` so only one renderer process runs at a time.
         Checks ``_render_generation`` before each diagram and before posting
         the result — if the user has typed more, the work is abandoned so the
         next queued thread can run instead.
         """
-        if not self._mmdc_semaphore.acquire(timeout=60):
+        if not self._mermaid_semaphore.acquire(timeout=60):
             return  # another render is stuck; give up rather than hang
         try:
-            renderer = SubprocessMermaidRenderer()
+            from calamus.mermaid_support import get_best_renderer
+
+            renderer = get_best_renderer()
+            mermaid_theme = "dark" if dark else "default"
             for source in uncached:
                 if generation != self._render_generation:
                     return  # superseded by a newer edit
-                svg = renderer.render_to_svg(source)
+                svg = renderer.render_to_svg(source, mermaid_theme)
                 if svg:
                     self._mermaid_cache.put(source, svg)
         finally:
-            self._mmdc_semaphore.release()
+            self._mermaid_semaphore.release()
         if generation == self._render_generation:
             GLib.idle_add(self._on_async_render_done, markdown_text)
 
