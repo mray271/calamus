@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-08-16
+
+### Fixed
+- Mermaid diagrams now inherit Calamus' active dark/light theme in the preview pane instead of always rendering with the default light theme.
+
 ## [0.10.2] - 2026-08-13
 
 ### Fixed
