@@ -20,11 +20,15 @@ MERMAID_LOCAL_PATH = "calamus/resources/js/mermaid.min.js"
 MERMAID_SYSTEM_PATH = "/usr/local/share/calamus/js/mermaid.min.js"
 
 
-def get_mermaid_script_tag(local_first: bool = True) -> str:
+def get_mermaid_script_tag(local_first: bool = True, defer: bool = False) -> str:
     """Return a <script> tag that loads Mermaid.js.
 
     When a local copy is available the JS is inlined directly into the tag
     so WebKit's file:// security restrictions cannot block it.
+    
+    Args:
+        local_first: Prefer local copy over CDN.
+        defer: If True and loading from CDN, add defer attribute.
     """
     if local_first:
         for candidate in (
@@ -34,7 +38,8 @@ def get_mermaid_script_tag(local_first: bool = True) -> str:
             if candidate.exists():
                 js = candidate.read_text(encoding="utf-8")
                 return f"<script>{js}</script>"
-    return f'<script src="{MERMAID_CDN_URL}"></script>'
+    defer_attr = " defer" if defer else ""
+    return f'<script src="{MERMAID_CDN_URL}"{defer_attr}></script>'
 
 
 def get_mermaid_init_script() -> str:

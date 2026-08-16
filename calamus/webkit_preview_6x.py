@@ -173,6 +173,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="color-scheme" content="{color_scheme}">
 {mermaid_script}
+<script>
+  // Initialize mermaid immediately after script tag (before body content loads)
+  // Use defer on mermaid script tag to ensure it's fully loaded before this runs
+  if (typeof mermaid !== 'undefined' && mermaid.initialize) {{
+    mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
+  }}
+</script>
 {highlight_css}
 {highlight_script}
 <style>
@@ -267,8 +274,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
 {content}
 <script>
+  // Render mermaid diagrams now that DOM is loaded and mermaid is initialized
   if (typeof mermaid !== 'undefined') {{
-    mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
     mermaid.run({{ querySelector: '.mermaid' }});
   }}
 </script>
@@ -1289,8 +1296,8 @@ if (document.body) {
         color_scheme = "dark" if dark else "light"
         mermaid_theme = "dark" if dark else "default"
 
-        # Get Mermaid script and highlighting
-        mermaid_script = get_mermaid_script_tag()
+        # Get Mermaid script with defer attribute to ensure initialization runs after loading
+        mermaid_script = get_mermaid_script_tag(defer=True)
         highlight_css = get_highlight_css_tag()
         highlight_script = get_highlight_script_tag()
 
