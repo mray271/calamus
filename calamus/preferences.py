@@ -197,7 +197,6 @@ class PreferencesDialog(Adw.PreferencesWindow):
         preview_group.set_title("Mermaid")
         preview_page.add(preview_group)
 
-
         self._font_row = font_row
         self._tab_row = tab_row
         self._spaces_row = spaces_row

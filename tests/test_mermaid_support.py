@@ -70,7 +70,11 @@ def test_fallback_renderer_escapes_html_in_source():
 
 
 def test_get_best_renderer_returns_fallback_when_mermaidx_unavailable(monkeypatch):
-    from calamus.mermaid_support import MermaidxRenderer, FallbackMermaidRenderer, get_best_renderer
+    from calamus.mermaid_support import (
+        FallbackMermaidRenderer,
+        MermaidxRenderer,
+        get_best_renderer,
+    )
 
     # Mock mermaidx to be unavailable
     monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", False)
@@ -305,4 +309,3 @@ def test_preprocess_static_export_ignores_mermaid_inside_outer_fence(monkeypatch
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
-

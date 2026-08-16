@@ -1062,7 +1062,7 @@ console.log('[TOOLTIP-JS] Script initialization complete');
             return  # another render is stuck; give up rather than hang
         try:
             from calamus.mermaid_support import get_best_renderer
-            
+
             renderer = get_best_renderer()
             mermaid_theme = "dark" if dark else "default"
             for source in uncached:

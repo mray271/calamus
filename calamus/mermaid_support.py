@@ -25,7 +25,7 @@ def get_mermaid_script_tag(local_first: bool = True, defer: bool = False) -> str
 
     When a local copy is available the JS is inlined directly into the tag
     so WebKit's file:// security restrictions cannot block it.
-    
+
     Args:
         local_first: Prefer local copy over CDN.
         defer: If True and loading from CDN, add defer attribute.
@@ -89,7 +89,7 @@ class AbstractMermaidRenderer(ABC):
     @abstractmethod
     def render_to_svg(self, diagram_source: str, theme: str = "default") -> str | None:
         """Return SVG string or None if rendering failed.
-        
+
         Args:
             diagram_source: Mermaid diagram source code.
             theme: Mermaid theme to use ('default' for light, 'dark' for dark).
@@ -102,7 +102,7 @@ class AbstractMermaidRenderer(ABC):
 
 class MermaidxRenderer(AbstractMermaidRenderer):
     """Renders Mermaid diagrams using the mermaidx library (recommended).
-    
+
     mermaidx is a pure-Python, actively maintained library that:
     - Renders 2-4.5x faster than mmdc (no browser overhead)
     - Has no system dependencies (unlike mmdc which needs Node.js)
@@ -116,6 +116,7 @@ class MermaidxRenderer(AbstractMermaidRenderer):
         if MermaidxRenderer._mermaidx_available is None:
             try:
                 import mermaidx  # noqa: F401
+
                 MermaidxRenderer._mermaidx_available = True
             except ImportError:
                 MermaidxRenderer._mermaidx_available = False
@@ -134,8 +135,6 @@ class MermaidxRenderer(AbstractMermaidRenderer):
             return svg
         except Exception:
             return None
-
-
 
 
 class FallbackMermaidRenderer(AbstractMermaidRenderer):
@@ -158,7 +157,7 @@ class FallbackMermaidRenderer(AbstractMermaidRenderer):
 
 def get_best_renderer() -> AbstractMermaidRenderer:
     """Return the best available Mermaid renderer.
-    
+
     Preference order:
     1. mermaidx (recommended: pure Python, actively maintained, no system deps)
     2. FallbackMermaidRenderer (placeholder when mermaidx unavailable)
@@ -227,11 +226,13 @@ def preprocess_with_cache(markdown_text: str, cache: MermaidCache) -> str:
     return pattern.sub(repl, markdown_text)
 
 
-def preprocess_markdown_for_static_export(markdown_text: str, theme: str = "default") -> str:
+def preprocess_markdown_for_static_export(
+    markdown_text: str, theme: str = "default"
+) -> str:
     """Replace Mermaid fenced blocks with inline SVG data URIs.
 
     Mermaid fences inside an outer fence of 4+ backticks are left untouched.
-    
+
     Args:
         markdown_text: Markdown content containing Mermaid blocks.
         theme: Mermaid theme to use ('default' for light, 'dark' for dark).

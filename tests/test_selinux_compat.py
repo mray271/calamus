@@ -202,8 +202,8 @@ class TestMermaidGracefulFailure:
         FallbackMermaidRenderer as a working fallback.
         """
         from calamus.mermaid_support import (
-            MermaidxRenderer,
             FallbackMermaidRenderer,
+            MermaidxRenderer,
             get_best_renderer,
         )
 
@@ -227,9 +227,7 @@ class TestMermaidGracefulFailure:
         )
 
         # Mock mermaidx to fail
-        monkeypatch.setattr(
-            MermaidxRenderer, "_mermaidx_available", False
-        )
+        monkeypatch.setattr(MermaidxRenderer, "_mermaidx_available", False)
 
         text = "Before\n```mermaid\ngraph TD\nA-->B\n```\nAfter"
         # Must not raise - should use fallback
