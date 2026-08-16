@@ -174,11 +174,13 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <meta name="color-scheme" content="{color_scheme}">
 {mermaid_script}
 <script>
-  // Initialize mermaid immediately after script tag (before body content loads)
-  // Use defer on mermaid script tag to ensure it's fully loaded before this runs
-  if (typeof mermaid !== 'undefined' && mermaid.initialize) {{
-    mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
-  }}
+  // Initialize mermaid when the DOM is fully loaded
+  // This ensures all content is parsed before mermaid starts rendering
+  document.addEventListener('DOMContentLoaded', function() {{
+    if (typeof mermaid !== 'undefined' && typeof mermaid.initialize === 'function') {{
+      mermaid.initialize({{ startOnLoad: false, theme: '{mermaid_theme}' }});
+    }}
+  }});
 </script>
 {highlight_css}
 {highlight_script}
@@ -1296,8 +1298,9 @@ if (document.body) {
         color_scheme = "dark" if dark else "light"
         mermaid_theme = "dark" if dark else "default"
 
-        # Get Mermaid script with defer attribute to ensure initialization runs after loading
-        mermaid_script = get_mermaid_script_tag(defer=True)
+        # Get Mermaid script and highlighting
+        # Load mermaid.js normally (without defer) so it's available for DOMContentLoaded handler
+        mermaid_script = get_mermaid_script_tag(defer=False)
         highlight_css = get_highlight_css_tag()
         highlight_script = get_highlight_script_tag()
 
