@@ -146,7 +146,7 @@ merging (except the self-hosted SELinux enforcing job, which is advisory).
 | **Format Check** | `format.yml` | push / PR | `black --check` + `isort --check-only` |
 | **Tests** | `test.yml` | push / PR | Full test suite, `--cov-fail-under=80`, JUnit + coverage artifacts |
 | **Build** | `build.yml` | push / PR | `uv build` package validation |
-| **Compatibility Matrix** | `compat.yml` | push / PR | Pure Python tests on 3.11/3.12/3.13; GTK tests on Fedora 44, Ubuntu 25.04, Debian 13, openSUSE Tumbleweed |
+| **Compatibility Matrix** | `compat.yml` | push / PR | Pure Python tests on 3.13/3.14/3.15; GTK tests on Fedora 44, Ubuntu 25.04, Debian 13, openSUSE Tumbleweed |
 | **SELinux Audit** | `selinux.yml` | push / PR | Subprocess allowlist, graceful-failure regression, Fedora container static audit |
 | **Release** | `release.yml` | `v*.*.*` tag | Builds, tests, creates GitHub Release with artifacts |
 

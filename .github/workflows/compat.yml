@@ -13,7 +13,7 @@ permissions:
 #
 # Two complementary matrices cover cross-platform compatibility:
 #
-# 1. python-matrix — pure Python tests (no GTK) across Python 3.11, 3.12, 3.13
+# 1. python-matrix — pure Python tests (no GTK) across Python 3.13, 3.14, 3.15
 #    on a single Ubuntu 25.04 runner. Catches Python version regressions fast
 #    and cheaply. Covers: formatting, mermaid_support, renderer, preferences,
 #    recentfiles, exporter logic, selinux_compat static audit.
@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.13", "3.14", "3.15"]
 
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +106,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 2. Distro compatibility matrix — GTK integration tests in containers.
-  #    One Python version (3.11), one container per supported distro.
+  #    One Python version (3.14), one container per supported distro.
   #    Verifies that system GTK packages install correctly and GTK tests pass.
   #
   #    Supported distros (per README.md):
@@ -168,7 +168,7 @@ jobs:
           echo "PKG_CONFIG=/usr/bin/pkg-config" >> $GITHUB_ENV
 
       - name: Install Python dev dependencies
-        run: uv python install 3.11 && uv sync --extra dev
+        run: uv python install 3.14 && uv sync --extra dev
 
       - name: Run GTK integration tests
         run: |
