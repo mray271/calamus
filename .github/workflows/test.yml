@@ -24,7 +24,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.14", "3.15"]
     steps:
       - uses: actions/checkout@v4
 
@@ -73,13 +73,13 @@ jobs:
           path: junit.xml
 
       - name: Publish test results to GitHub
-        if: always() && matrix.python-version == '3.11'
+        if: always() && matrix.python-version == '3.14'
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: junit.xml
 
       - name: Post coverage comment on PR
-        if: github.event_name == 'pull_request' && matrix.python-version == '3.11'
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.14'
         uses: MishaKav/pytest-coverage-comment@main
         with:
           pytest-xml-coverage-path: coverage.xml

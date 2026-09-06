@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- GitHub Actions test workflows now target newer Python runtimes: `test.yml` runs the full suite on Python 3.14 and 3.15, while `compat.yml` runs the pure-Python matrix on 3.13, 3.14, and 3.15 and uses Python 3.14 for the fixed GTK container test jobs.
+
 ## [0.10.3] - 2026-08-16
 
 ### Fixed
