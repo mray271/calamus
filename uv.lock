@@ -442,7 +442,7 @@ wheels = [
 
 [[package]]
 name = "mermaidx"
-version = "0.9.4"
+version = "0.9.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "quickjs-ng" },
@@ -450,7 +450,7 @@ dependencies = [
     { name = "termaid" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/d8/5c0bc1561035f6a4d9b132d077b3b3420f8ee4c88d6b8153eeec9c93b150/mermaidx-0.9.4-py3-none-any.whl", hash = "sha256:a0d73d324259a3fc1ce502b1c58d1deed1e9b4f770d586669fc1f553bc62d5d5", size = 1773461, upload-time = "2026-07-24T13:47:56.465Z" },
+    { url = "https://files.pythonhosted.org/packages/7a/62/39480a6aa506aa756021802eedde019f70aa3a15525f377708f705aa5fc8/mermaidx-0.9.5-py3-none-any.whl", hash = "sha256:46dfbdc7c101bd5395f05bca2f0917c467b9c5d5c3cbec1fbe238c546b673039", size = 1776497, upload-time = "2026-08-31T02:44:09.368Z" },
 ]
 
 [[package]]
